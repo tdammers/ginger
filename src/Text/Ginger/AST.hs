@@ -14,6 +14,7 @@ data Template
     = Template
         { templateBody :: Statement
         }
+        deriving (Show)
 
 -- | Ginger statements.
 data Statement
@@ -22,8 +23,11 @@ data Statement
     | InterpolationS Expression -- ^ {{ expression }}
     | IfS Expression Statement Statement -- ^ {% if expression %}statement{% else %}statement{% endif %}
     | ForS VarName Expression Statement -- ^ {% for varname in expression %}statement{% endfor %}
+    | NullS -- ^ The do-nothing statement (NOP)
+    deriving (Show)
 
 -- | Expressions, building blocks for the expression minilanguage.
 data Expression
     = StringLiteralE Text -- ^ String literal expression: "foobar"
     | VarE VarName -- ^ Variable reference: foobar
+    deriving (Show)
