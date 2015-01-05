@@ -2,7 +2,8 @@
 module Text.Ginger.Parse
 ( parseGinger
 , parseGingerFile
-, ParserError
+, ParserError (..)
+, IncludeResolver
 )
 where
 
@@ -23,6 +24,12 @@ type Source = String
 -- | A source identifier (typically a filename).
 type SourceName = String
 
+-- | Used to resolve includes. Ginger will call this function whenever it
+-- encounters an {% include %}, {% import %}, or {% extends %} directive.
+-- If the required source code is not available, the resolver should return
+-- @Nothing@, else @Just@ the source.
+type IncludeResolver m = SourceName -> m (Maybe Source)
+
 -- | Parse Ginger source from a file.
 parseGingerFile :: Monad m => IncludeResolver m -> SourceName -> m (Either ParserError Template)
 parseGingerFile resolve fn = do
@@ -31,9 +38,9 @@ parseGingerFile resolve fn = do
         Nothing -> return . Left $
             ParserError
                 { peErrorMessage = "Template file not found: " ++ fn
-                , peSourceFile = Nothing
-                , peSourceLine = 0
-                , peSourceColumn = 0
+                , peSourceName = Nothing
+                , peSourceLine = Nothing
+                , peSourceColumn = Nothing
                 }
         Just src -> parseGinger resolve src
 
@@ -42,15 +49,13 @@ parseGingerFile resolve fn = do
 parseGinger :: Monad m => IncludeResolver m -> Source -> m (Either ParserError Template)
 parseGinger = undefined
 
-type IncludeResolver m = String -> m (Maybe String)
-
 -- | Error information for Ginger parser errors.
 data ParserError =
     ParserError
         { peErrorMessage :: String -- ^ Human-readable error message
         , peSourceName :: Maybe SourceName -- ^ Source name, if any
-        , peSourceLine :: Int -- ^ Line number, if available
-        , peSourceColumn :: Int -- ^ Column number, if available
+        , peSourceLine :: Maybe Int -- ^ Line number, if available
+        , peSourceColumn :: Maybe Int -- ^ Column number, if available
         }
         deriving (Show)
 
@@ -64,5 +69,5 @@ fromParsecError e =
     in ParserError
         (unlines . map messageString . errorMessages $ e)
         sourceFilename
-        (sourceLine pos)
-        (sourceColumn pos)
+        (Just $ sourceLine pos)
+        (Just $ sourceColumn pos)
