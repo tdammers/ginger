@@ -8,7 +8,7 @@
 {-#LANGUAGE FlexibleInstances #-}
 module Text.Ginger.Html
 ( Html
-, preEscaped
+, unsafeRawHtml
 , html
 , htmlSource
 , ToHtml (..)
@@ -41,8 +41,8 @@ htmlSource = unHtml
 -- this bypasses any and all HTML encoding; the caller is responsible for
 -- taking appropriate measures against XSS and other potential vulnerabilities.
 -- In other words, the input to this function is considered pre-sanitized.
-preEscaped :: Text -> Html
-preEscaped = Html
+unsafeRawHtml :: Text -> Html
+unsafeRawHtml = Html
 
 -- | Safely convert plain text to HTML.
 html :: Text -> Html
