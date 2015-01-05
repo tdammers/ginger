@@ -4,6 +4,7 @@ module Text.Ginger.Parse
 , parseGingerFile
 , ParserError (..)
 , IncludeResolver
+, Source, SourceName
 )
 where
 
