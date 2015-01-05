@@ -18,6 +18,7 @@ instance GingerValue Text where
     keys = const []
     toList = const []
     toString = id
+    toBoolean = Text.null
     fromString = id
     (~+~) = withScientificText (+)
     (~-~) = withScientificText (-)

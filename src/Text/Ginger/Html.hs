@@ -27,11 +27,17 @@ newtype Html = Html { unHtml :: Text }
 class ToHtml s where
     toHtml :: s -> Html
 
+-- | Text is automatically HTML-encoded
 instance ToHtml Text where
     toHtml = html
 
+-- | String is automatically HTML-encoded and converted to 'Text'
 instance ToHtml [Char] where
     toHtml = mconcat . map htmlEncodeChar
+
+-- | Html itself is a trivial instance
+instance ToHtml Html where
+    toHtml = id
 
 -- | Extract HTML source code from an @Html@ value.
 htmlSource :: Html -> Text

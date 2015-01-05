@@ -10,8 +10,8 @@ module Text.Ginger.Run
 )
 where
 
-import Prelude ( (.), ($)
-               , undefined
+import Prelude ( (.), ($), (==)
+               , undefined, otherwise
                , Maybe (..)
                )
 import qualified Prelude
@@ -21,9 +21,11 @@ import Text.Ginger.Value
 
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.Writer
 import Control.Monad.Reader
+import Control.Applicative
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 
@@ -48,7 +50,7 @@ data CallArgs v =
 -- based on a lookup key, and a writer function (outputting HTML by whatever
 -- means the carrier monad provides, e.g. @putStr@ for @IO@, or @tell@ for
 -- @Writer@s).
-makeContextM :: (Monad m, GingerValue v) => (VarName -> m v) -> (Html -> m ()) -> GingerContext m v
+makeContextM :: (Monad m, Functor m, GingerValue v) => (VarName -> m v) -> (Html -> m ()) -> GingerContext m v
 makeContextM = GingerContext
 
 -- | Create an execution context for runGinger.
@@ -57,11 +59,46 @@ makeContextM = GingerContext
 makeContext :: GingerValue v => (VarName -> v) -> GingerContext (Writer Html) v
 makeContext l = makeContextM (return . l) tell
 
--- | Monadically run a Ginger template. The @m@ parameter is the carrier monad,
--- the @v@ parameter is the type for Ginger values.
-runGingerM :: (Monad m, GingerValue v) => GingerContext m v -> Template -> m ()
-runGingerM = undefined
-
 -- | Purely expand a Ginger template. @v@ is the type for Ginger values.
 runGinger :: (GingerValue v) => GingerContext (Writer Html) v -> Template -> Html
 runGinger context template = execWriter $ runGingerM context template
+
+-- | Monadically run a Ginger template. The @m@ parameter is the carrier monad,
+-- the @v@ parameter is the type for Ginger values.
+runGingerM :: (Monad m, Functor m, GingerValue v) => GingerContext m v -> Template -> m ()
+runGingerM context tpl = runReaderT (runTemplate tpl) context
+
+type Run m v = ReaderT (GingerContext m v) m
+
+runTemplate :: (Monad m, Functor m, GingerValue v) => Template -> Run m v ()
+runTemplate = runStatement . templateBody
+
+runStatement :: (Monad m, Functor m, GingerValue v) => Statement -> Run m v ()
+runStatement (MultiS xs) = forM_ xs runStatement
+runStatement (LiteralS html) = echo html
+runStatement (InterpolationS expr) = runExpression expr >>= echo
+runStatement (IfS condExpr true false) = do
+    cond <- runExpression condExpr
+    runStatement $ if toBoolean cond then true else false
+
+runStatement (ForS varName itereeExpr body) = do
+    iteree <- toList <$> runExpression itereeExpr
+    forM_ iteree $ \iterator -> do
+        parentLookup <- asks contextLookup
+        let localLookup k
+                | k == varName = return iterator
+                | otherwise = parentLookup k
+        local
+            (\c -> c { contextLookup = localLookup })
+            (runStatement body)
+
+runExpression :: (Monad m, Functor m, GingerValue v) => Expression -> Run m v v
+runExpression (StringLiteralE str) = return $ fromString str
+runExpression (VarE key) = do
+    l <- asks contextLookup
+    lift $ l key
+
+echo :: (Monad m, Functor m, GingerValue v, ToHtml h) => h -> Run m v ()
+echo src = do
+    p <- asks contextWriteHtml
+    lift $ p (toHtml src)

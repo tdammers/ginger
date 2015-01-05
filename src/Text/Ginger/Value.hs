@@ -11,6 +11,7 @@ class ToHtml v => GingerValue v where
     keys :: v -> [Text] -- ^ get all dictionary keys, if any
     toList :: v -> [v] -- ^ access as flat list
     toString :: v -> Text -- ^ access as string
+    toBoolean :: v -> Bool -- ^ cast to boolean
     fromString :: Text -> v -- ^ create from string
     (~+~) :: v -> v -> v -- ^ loosely-typed addition
     (~-~) :: v -> v -> v -- ^ loosely-typed subtraction
