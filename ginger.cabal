@@ -25,7 +25,8 @@ library
                , aeson
                , bytestring
                , mtl >= 2.1
-               , parsec
+               , parsec >= 3.0
                , text
+               , unordered-containers >= 0.2.5
   hs-source-dirs:      src
   default-language:    Haskell2010
