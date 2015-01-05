@@ -68,11 +68,14 @@ runGinger context template = execWriter $ runGingerM context template
 runGingerM :: (Monad m, Functor m, GingerValue v) => GingerContext m v -> Template -> m ()
 runGingerM context tpl = runReaderT (runTemplate tpl) context
 
+-- | Internal type alias for our template-runner monad stack.
 type Run m v = ReaderT (GingerContext m v) m
 
+-- | Run a template.
 runTemplate :: (Monad m, Functor m, GingerValue v) => Template -> Run m v ()
 runTemplate = runStatement . templateBody
 
+-- | Run one statement.
 runStatement :: (Monad m, Functor m, GingerValue v) => Statement -> Run m v ()
 runStatement (MultiS xs) = forM_ xs runStatement
 runStatement (LiteralS html) = echo html
@@ -92,12 +95,15 @@ runStatement (ForS varName itereeExpr body) = do
             (\c -> c { contextLookup = localLookup })
             (runStatement body)
 
+-- | Run (evaluate) an expression and return its value into the Run monad
 runExpression :: (Monad m, Functor m, GingerValue v) => Expression -> Run m v v
 runExpression (StringLiteralE str) = return $ fromString str
 runExpression (VarE key) = do
     l <- asks contextLookup
     lift $ l key
 
+-- | Helper function to output a HTML value using whatever print function the
+-- context provides.
 echo :: (Monad m, Functor m, GingerValue v, ToHtml h) => h -> Run m v ()
 echo src = do
     p <- asks contextWriteHtml

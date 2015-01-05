@@ -1,3 +1,5 @@
+-- | Defines the typeclass that Ginger values must implement for the template
+-- runner to deal with them.
 module Text.Ginger.Value
 where
 
