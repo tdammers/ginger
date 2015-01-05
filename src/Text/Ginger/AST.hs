@@ -5,7 +5,7 @@ where
 import Data.Text (Text)
 import qualified Data.Text as Text
 
--- | A context variable name
+-- | A context variable name.
 type VarName = Text
 
 -- | Top-level data structure, representing a fully parsed template.
@@ -14,7 +14,7 @@ data Template
         { templateBody :: Statement
         }
 
--- | Ginger "statements".
+-- | Ginger statements.
 data Statement
     = MultiS [Statement] -- ^ A sequence of multiple statements
     | LiteralS Text -- ^ Literal output (anything outside of any tag)
