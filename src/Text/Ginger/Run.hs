@@ -3,7 +3,7 @@ module Text.Ginger.Run
 ( runGingerM
 , runGinger
 , GingerContext
-, GingerValue (..)
+, module Text.Ginger.Value
 , CallArgs (..)
 , makeContext
 , makeContextM
