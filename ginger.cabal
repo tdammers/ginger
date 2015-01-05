@@ -19,6 +19,9 @@ cabal-version:       >=1.10
 library
   exposed-modules: Text.Ginger
                  , Text.Ginger.Parse
+                 , Text.Ginger.Run
+                 , Text.Ginger.Value
+                 , Text.Ginger.Value.Text
   -- other-modules:       
   -- other-extensions:    
   build-depends: base >=4.6 && <4.7
@@ -26,6 +29,8 @@ library
                , bytestring
                , mtl >= 2.1
                , parsec >= 3.0
+               , safe >= 0.3
+               , scientific >= 0.3
                , text
                , unordered-containers >= 0.2.5
   hs-source-dirs:      src

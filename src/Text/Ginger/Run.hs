@@ -1,8 +1,10 @@
+-- | Execute Ginger templates in an arbitrary monad.
 module Text.Ginger.Run
 ( runGingerM
 , runGinger
 , GingerContext
 , GingerValue (..)
+, CallArgs (..)
 , makeContext
 , makeContextM
 )
@@ -15,12 +17,15 @@ import Prelude ( (.), ($)
 import qualified Prelude
 import Text.Ginger.AST
 import Text.Ginger.Html
+import Text.Ginger.Value
 
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Control.Monad.Identity
 import Control.Monad.Writer
 import Control.Monad.Reader
+import qualified Data.HashMap.Strict as HashMap
+import Data.HashMap.Strict (HashMap)
 
 -- | Execution context. Determines how to look up variables from the
 -- environment, and how to write out template output.
@@ -30,22 +35,13 @@ data GingerContext m v
         , contextWriteHtml :: Html -> m ()
         }
 
--- | Since Ginger is unityped, any type that you want to use as a value in
--- a template must implement a few common operations.
-class ToHtml v => GingerValue v where
-    lookup :: Text -> v -> Maybe v -- ^ used for dictionary-style access
-    keys :: v -> [Text] -- ^ get all dictionary keys, if any
-    toList :: v -> [v] -- ^ access as flat list
-    toString :: v -> Text -- ^ access as string
-    fromString :: Text -> v -- ^ create from string
-    (~+~) :: v -> v -> v -- ^ loosely-typed addition
-    (~-~) :: v -> v -> v -- ^ loosely-typed subtraction
-    (~*~) :: v -> v -> v -- ^ loosely-typed multiplication
-    (~/~) :: v -> v -> v -- ^ loosely-typed division
-    (~//~) :: v -> v -> v -- ^ loosely-typed integer division
-    (~~~) :: v -> v -> v -- ^ string concatenation
-    stringly :: (Text -> Text) -> v -> v -- ^ "lift" a string transformation onto ginger values
-    stringly f = fromString . f . toString
+-- | Wrapper structure to hold function call arguments.
+data CallArgs v =
+    CallArgs
+        { namedArgs :: HashMap Text v -- ^ Argument given by declared name
+        , kwargs :: HashMap Text v -- ^ Undeclared named arguments
+        , args :: [v] -- ^ Excess positional arguments
+        }
 
 -- | Create an execution context for runGingerM.
 -- Takes a lookup function, which returns ginger values into the carrier monad
