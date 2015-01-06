@@ -37,14 +37,6 @@ data GingerContext m v
         , contextWriteHtml :: Html -> m ()
         }
 
--- | Wrapper structure to hold function call arguments.
-data CallArgs v =
-    CallArgs
-        { namedArgs :: HashMap Text v -- ^ Argument given by declared name
-        , kwargs :: HashMap Text v -- ^ Undeclared named arguments
-        , args :: [v] -- ^ Excess positional arguments
-        }
-
 -- | Create an execution context for runGingerM.
 -- Takes a lookup function, which returns ginger values into the carrier monad
 -- based on a lookup key, and a writer function (outputting HTML by whatever
