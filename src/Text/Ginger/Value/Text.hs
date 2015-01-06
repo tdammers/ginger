@@ -17,16 +17,14 @@ instance GingerValue Text where
     lookup k v = Nothing
     keys = const []
     toList = const []
-    toString = id
     toBoolean = Text.null
-    fromString = id
+    toNumber = readMay . Text.unpack
     (~+~) = withScientificText (+)
     (~-~) = withScientificText (-)
     (~*~) = withScientificText (*)
     (~/~) = withScientificText (/)
     (~//~) = withIntegerText div
     (~~~) = (<>)
-    stringly = id
 
 withScientificText :: (Scientific -> Scientific -> Scientific) -> Text -> Text -> Text
 withScientificText = withText

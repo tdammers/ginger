@@ -5,20 +5,25 @@ module Text.Ginger.Run
 , runGinger
 , GingerContext
 , module Text.Ginger.Value
-, CallArgs (..)
 , makeContext
 , makeContextM
 )
 where
 
-import Prelude ( (.), ($), (==)
+import Prelude ( (.), ($), (==), (/=)
+               , (+), (-), (*), (/), div
                , undefined, otherwise
                , Maybe (..)
+               , Bool (..)
+               , fromIntegral, floor
+               , not
                )
 import qualified Prelude
+import Data.Maybe (fromMaybe)
 import Text.Ginger.AST
 import Text.Ginger.Html
 import Text.Ginger.Value
+import Text.Ginger.GVal
 
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -29,24 +34,8 @@ import Control.Monad.Reader
 import Control.Applicative
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
-
-data GVal m v =
-    UserValue v |
-    List [GVal m v] |
-    -- Object (HashMap Text (GVal m v)) |
-    String Text |
-    Html Html |
-    Function ([(Maybe Text, GVal m v)] -> m (GVal m v))
-
-instance ToHtml v => ToHtml (GVal m v) where
-    toHtml (UserValue v) = toHtml v
-    toHtml (List xs) = mconcat . Prelude.map toHtml $ xs
-    toHtml (String s) = toHtml s
-    toHtml (Html h) = h
-    toHtml (Function _) = toHtml ""
-
-instance GingerValue v => GingerValue (GVal m v) where
-
+import Data.Scientific (Scientific)
+import Safe (readMay)
 
 -- | Execution context. Determines how to look up variables from the
 -- environment, and how to write out template output.
@@ -64,7 +53,7 @@ data GingerContext m v
 makeContextM :: (Monad m, Functor m, GingerValue v) => (VarName -> m v) -> (Html -> m ()) -> GingerContext m v
 makeContextM l w = GingerContext (liftLookup l) w
 
-liftLookup :: Monad m => (VarName -> v) -> (VarName -> GVal m v)
+liftLookup :: Monad m => (VarName -> m v) -> VarName -> m (GVal m v)
 liftLookup f k = do
     v <- f k
     return . UserValue $ v
@@ -112,8 +101,8 @@ runStatement (ForS varName itereeExpr body) = do
             (runStatement body)
 
 -- | Run (evaluate) an expression and return its value into the Run monad
-runExpression :: (Monad m, Functor m, GingerValue v) => Expression -> Run m v v
-runExpression (StringLiteralE str) = return $ fromString str
+runExpression :: (Monad m, Functor m, GingerValue v) => Expression -> Run m v (GVal m v)
+runExpression (StringLiteralE str) = return . String $ str
 runExpression (VarE key) = do
     l <- asks contextLookup
     lift $ l key
