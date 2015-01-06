@@ -170,7 +170,20 @@ forStmtP = do
     return $ ForS varName iteree body
 
 forHeadP :: Monad m => Parser m (Expression, VarName)
-forHeadP = do
+forHeadP = try forHeadInP <|> forHeadAsP
+
+forHeadInP :: Monad m => Parser m (Expression, VarName)
+forHeadInP = do
+    varName <- Text.pack <$> identifierP
+    spaces
+    string "in"
+    notFollowedBy identCharP
+    spaces
+    iteree <- expressionP
+    return (iteree, varName)
+
+forHeadAsP :: Monad m => Parser m (Expression, VarName)
+forHeadAsP = do
     iteree <- expressionP
     spaces
     string "as"
