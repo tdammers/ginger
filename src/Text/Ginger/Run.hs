@@ -82,6 +82,7 @@ runTemplate = runStatement . templateBody
 
 -- | Run one statement.
 runStatement :: (Monad m, Functor m, GingerValue v) => Statement -> Run m v ()
+runStatement NullS = return ()
 runStatement (MultiS xs) = forM_ xs runStatement
 runStatement (LiteralS html) = echo html
 runStatement (InterpolationS expr) = runExpression expr >>= echo

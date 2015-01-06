@@ -17,7 +17,9 @@ import Text.Parsec ( ParseError
                    , try, lookAhead
                    , manyTill, oneOf, string, notFollowedBy, between
                    , eof, spaces, anyChar, char
+                   , option
                    , unexpected
+                   , (<?>)
                    )
 import Text.Parsec.Error ( errorMessages
                          , errorPos
@@ -109,12 +111,13 @@ ignore = (>> return ())
 
 templateP :: Monad m => Parser m Template
 templateP = do
-    Template <$> statementsP
+    t <- Template <$> statementsP
+    eof
+    return t
 
 statementsP :: Monad m => Parser m Statement
 statementsP = do
-    stmts <- many statementP
-    eof
+    stmts <- many (try statementP)
     case stmts of
         [] -> return NullS
         x:[] -> return x
@@ -122,6 +125,7 @@ statementsP = do
 
 statementP :: Monad m => Parser m Statement
 statementP = interpolationStmtP
+           <|> ifStmtP
            <|> literalStmtP
 
 interpolationStmtP :: Monad m => Parser m Statement
@@ -135,10 +139,50 @@ interpolationStmtP = do
 
 literalStmtP :: Monad m => Parser m Statement
 literalStmtP = do
-    txt <- manyTill anyChar ((ignore . lookAhead . try . string $ "{{") <|> eof)
+    txt <- manyTill anyChar endOfLiteralP
+
     case txt of
         [] -> unexpected "{{"
         _ -> return . LiteralS . unsafeRawHtml . Text.pack $ txt
+
+endOfLiteralP :: Monad m => Parser m ()
+endOfLiteralP =
+    (ignore . lookAhead . try . string $ "{{") <|>
+    (ignore . lookAhead $ openTagP) <|>
+    eof
+
+ifStmtP :: Monad m => Parser m Statement
+ifStmtP = do
+    try $ do
+        openTagP
+        string "if"
+        spaces
+    condExpr <- expressionP
+    closeTagP
+    trueStmt <- statementsP
+    falseStmt <- option NullS $ do
+        try (openTagP >> string "else" >> closeTagP)
+        statementsP
+    openTagP >> string "endif" >> closeTagP
+    return $ IfS condExpr trueStmt falseStmt
+
+openTagP :: Monad m => Parser m ()
+openTagP = try openTagWP <|> try openTagNWP
+
+openTagWP :: Monad m => Parser m ()
+openTagWP = ignore (spaces >> string "{%-" >> spaces)
+
+openTagNWP :: Monad m => Parser m ()
+openTagNWP = ignore (string "{%" >> spaces)
+
+closeTagP :: Monad m => Parser m ()
+closeTagP = try closeTagWP <|> try closeTagNWP <?> "Closing tag ('%}')"
+
+closeTagWP :: Monad m => Parser m ()
+closeTagWP = ignore (spaces >> string "-%}" >> spaces)
+
+closeTagNWP :: Monad m => Parser m ()
+closeTagNWP = ignore (spaces >> string "%}")
 
 expressionP :: Monad m => Parser m Expression
 expressionP = parenthesizedExprP <|> varExprP <|> stringLiteralExprP
@@ -160,7 +204,10 @@ identifierP :: Monad m => Parser m String
 identifierP =
     (:)
         <$> oneOf (['a'..'z'] ++ ['A'..'Z'] ++ ['_'])
-        <*> (many . oneOf) (['a'..'z'] ++ ['A'..'Z'] ++ ['_'] ++ ['0'..'9'])
+        <*> many identCharP
+
+identCharP :: Monad m => Parser m Char
+identCharP = oneOf (['a'..'z'] ++ ['A'..'Z'] ++ ['_'] ++ ['0'..'9'])
 
 stringLiteralExprP :: Monad m => Parser m Expression
 stringLiteralExprP = do

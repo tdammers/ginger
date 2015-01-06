@@ -17,7 +17,7 @@ instance GingerValue Text where
     lookup k v = Nothing
     keys = const []
     toList = const []
-    toBoolean = Text.null
+    toBoolean = not . Text.null
     toNumber = readMay . Text.unpack
     (~+~) = withScientificText (+)
     (~-~) = withScientificText (-)

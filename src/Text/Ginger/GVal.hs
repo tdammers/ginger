@@ -11,10 +11,12 @@ import Prelude ( (.), ($), (==), (/=)
                , undefined, otherwise
                , Maybe (..)
                , Bool (..)
+               , Show, show
                , fromIntegral, floor
                , not
                )
 import qualified Prelude
+import qualified Data.List as List
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -35,6 +37,15 @@ data GVal m v =
     Boolean Bool |
     Number Scientific |
     Function ([(Maybe Text, GVal m v)] -> m (GVal m v))
+
+instance Show v => Show (GVal m v) where
+    show (UserValue v) = "UserValue " <> show v
+    show (List xs) = "[" <> (mconcat . List.intersperse ", " . Prelude.map show $ xs) <> "]"
+    show (String v) = show v
+    show (Html h) = show h
+    show (Boolean b) = show b
+    show (Number n) = show n
+    show (Function _) = "<<function>>"
 
 -- | Forward 'UserValue' to the user type, implement in a somewhat useful 
 -- way for the others.
@@ -68,10 +79,10 @@ instance GingerValue v => GingerValue (GVal m v) where
     -- | Forward for wrapped user values
     toBoolean (UserValue v) = toBoolean v
     -- | Loose conversion for other constructors
-    toBoolean (List xs) = Prelude.null xs
-    toBoolean (String s) = Text.null s
+    toBoolean (List xs) = not $ Prelude.null xs
+    toBoolean (String s) = not $ Text.null s
     toBoolean (Number n) = n /= 0
-    toBoolean (Html h) = Text.null . htmlSource $ h
+    toBoolean (Html h) = not . Text.null . htmlSource $ h
     toBoolean (Boolean b) = b
     toBoolean (Function _) = True
 

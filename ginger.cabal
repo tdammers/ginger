@@ -18,13 +18,16 @@ cabal-version:       >=1.10
 
 library
   exposed-modules: Text.Ginger
+                 , Text.Ginger.AST
+                 , Text.Ginger.GVal
+                 , Text.Ginger.Html
                  , Text.Ginger.Parse
                  , Text.Ginger.Run
                  , Text.Ginger.Value
                  , Text.Ginger.Value.Text
   -- other-modules:       
   -- other-extensions:    
-  build-depends: base >=4.6 && <4.7
+  build-depends: base >=4.6 && <5
                , aeson
                , bytestring
                , mtl >= 2.1
@@ -35,3 +38,11 @@ library
                , unordered-containers >= 0.2.5
   hs-source-dirs:      src
   default-language:    Haskell2010
+
+executable smoke-test
+    main-is: SmokeTest.hs
+    hs-source-dirs: tests
+    default-language:    Haskell2010
+    build-depends: base >= 4.6 && <5
+                 , ginger
+                 , text
