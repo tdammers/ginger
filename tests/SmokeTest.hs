@@ -8,6 +8,7 @@ import Data.Aeson as JSON
 import Data.Maybe
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
+import Control.Applicative
 
 main = do
     let scope :: HashMap Text Value
@@ -19,5 +20,29 @@ main = do
     tplSource <- getContents
     tpl <- parseGinger resolve "input" tplSource
     case tpl of
-        Left err -> print err
+        Left err -> do
+            printParserError err
+            displayParserError tplSource err
         Right t -> runGingerM (makeContextM scopeLookup (putStr . Text.unpack . htmlSource)) t
+
+printParserError :: ParserError -> IO ()
+printParserError pe = do
+    putStr . fromMaybe "<<unknown source>>" . peSourceName $ pe
+    putStr ":"
+    putStr . fromMaybe "" $ (++ ":") . show <$> peSourceLine pe
+    putStr . fromMaybe "" $ (++ ":") . show <$> peSourceColumn pe
+    putStrLn $ peErrorMessage pe
+
+displayParserError :: String -> ParserError -> IO ()
+displayParserError src pe = do
+    case (peSourceLine pe, peSourceColumn pe) of
+        (Just l, cMay) -> do
+            let ln = Prelude.take 1 . Prelude.drop (l - 1) . Prelude.lines $ src
+            case ln of
+                [] -> return ()
+                x:_ -> do
+                    putStrLn x
+                    case cMay of
+                        Just c -> putStrLn $ Prelude.replicate (c - 1) ' ' ++ "^"
+                        _ -> return ()
+        _ -> return ()
