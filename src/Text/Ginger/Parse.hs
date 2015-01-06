@@ -14,7 +14,8 @@ import Text.Parsec ( ParseError
                    , sourceName
                    , ParsecT
                    , runParserT
-                   , manyTill, oneOf, string, notFollowedBy, try, lookAhead
+                   , try, lookAhead
+                   , manyTill, oneOf, string, notFollowedBy, between
                    , eof, spaces, anyChar, char
                    , unexpected
                    )
@@ -140,7 +141,26 @@ literalStmtP = do
         _ -> return . LiteralS . unsafeRawHtml . Text.pack $ txt
 
 expressionP :: Monad m => Parser m Expression
-expressionP = stringLiteralExprP
+expressionP = parenthesizedExprP <|> varExprP <|> stringLiteralExprP
+
+parenthesizedExprP :: Monad m => Parser m Expression
+parenthesizedExprP =
+    between
+        (try . ignore $ char '(' >> spaces)
+        (ignore $ char ')' >> spaces)
+        expressionP
+
+varExprP :: Monad m => Parser m Expression
+varExprP = do
+    litName <- identifierP
+    spaces
+    return . VarE . Text.pack $ litName
+
+identifierP :: Monad m => Parser m String
+identifierP =
+    (:)
+        <$> oneOf (['a'..'z'] ++ ['A'..'Z'] ++ ['_'])
+        <*> (many . oneOf) (['a'..'z'] ++ ['A'..'Z'] ++ ['_'] ++ ['0'..'9'])
 
 stringLiteralExprP :: Monad m => Parser m Expression
 stringLiteralExprP = do
