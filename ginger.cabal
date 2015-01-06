@@ -23,9 +23,6 @@ library
                  , Text.Ginger.Html
                  , Text.Ginger.Parse
                  , Text.Ginger.Run
-                 , Text.Ginger.Value
-                 , Text.Ginger.Value.Text
-                 , Text.Ginger.Value.JSON
   -- other-modules:       
   -- other-extensions:    
   build-depends: base >=4.6 && <5

@@ -1,10 +1,10 @@
+{-#LANGUAGE FlexibleContexts #-}
 {-#LANGUAGE OverloadedStrings #-}
 -- | Execute Ginger templates in an arbitrary monad.
 module Text.Ginger.Run
 ( runGingerM
 , runGinger
 , GingerContext
-, module Text.Ginger.Value
 , makeContext
 , makeContextM
 )
@@ -22,7 +22,6 @@ import qualified Prelude
 import Data.Maybe (fromMaybe)
 import Text.Ginger.AST
 import Text.Ginger.Html
-import Text.Ginger.Value
 import Text.Ginger.GVal
 
 import Data.Text (Text)
@@ -39,9 +38,9 @@ import Safe (readMay)
 
 -- | Execution context. Determines how to look up variables from the
 -- environment, and how to write out template output.
-data GingerContext m v
+data GingerContext m
     = GingerContext
-        { contextLookup :: VarName -> m (GVal m v)
+        { contextLookup :: VarName -> m (GVal m)
         , contextWriteHtml :: Html -> m ()
         }
 
@@ -50,38 +49,38 @@ data GingerContext m v
 -- based on a lookup key, and a writer function (outputting HTML by whatever
 -- means the carrier monad provides, e.g. @putStr@ for @IO@, or @tell@ for
 -- @Writer@s).
-makeContextM :: (Monad m, Functor m, GingerValue v) => (VarName -> m v) -> (Html -> m ()) -> GingerContext m v
+makeContextM :: (Monad m, Functor m, ToGVal m v) => (VarName -> m v) -> (Html -> m ()) -> GingerContext m
 makeContextM l w = GingerContext (liftLookup l) w
 
-liftLookup :: Monad m => (VarName -> m v) -> VarName -> m (GVal m v)
+liftLookup :: (Monad m, ToGVal m v) => (VarName -> m v) -> VarName -> m (GVal m)
 liftLookup f k = do
     v <- f k
-    return . UserValue $ v
+    return . toGVal $ v
 
 -- | Create an execution context for runGinger.
 -- The argument is a lookup function that maps top-level context keys to ginger
 -- values.
-makeContext :: GingerValue v => (VarName -> v) -> GingerContext (Writer Html) v
+makeContext :: (ToGVal (Writer Html) v) => (VarName -> v) -> GingerContext (Writer Html)
 makeContext l = makeContextM (return . l) tell
 
 -- | Purely expand a Ginger template. @v@ is the type for Ginger values.
-runGinger :: (GingerValue v) => GingerContext (Writer Html) v -> Template -> Html
+runGinger :: GingerContext (Writer Html) -> Template -> Html
 runGinger context template = execWriter $ runGingerM context template
 
 -- | Monadically run a Ginger template. The @m@ parameter is the carrier monad,
 -- the @v@ parameter is the type for Ginger values.
-runGingerM :: (Monad m, Functor m, GingerValue v) => GingerContext m v -> Template -> m ()
+runGingerM :: (Monad m, Functor m) => GingerContext m -> Template -> m ()
 runGingerM context tpl = runReaderT (runTemplate tpl) context
 
 -- | Internal type alias for our template-runner monad stack.
-type Run m v = ReaderT (GingerContext m v) m
+type Run m = ReaderT (GingerContext m) m
 
 -- | Run a template.
-runTemplate :: (Monad m, Functor m, GingerValue v) => Template -> Run m v ()
+runTemplate :: (Monad m, Functor m) => Template -> Run m ()
 runTemplate = runStatement . templateBody
 
 -- | Run one statement.
-runStatement :: (Monad m, Functor m, GingerValue v) => Statement -> Run m v ()
+runStatement :: (Monad m, Functor m) => Statement -> Run m ()
 runStatement NullS = return ()
 runStatement (MultiS xs) = forM_ xs runStatement
 runStatement (LiteralS html) = echo html
@@ -102,7 +101,7 @@ runStatement (ForS varName itereeExpr body) = do
             (runStatement body)
 
 -- | Run (evaluate) an expression and return its value into the Run monad
-runExpression :: (Monad m, Functor m, GingerValue v) => Expression -> Run m v (GVal m v)
+runExpression :: (Monad m, Functor m) => Expression -> Run m (GVal m)
 runExpression (StringLiteralE str) = return . String $ str
 runExpression (VarE key) = do
     l <- asks contextLookup
@@ -110,7 +109,7 @@ runExpression (VarE key) = do
 
 -- | Helper function to output a HTML value using whatever print function the
 -- context provides.
-echo :: (Monad m, Functor m, GingerValue v, ToHtml h) => h -> Run m v ()
+echo :: (Monad m, Functor m, ToHtml h) => h -> Run m ()
 echo src = do
     p <- asks contextWriteHtml
     lift $ p (toHtml src)

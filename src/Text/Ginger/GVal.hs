@@ -1,4 +1,6 @@
 {-#LANGUAGE OverloadedStrings #-}
+{-#LANGUAGE MultiParamTypeClasses #-}
+{-#LANGUAGE FlexibleInstances #-}
 -- | GVal is a generic unitype value, parametrized over a user type.
 -- It implements 'GingerValue' semantics such that wrapped 'UserValue's are
 -- preserved as much as possible, promoting to specific other constructors
@@ -8,7 +10,7 @@ where
 
 import Prelude ( (.), ($), (==), (/=)
                , (+), (-), (*), (/), div
-               , undefined, otherwise
+               , undefined, otherwise, id
                , Maybe (..)
                , Bool (..)
                , Show, show
@@ -20,102 +22,87 @@ import qualified Data.List as List
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.List as List
 import Safe (readMay)
 import Data.Monoid
 import Data.Scientific (Scientific)
 import Control.Applicative
+import qualified Data.Aeson as JSON
+import qualified Data.HashMap.Strict as HashMap
+import Data.HashMap.Strict (HashMap)
+import qualified Data.Vector as Vector
 
-import Text.Ginger.Value
 import Text.Ginger.Html
 
-data GVal m v =
-    UserValue v |
-    List [GVal m v] |
-    -- Object (HashMap Text (GVal m v)) |
+type Function m = ([(Maybe Text, GVal m)] -> m (GVal m))
+
+data GVal m =
+    List [GVal m] |
+    Object (HashMap Text (GVal m)) |
     String Text |
     Html Html |
     Boolean Bool |
     Number Scientific |
-    Function ([(Maybe Text, GVal m v)] -> m (GVal m v))
+    Null |
+    Function (Function m)
 
-instance Show v => Show (GVal m v) where
-    show (UserValue v) = "UserValue " <> show v
+class ToGVal m a where
+    toGVal :: a -> GVal m
+
+instance ToGVal m (GVal m) where
+    toGVal = id
+
+instance Show (GVal m) where
     show (List xs) = "[" <> (mconcat . List.intersperse ", " . Prelude.map show $ xs) <> "]"
     show (String v) = show v
     show (Html h) = show h
     show (Boolean b) = show b
     show (Number n) = show n
+    show Null = "null"
     show (Function _) = "<<function>>"
 
--- | Forward 'UserValue' to the user type, implement in a somewhat useful 
--- way for the others.
-instance ToHtml v => ToHtml (GVal m v) where
-    toHtml (UserValue v) = toHtml v
+instance ToHtml (GVal m) where
     toHtml (List xs) = mconcat . Prelude.map toHtml $ xs
     toHtml (String s) = toHtml s
     toHtml (Html h) = h
+    toHtml (Number n) = toHtml . Text.pack . show $ n
     toHtml (Boolean False) = html ""
     toHtml (Boolean True) = html "1"
-    toHtml (Function _) = html ""
+    toHtml _ = html ""
 
-instance GingerValue v => GingerValue (GVal m v) where
-    -- | Forward lookups to wrapped user values
-    lookup key (UserValue v) = UserValue <$> lookup key v
-    -- | Other constructors do not support key lookup
-    lookup key _ = Nothing
+lookup :: Text -> GVal m -> Maybe (GVal m)
+lookup k _ = Nothing
 
-    -- | For wrapped user values, forward the call
-    keys (UserValue v) = keys v
-    -- | Other constructors do not provide keys
-    keys _ = []
+keys :: GVal m -> [GVal m]
+keys _ = []
 
-    -- | For wrapped user values, forward the call
-    toList (UserValue v) = Prelude.map UserValue $ toList v
-    -- | Lists can be trivially converted
-    toList (List xs) = xs
-    -- | Other values cannot be converted to lists
-    toList _ = []
+toList :: GVal m -> [GVal m]
+toList (List xs) = xs
+toList _ = []
 
-    -- | Forward for wrapped user values
-    toBoolean (UserValue v) = toBoolean v
-    -- | Loose conversion for other constructors
-    toBoolean (List xs) = not $ Prelude.null xs
-    toBoolean (String s) = not $ Text.null s
-    toBoolean (Number n) = n /= 0
-    toBoolean (Html h) = not . Text.null . htmlSource $ h
-    toBoolean (Boolean b) = b
-    toBoolean (Function _) = True
+toNumber :: GVal m -> Maybe Scientific
+toNumber (Number n) = Just n
+toNumber (String s) = readMay . Text.unpack $ s
+toNumber (Boolean False) = Nothing
+toNumber (Boolean True) = Just 1
+toNumber _ = Nothing
 
-    toNumber (UserValue v) = toNumber v
-    toNumber (Number n) = Just n
-    toNumber (String s) = readMay . Text.unpack $ s
-    toNumber (Html h) = readMay . Text.unpack . htmlSource $ h
-    toNumber (Boolean True) = Just 1
-    toNumber _ = Nothing
+toBoolean :: GVal m -> Bool
+toBoolean (Number n) = n /= 0
+toBoolean (String s) = not $ Text.null s
+toBoolean (List xs) = not $ List.null xs
+toBoolean (Boolean b) = b
+toBoolean (Function _) = True
+toBoolean _ = False
 
-    -- Numeric operations keep UserValues intact where possible, and promote
-    -- to Number otherwise.
-    UserValue a ~+~ UserValue b = UserValue (a ~+~ b)
-    a ~+~ b = Number $ (fromMaybe 0 . toNumber) a + (fromMaybe 0 . toNumber) b
-    UserValue a ~-~ UserValue b = UserValue (a ~-~ b)
-    a ~-~ b = Number $ (fromMaybe 0 . toNumber) a - (fromMaybe 0 . toNumber) b
-    UserValue a ~*~ UserValue b = UserValue (a ~*~ b)
-    a ~*~ b = Number $ (fromMaybe 0 . toNumber) a * (fromMaybe 0 . toNumber) b
-    UserValue a ~/~ UserValue b = UserValue (a ~/~ b)
-    a ~/~ b = Number $ (fromMaybe 0 . toNumber) a / (fromMaybe 0 . toNumber) b
-    UserValue a ~//~ UserValue b = UserValue (a ~//~ b)
-    a ~//~ b = Number . fromIntegral $ floor ((fromMaybe 0 . toNumber) a) `div` floor ((fromMaybe 0 . toNumber) b)
+toFunction :: GVal m -> Maybe (Function m)
+toFunction (Function f) = Just f
+toFunction _ = Nothing
 
-    -- UserValues are forwarded
-    UserValue a ~~~ UserValue b = UserValue (a ~~~ b)
-    -- Strings can be concatenated as-is
-    String a ~~~ String b = String (a <> b)
-    -- If either value is HTML, the result must also be HTML
-    Html h ~~~ b = Html $ h <> toHtml b
-    a ~~~ Html h = Html $ toHtml a <> h
-    a ~~~ b
-        | not (toBoolean b) = a
-        | not (toBoolean a) = b
-        | otherwise = Html (toHtml a <> toHtml b)
-
-
+instance ToGVal m JSON.Value where
+    toGVal (JSON.Number n) = Number n
+    toGVal (JSON.String s) = String s
+    toGVal (JSON.Bool b) = Boolean b
+    toGVal (JSON.Null) = Null
+    toGVal (JSON.Array a) = List (List.map toGVal $ Vector.toList a)
+    toGVal (JSON.Object o) = Object (HashMap.map toGVal $ o)

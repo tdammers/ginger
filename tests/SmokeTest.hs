@@ -3,7 +3,6 @@ module Main where
 
 import Text.Ginger
 import Text.Ginger.Html
-import Text.Ginger.Value.JSON
 import Data.Text as Text
 import Data.Aeson as JSON
 import Data.Maybe
