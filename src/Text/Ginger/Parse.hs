@@ -153,18 +153,26 @@ endOfLiteralP =
 
 ifStmtP :: Monad m => Parser m Statement
 ifStmtP = do
-    try $ do
-        openTagP
-        string "if"
-        spaces
-    condExpr <- expressionP
-    closeTagP
+    condExpr <- startTagP "if" expressionP
     trueStmt <- statementsP
     falseStmt <- option NullS $ do
-        try (openTagP >> string "else" >> closeTagP)
+        try $ simpleTagP "else"
         statementsP
-    openTagP >> string "endif" >> closeTagP
+    simpleTagP "endif"
     return $ IfS condExpr trueStmt falseStmt
+
+startTagP :: Monad m => String -> Parser m a -> Parser m a
+startTagP tagName inner =
+    between
+        (try $ do
+            openTagP
+            string tagName
+            spaces)
+        closeTagP
+        inner
+
+simpleTagP :: Monad m => String -> Parser m ()
+simpleTagP tagName = openTagP >> string tagName >> closeTagP
 
 openTagP :: Monad m => Parser m ()
 openTagP = try openTagWP <|> try openTagNWP
