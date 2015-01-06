@@ -1,3 +1,4 @@
+{-#LANGUAGE OverloadedStrings #-}
 -- | Execute Ginger templates in an arbitrary monad.
 module Text.Ginger.Run
 ( runGingerM
@@ -29,11 +30,29 @@ import Control.Applicative
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 
+data GVal m v =
+    UserValue v |
+    List [GVal m v] |
+    -- Object (HashMap Text (GVal m v)) |
+    String Text |
+    Html Html |
+    Function ([(Maybe Text, GVal m v)] -> m (GVal m v))
+
+instance ToHtml v => ToHtml (GVal m v) where
+    toHtml (UserValue v) = toHtml v
+    toHtml (List xs) = mconcat . Prelude.map toHtml $ xs
+    toHtml (String s) = toHtml s
+    toHtml (Html h) = h
+    toHtml (Function _) = toHtml ""
+
+instance GingerValue v => GingerValue (GVal m v) where
+
+
 -- | Execution context. Determines how to look up variables from the
 -- environment, and how to write out template output.
 data GingerContext m v
     = GingerContext
-        { contextLookup :: VarName -> m v
+        { contextLookup :: VarName -> m (GVal m v)
         , contextWriteHtml :: Html -> m ()
         }
 
@@ -43,7 +62,12 @@ data GingerContext m v
 -- means the carrier monad provides, e.g. @putStr@ for @IO@, or @tell@ for
 -- @Writer@s).
 makeContextM :: (Monad m, Functor m, GingerValue v) => (VarName -> m v) -> (Html -> m ()) -> GingerContext m v
-makeContextM = GingerContext
+makeContextM l w = GingerContext (liftLookup l) w
+
+liftLookup :: Monad m => (VarName -> v) -> (VarName -> GVal m v)
+liftLookup f k = do
+    v <- f k
+    return . UserValue $ v
 
 -- | Create an execution context for runGinger.
 -- The argument is a lookup function that maps top-level context keys to ginger
