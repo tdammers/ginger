@@ -23,5 +23,3 @@ class ToHtml v => GingerValue v where
     (~~~) :: v -> v -> v -- ^ string concatenation
     stringly :: (Text -> Text) -> v -> v -- ^ "lift" a string transformation onto ginger values
     stringly f = fromString . f . toString
-
-
