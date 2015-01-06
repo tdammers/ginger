@@ -126,6 +126,7 @@ statementsP = do
 statementP :: Monad m => Parser m Statement
 statementP = interpolationStmtP
            <|> ifStmtP
+           <|> forStmtP
            <|> literalStmtP
 
 interpolationStmtP :: Monad m => Parser m Statement
@@ -160,6 +161,23 @@ ifStmtP = do
         statementsP
     simpleTagP "endif"
     return $ IfS condExpr trueStmt falseStmt
+
+forStmtP :: Monad m => Parser m Statement
+forStmtP = do
+    (iteree, varName) <- startTagP "for" forHeadP
+    body <- statementsP
+    simpleTagP "endfor"
+    return $ ForS varName iteree body
+
+forHeadP :: Monad m => Parser m (Expression, VarName)
+forHeadP = do
+    iteree <- expressionP
+    spaces
+    string "as"
+    notFollowedBy identCharP
+    spaces
+    varName <- Text.pack <$> identifierP
+    return (iteree, varName)
 
 startTagP :: Monad m => String -> Parser m a -> Parser m a
 startTagP tagName inner =

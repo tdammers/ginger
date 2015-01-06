@@ -49,3 +49,4 @@ executable smoke-test
                  , ginger
                  , aeson
                  , text
+                 , unordered-containers >= 0.2.5
