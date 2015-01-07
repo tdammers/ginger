@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html>
 <body>
-    Hello, {{ user }}!
+    <h1>Grocery list{% if user %} for {{ user }}{% endif %}</h1>
+    <ul>
+    {%- for count in groceries %}
+        <li>{{ count }}</li>
+    {%- endfor %}
+    </ul>
 </body>
 </html>

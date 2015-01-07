@@ -1,3 +1,8 @@
 {
-    "user": "tobias"
+    "user": "tobias",
+    "groceries": {
+        "apples": 5,
+        "oranges": 10,
+        "bananas": 3
+    }
 }

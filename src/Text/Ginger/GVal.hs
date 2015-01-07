@@ -66,6 +66,7 @@ instance ToGVal m (GVal m) where
 -- JavaScript / JSON
 instance Show (GVal m) where
     show (List xs) = "[" <> (mconcat . List.intersperse ", " . Prelude.map show $ xs) <> "]"
+    show (Object o) = "{" <> (mconcat . List.intersperse ", " $ [ show k <> ": " <> show v | (k, v) <- HashMap.toList o ]) <> "}"
     show (String v) = show v
     show (Html h) = show h
     show (Boolean b) = show b
@@ -77,6 +78,7 @@ instance Show (GVal m) where
 -- Tags that have no obvious textual representation render as empty HTML.
 instance ToHtml (GVal m) where
     toHtml (List xs) = mconcat . Prelude.map toHtml $ xs
+    toHtml (Object o) = mconcat . Prelude.map toHtml . HashMap.elems $ o
     toHtml (String s) = toHtml s
     toHtml (Html h) = h
     toHtml (Number n) = toHtml . Text.pack . show $ n
@@ -87,17 +89,20 @@ instance ToHtml (GVal m) where
 -- | Treat a 'GVal' as a dictionary and look up a value by key.
 -- If the value is not a dictionary, return 'Nothing'.
 lookup :: Text -> GVal m -> Maybe (GVal m)
+lookup k (Object o) = HashMap.lookup k o
 lookup k _ = Nothing
 
 -- | Treat a 'GVal' as a dictionary and list all the keys, with no particular
 -- ordering.
-keys :: GVal m -> [GVal m]
+keys :: GVal m -> [Text]
+keys (Object o) = HashMap.keys o
 keys _ = []
 
 -- | Convert a 'GVal' to a list of 'GVal's. If the value is not list-like
 -- (i.e., neither an 'Object' nor a 'List'), the empty list is returned.
 toList :: GVal m -> [GVal m]
 toList (List xs) = xs
+toList (Object o) = HashMap.elems o
 toList _ = []
 
 -- | Convert a 'GVal' to a number.
@@ -127,6 +132,7 @@ toBoolean :: GVal m -> Bool
 toBoolean (Number n) = n /= 0
 toBoolean (String s) = not $ Text.null s
 toBoolean (List xs) = not $ List.null xs
+toBoolean (Object o) = not $ HashMap.null o
 toBoolean (Boolean b) = b
 toBoolean (Function _) = True
 toBoolean _ = False
