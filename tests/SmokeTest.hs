@@ -12,26 +12,45 @@ import Control.Applicative
 import System.Environment ( getArgs )
 import System.IO
 import System.IO.Error
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
+import Control.Monad.Trans.Class ( lift )
+import Control.Monad.Trans.Maybe
+
+loadFile fn = openFile fn ReadMode >>= hGetContents
+
+loadFileMay fn =
+    tryIOError (loadFile fn) >>= \e ->
+         case e of
+            Right contents -> return (Just contents)
+            Left err -> do
+                print err
+                return Nothing
+
+decodeFile :: (FromJSON v) => FilePath -> IO (Maybe v)
+decodeFile fn = JSON.decode <$> (openFile fn ReadMode >>= LBS.hGetContents)
 
 main = do
     args <- getArgs
+    let (srcFn, scopeFn) = case args of
+            [] -> (Nothing, Nothing)
+            a:[] -> (Just a, Nothing)
+            a:b:[] -> (Just a, Just b)
 
-    let scope :: HashMap Text Value
-        Just scope = JSON.decode "{ \"name\": \"world\", \"list\": [4, 1, 3] }"
-        scopeLookup key = return . fromMaybe Null . HashMap.lookup key $ scope
+    scope <- case scopeFn of
+        Nothing -> return Nothing
+        Just fn -> (decodeFile fn :: IO (Maybe (HashMap Text Value)))
 
-        loadFile fn = openFile fn ReadMode >>= hGetContents
+    let scopeLookup key = case scope of
+            Nothing -> return Null
+            Just scope -> return . fromMaybe Null . HashMap.lookup key $ scope
 
-        resolve fn = tryIOError (loadFile fn) >>= \e ->
-                     case e of
-                        Right contents -> return (Just contents)
-                        Left err -> do
-                            print err
-                            return Nothing
+        resolve = loadFileMay
 
-    (tpl, src) <- case args of
-            fn:[] -> (,) <$> parseGingerFile resolve fn <*> return Nothing
-            _ -> getContents >>= \s -> (,) <$> parseGinger resolve Nothing s <*> return (Just s)
+    (tpl, src) <- case srcFn of
+            Just fn -> (,) <$> parseGingerFile resolve fn <*> return Nothing
+            Nothing -> getContents >>= \s -> (,) <$> parseGinger resolve Nothing s <*> return (Just s)
+
     case tpl of
         Left err -> do
             printParserError err
