@@ -15,6 +15,10 @@ import Prelude ( (.), ($), (==), (/=)
                , undefined, otherwise, id
                , Maybe (..)
                , Bool (..)
+               , Either (..)
+               , Int
+               , Integer
+               , Double
                , Show, show
                , fromIntegral, floor
                , not
@@ -27,7 +31,9 @@ import qualified Data.Text as Text
 import qualified Data.List as List
 import Safe (readMay)
 import Data.Monoid
-import Data.Scientific (Scientific)
+import Data.Scientific ( Scientific
+                       , floatingOrInteger
+                       )
 import Control.Applicative
 import qualified Data.Aeson as JSON
 import qualified Data.HashMap.Strict as HashMap
@@ -70,7 +76,10 @@ instance Show (GVal m) where
     show (String v) = show v
     show (Html h) = show h
     show (Boolean b) = show b
-    show (Number n) = show n
+    show (Number n) =
+        case floatingOrInteger n :: Either Double Integer of
+            Left x -> show n
+            Right x -> show x
     show Null = "null"
     show (Function _) = "<<function>>"
 
@@ -81,7 +90,7 @@ instance ToHtml (GVal m) where
     toHtml (Object o) = mconcat . Prelude.map toHtml . HashMap.elems $ o
     toHtml (String s) = toHtml s
     toHtml (Html h) = h
-    toHtml (Number n) = toHtml . Text.pack . show $ n
+    toHtml (Number n) = toHtml . Text.pack . show $ Number n
     toHtml (Boolean False) = html ""
     toHtml (Boolean True) = html "1"
     toHtml _ = html ""

@@ -7,5 +7,10 @@
         <li>{{ item }}: {{ count }}</li>
     {%- endfor %}
     </ul>
+    <ul>
+    {%- for item, name in friends %}
+        <li>{{ item }}: {{ name }}</li>
+    {%- endfor %}
+    </ul>
 </body>
 </html>
