@@ -324,7 +324,11 @@ varExprP :: Monad m => Parser m Expression
 varExprP = do
     litName <- identifierP
     spaces
-    return . VarE . Text.pack $ litName
+    return $ case litName of
+        "true" -> BoolLiteralE True
+        "false" -> BoolLiteralE False
+        "null" -> NullLiteralE
+        _ -> VarE . Text.pack $ litName
 
 identifierP :: Monad m => Parser m String
 identifierP =

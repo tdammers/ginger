@@ -107,6 +107,8 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
 runExpression :: (Monad m, Functor m) => Expression -> Run m (GVal m)
 runExpression (StringLiteralE str) = return . String $ str
 runExpression (NumberLiteralE n) = return . Number $ n
+runExpression (BoolLiteralE b) = return . Boolean $ b
+runExpression (NullLiteralE) = return Null
 runExpression (VarE key) = do
     l <- asks contextLookup
     lift $ l key

@@ -30,6 +30,8 @@ data Statement
 -- | Expressions, building blocks for the expression minilanguage.
 data Expression
     = StringLiteralE Text -- ^ String literal expression: "foobar"
-    | NumberLiteralE Scientific
+    | NumberLiteralE Scientific -- ^ Numeric literal expression: 123.4
+    | BoolLiteralE Bool -- ^ Boolean literal expression: true
+    | NullLiteralE -- ^ Literal null
     | VarE VarName -- ^ Variable reference: foobar
     deriving (Show)
