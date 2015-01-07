@@ -29,9 +29,13 @@ import Text.Ginger.AST
 import Text.Ginger.Html ( unsafeRawHtml )
 import Control.Monad.Reader ( ReaderT
                             , runReaderT
+                            , ask, asks
                             )
+import Control.Monad.Trans.Class ( lift )
 import Control.Applicative
 import Data.Text (Text)
+import Data.Maybe ( fromMaybe )
+import System.FilePath ( takeDirectory, (</>) )
 import qualified Data.Text as Text
 
 -- | Input type for the parser (source code).
@@ -83,23 +87,24 @@ parseGingerFile resolve fn = do
     case srcMay of
         Nothing -> return . Left $
             ParserError
-                { peErrorMessage = "Template file not found: " ++ fn
+                { peErrorMessage = "Template source not found: " ++ fn
                 , peSourceName = Nothing
                 , peSourceLine = Nothing
                 , peSourceColumn = Nothing
                 }
-        Just src -> parseGinger resolve fn src
+        Just src -> parseGinger resolve (Just fn) src
 
 
 data ParseContext m
     = ParseContext
         { pcResolve :: IncludeResolver m
+        , pcCurrentSource :: Maybe SourceName
         }
 
 -- | Parse Ginger source from memory.
-parseGinger :: Monad m => IncludeResolver m -> SourceName -> Source -> m (Either ParserError Template)
+parseGinger :: Monad m => IncludeResolver m -> Maybe SourceName -> Source -> m (Either ParserError Template)
 parseGinger resolve sn src = do
-    result <- runReaderT (runParserT templateP () sn src) (ParseContext resolve)
+    result <- runReaderT (runParserT templateP () (fromMaybe "<<unknown>>" sn) src) (ParseContext resolve sn)
     case result of
         Right t -> return . Right $ t
         Left e -> return . Left $ fromParsecError e
@@ -115,6 +120,19 @@ templateP = do
     eof
     return t
 
+getResolver :: Monad m => Parser m (IncludeResolver m)
+getResolver = asks pcResolve
+
+include :: Monad m => SourceName -> Parser m Statement
+include sourceName = do
+    resolver <- getResolver
+    currentSource <- fromMaybe "" <$> asks pcCurrentSource
+    let includeSourceName = takeDirectory currentSource </> sourceName
+    pres <- lift . lift $ parseGingerFile resolver includeSourceName
+    case pres of
+        Right (Template s) -> return s
+        Left err -> fail (show err)
+
 statementsP :: Monad m => Parser m Statement
 statementsP = do
     stmts <- many (try statementP)
@@ -127,6 +145,7 @@ statementP :: Monad m => Parser m Statement
 statementP = interpolationStmtP
            <|> ifStmtP
            <|> forStmtP
+           <|> includeP
            <|> literalStmtP
 
 interpolationStmtP :: Monad m => Parser m Statement
@@ -168,6 +187,11 @@ forStmtP = do
     body <- statementsP
     simpleTagP "endfor"
     return $ ForS varName iteree body
+
+includeP :: Monad m => Parser m Statement
+includeP = do
+    sourceName <- startTagP "include" stringLiteralP
+    include sourceName
 
 forHeadP :: Monad m => Parser m (Expression, VarName)
 forHeadP = try forHeadInP <|> forHeadAsP
@@ -245,14 +269,17 @@ identifierP =
         <$> oneOf (['a'..'z'] ++ ['A'..'Z'] ++ ['_'])
         <*> many identCharP
 
+stringLiteralP :: Monad m => Parser m String
+stringLiteralP = do
+    d <- oneOf [ '\'', '\"' ]
+    manyTill stringCharP (char d)
+
 identCharP :: Monad m => Parser m Char
 identCharP = oneOf (['a'..'z'] ++ ['A'..'Z'] ++ ['_'] ++ ['0'..'9'])
 
 stringLiteralExprP :: Monad m => Parser m Expression
 stringLiteralExprP = do
-    d <- oneOf [ '\'', '\"' ]
-    txt <- manyTill stringCharP (char d)
-    return . StringLiteralE . Text.pack $ txt
+    StringLiteralE . Text.pack <$> stringLiteralP
 
 stringCharP :: Monad m => Parser m Char
 stringCharP = do

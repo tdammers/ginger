@@ -9,20 +9,30 @@ import Data.Maybe
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import Control.Applicative
+import System.Environment ( getArgs )
+import System.IO
 
 main = do
+    args <- getArgs
+    print args
+
     let scope :: HashMap Text Value
         Just scope = JSON.decode "{ \"name\": \"world\", \"list\": [4, 1, 3] }"
         scopeLookup key = return . fromMaybe Null . HashMap.lookup key $ scope
 
-        resolve _ = return Nothing
+        resolve fn = Just <$> (openFile fn ReadMode >>= hGetContents)
 
-    tplSource <- getContents
-    tpl <- parseGinger resolve "input" tplSource
+    tpl <- case args of
+            fn:[] -> do
+                putStrLn $ "Parsing from " ++ fn
+                parseGingerFile resolve fn
+            _ -> do
+                putStrLn "Parsing from STDIN"
+                getContents >>= parseGinger resolve Nothing
     case tpl of
         Left err -> do
             printParserError err
-            displayParserError tplSource err
+            -- displayParserError tplSource err
         Right t -> runGingerM (makeContextM scopeLookup (putStr . Text.unpack . htmlSource)) t
 
 printParserError :: ParserError -> IO ()
