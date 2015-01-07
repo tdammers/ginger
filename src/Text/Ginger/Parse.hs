@@ -19,6 +19,7 @@ import Text.Parsec ( ParseError
                    , eof, spaces, anyChar, char
                    , option
                    , unexpected
+                   , digit
                    , (<?>)
                    )
 import Text.Parsec.Error ( errorMessages
@@ -27,16 +28,21 @@ import Text.Parsec.Error ( errorMessages
                          )
 import Text.Ginger.AST
 import Text.Ginger.Html ( unsafeRawHtml )
+
 import Control.Monad.Reader ( ReaderT
                             , runReaderT
                             , ask, asks
                             )
 import Control.Monad.Trans.Class ( lift )
 import Control.Applicative
+import Safe ( readMay )
+
 import Data.Text (Text)
 import Data.Maybe ( fromMaybe )
-import System.FilePath ( takeDirectory, (</>) )
+import Data.Scientific ( Scientific )
 import qualified Data.Text as Text
+
+import System.FilePath ( takeDirectory, (</>) )
 
 -- | Input type for the parser (source code).
 type Source = String
@@ -301,7 +307,11 @@ closeNWP c = ignore $ do
     optional . ignore . char $ '\n'
 
 expressionP :: Monad m => Parser m Expression
-expressionP = parenthesizedExprP <|> varExprP <|> stringLiteralExprP
+expressionP = parenthesizedExprP
+            <|> varExprP
+            <|> stringLiteralExprP
+            <|> numberLiteralExprP
+            <?> "Expression"
 
 parenthesizedExprP :: Monad m => Parser m Expression
 parenthesizedExprP =
@@ -322,17 +332,17 @@ identifierP =
         <$> oneOf (['a'..'z'] ++ ['A'..'Z'] ++ ['_'])
         <*> many identCharP
 
-stringLiteralP :: Monad m => Parser m String
-stringLiteralP = do
-    d <- oneOf [ '\'', '\"' ]
-    manyTill stringCharP (char d)
-
 identCharP :: Monad m => Parser m Char
 identCharP = oneOf (['a'..'z'] ++ ['A'..'Z'] ++ ['_'] ++ ['0'..'9'])
 
 stringLiteralExprP :: Monad m => Parser m Expression
 stringLiteralExprP = do
     StringLiteralE . Text.pack <$> stringLiteralP
+
+stringLiteralP :: Monad m => Parser m String
+stringLiteralP = do
+    d <- oneOf [ '\'', '\"' ]
+    manyTill stringCharP (char d)
 
 stringCharP :: Monad m => Parser m Char
 stringCharP = do
@@ -348,3 +358,19 @@ stringCharP = do
                 't' -> return '\t'
                 _ -> return c2
         _ -> return c1
+
+numberLiteralExprP :: Monad m => Parser m Expression
+numberLiteralExprP = do
+    str <- numberLiteralP
+    let nMay :: Maybe Scientific
+        nMay = readMay str
+    case nMay of
+        Just n -> return . NumberLiteralE $ n
+        Nothing -> fail $ "Failed to parse " ++ str ++ " as a number"
+
+numberLiteralP :: Monad m => Parser m String
+numberLiteralP = do
+    sign <- option "" $ string "-"
+    integral <- string "0" <|> ((:) <$> oneOf ['1'..'9'] <*> many digit)
+    fractional <- option "" $ (:) <$> char '.' <*> many digit
+    return $ sign ++ integral ++ fractional

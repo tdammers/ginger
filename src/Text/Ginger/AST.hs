@@ -5,6 +5,7 @@ where
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Text.Ginger.Html
+import Data.Scientific (Scientific)
 
 -- | A context variable name.
 type VarName = Text
@@ -29,5 +30,6 @@ data Statement
 -- | Expressions, building blocks for the expression minilanguage.
 data Expression
     = StringLiteralE Text -- ^ String literal expression: "foobar"
+    | NumberLiteralE Scientific
     | VarE VarName -- ^ Variable reference: foobar
     deriving (Show)
