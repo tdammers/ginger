@@ -11,37 +11,50 @@ import qualified Data.HashMap.Strict as HashMap
 import Control.Applicative
 import System.Environment ( getArgs )
 import System.IO
+import System.IO.Error
 
 main = do
     args <- getArgs
-    print args
 
     let scope :: HashMap Text Value
         Just scope = JSON.decode "{ \"name\": \"world\", \"list\": [4, 1, 3] }"
         scopeLookup key = return . fromMaybe Null . HashMap.lookup key $ scope
 
-        resolve fn = Just <$> (openFile fn ReadMode >>= hGetContents)
+        loadFile fn = openFile fn ReadMode >>= hGetContents
 
-    tpl <- case args of
-            fn:[] -> do
-                putStrLn $ "Parsing from " ++ fn
-                parseGingerFile resolve fn
-            _ -> do
-                putStrLn "Parsing from STDIN"
-                getContents >>= parseGinger resolve Nothing
+        resolve fn = tryIOError (loadFile fn) >>= \e ->
+                     case e of
+                        Right contents -> return (Just contents)
+                        Left err -> do
+                            print err
+                            return Nothing
+
+    (tpl, src) <- case args of
+            fn:[] -> (,) <$> parseGingerFile resolve fn <*> return Nothing
+            _ -> getContents >>= \s -> (,) <$> parseGinger resolve Nothing s <*> return (Just s)
     case tpl of
         Left err -> do
             printParserError err
-            -- displayParserError tplSource err
+            tplSource <- case src of
+                            Just s -> return s
+                            Nothing -> do
+                                let s = peSourceName err
+                                case s of
+                                    Nothing -> return ""
+                                    Just sn -> loadFile sn
+            displayParserError tplSource err
         Right t -> runGingerM (makeContextM scopeLookup (putStr . Text.unpack . htmlSource)) t
 
 printParserError :: ParserError -> IO ()
-printParserError pe = do
-    putStr . fromMaybe "<<unknown source>>" . peSourceName $ pe
-    putStr ":"
-    putStr . fromMaybe "" $ (++ ":") . show <$> peSourceLine pe
-    putStr . fromMaybe "" $ (++ ":") . show <$> peSourceColumn pe
-    putStrLn $ peErrorMessage pe
+printParserError = putStrLn . formatParserError
+
+formatParserError :: ParserError -> String
+formatParserError pe = Prelude.concat
+    [ fromMaybe "<<unknown source>>" . peSourceName $ pe
+    , ":"
+    , fromMaybe "" $ (++ ":") . show <$> peSourceLine pe
+    , fromMaybe "" $ (++ ":") . show <$> peSourceColumn pe
+    , peErrorMessage pe ]
 
 displayParserError :: String -> ParserError -> IO ()
 displayParserError src pe = do
