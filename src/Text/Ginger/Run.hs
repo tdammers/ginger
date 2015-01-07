@@ -89,12 +89,15 @@ runStatement (IfS condExpr true false) = do
     cond <- runExpression condExpr
     runStatement $ if toBoolean cond then true else false
 
-runStatement (ForS varName itereeExpr body) = do
-    iteree <- toList <$> runExpression itereeExpr
-    forM_ iteree $ \iterator -> do
-        parentLookup <- asks contextLookup
+runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
+    iteree <- runExpression itereeExpr
+    let values = toList iteree
+        indexes = iterKeys iteree
+    parentLookup <- asks contextLookup
+    forM_ (Prelude.zip indexes values) $ \(index, value) -> do
         let localLookup k
-                | k == varName = return iterator
+                | k == varNameValue = return value
+                | Just k == varNameIndex = return index
                 | otherwise = parentLookup k
         local
             (\c -> c { contextLookup = localLookup })

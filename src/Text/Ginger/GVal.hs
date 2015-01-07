@@ -98,6 +98,11 @@ keys :: GVal m -> [Text]
 keys (Object o) = HashMap.keys o
 keys _ = []
 
+iterKeys :: GVal m -> [GVal m]
+iterKeys (Object o) = Prelude.map String . HashMap.keys $ o
+iterKeys (List xs) = Prelude.map (Number . fromIntegral) [0..Prelude.length xs]
+iterKeys _ = []
+
 -- | Convert a 'GVal' to a list of 'GVal's. If the value is not list-like
 -- (i.e., neither an 'Object' nor a 'List'), the empty list is returned.
 toList :: GVal m -> [GVal m]

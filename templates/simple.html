@@ -3,8 +3,8 @@
 <body>
     <h1>Grocery list{% if user %} for {{ user }}{% endif %}</h1>
     <ul>
-    {%- for count in groceries %}
-        <li>{{ count }}</li>
+    {%- for item, count in groceries %}
+        <li>{{ item }}: {{ count }}</li>
     {%- endfor %}
     </ul>
 </body>

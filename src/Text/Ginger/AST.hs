@@ -22,7 +22,7 @@ data Statement
     | LiteralS Html -- ^ Literal output (anything outside of any tag)
     | InterpolationS Expression -- ^ {{ expression }}
     | IfS Expression Statement Statement -- ^ {% if expression %}statement{% else %}statement{% endif %}
-    | ForS VarName Expression Statement -- ^ {% for varname in expression %}statement{% endfor %}
+    | ForS (Maybe VarName) VarName Expression Statement -- ^ {% for index, varname in expression %}statement{% endfor %}
     | NullS -- ^ The do-nothing statement (NOP)
     deriving (Show)
 

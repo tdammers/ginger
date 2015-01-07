@@ -194,38 +194,57 @@ ifStmtP = do
 
 forStmtP :: Monad m => Parser m Statement
 forStmtP = do
-    (iteree, varName) <- startTagP "for" forHeadP
+    (iteree, varNameVal, varNameIndex) <- startTagP "for" forHeadP
     body <- statementsP
     simpleTagP "endfor"
-    return $ ForS varName iteree body
+    return $ ForS varNameIndex varNameVal iteree body
 
 includeP :: Monad m => Parser m Statement
 includeP = do
     sourceName <- startTagP "include" stringLiteralP
     include sourceName
 
-forHeadP :: Monad m => Parser m (Expression, VarName)
+forHeadP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
 forHeadP = try forHeadInP <|> forHeadAsP
 
-forHeadInP :: Monad m => Parser m (Expression, VarName)
+forIteratorP :: Monad m => Parser m (VarName, Maybe VarName)
+forIteratorP = try forIndexedIteratorP <|> try forSimpleIteratorP <?> "iteration variables"
+
+forIndexedIteratorP :: Monad m => Parser m (VarName, Maybe VarName)
+forIndexedIteratorP = do
+    indexIdent <- Text.pack <$> identifierP
+    spaces
+    char ','
+    spaces
+    varIdent <- Text.pack <$> identifierP
+    spaces
+    return (varIdent, Just indexIdent)
+
+forSimpleIteratorP :: Monad m => Parser m (VarName, Maybe VarName)
+forSimpleIteratorP = do
+    varIdent <- Text.pack <$> identifierP
+    spaces
+    return (varIdent, Nothing)
+
+forHeadInP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
 forHeadInP = do
-    varName <- Text.pack <$> identifierP
+    (varIdent, indexIdent) <- forIteratorP
     spaces
     string "in"
     notFollowedBy identCharP
     spaces
     iteree <- expressionP
-    return (iteree, varName)
+    return (iteree, varIdent, indexIdent)
 
-forHeadAsP :: Monad m => Parser m (Expression, VarName)
+forHeadAsP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
 forHeadAsP = do
     iteree <- expressionP
     spaces
     string "as"
     notFollowedBy identCharP
     spaces
-    varName <- Text.pack <$> identifierP
-    return (iteree, varName)
+    (varIdent, indexIdent) <- forIteratorP
+    return (iteree, varIdent, indexIdent)
 
 startTagP :: Monad m => String -> Parser m a -> Parser m a
 startTagP tagName inner =
