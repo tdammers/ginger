@@ -1,3 +1,7 @@
+-- | An example Ginger CLI application.
+--
+-- Takes two optional arguments; the first one is a template file, the second
+-- one a file containing some context data in JSON format.
 {-#LANGUAGE OverloadedStrings #-}
 module Main where
 
