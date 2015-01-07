@@ -2,7 +2,7 @@
 {-#LANGUAGE OverloadedStrings #-}
 -- | Execute Ginger templates in an arbitrary monad.
 module Text.Ginger.Run
-( runGingerM
+( runGingerT
 , runGinger
 , GingerContext
 , makeContext
@@ -44,7 +44,7 @@ data GingerContext m
         , contextWriteHtml :: Html -> m ()
         }
 
--- | Create an execution context for runGingerM.
+-- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad
 -- based on a lookup key, and a writer function (outputting HTML by whatever
 -- means the carrier monad provides, e.g. @putStr@ for @IO@, or @tell@ for
@@ -65,12 +65,12 @@ makeContext l = makeContextM (return . l) tell
 
 -- | Purely expand a Ginger template. @v@ is the type for Ginger values.
 runGinger :: GingerContext (Writer Html) -> Template -> Html
-runGinger context template = execWriter $ runGingerM context template
+runGinger context template = execWriter $ runGingerT context template
 
 -- | Monadically run a Ginger template. The @m@ parameter is the carrier monad,
 -- the @v@ parameter is the type for Ginger values.
-runGingerM :: (Monad m, Functor m) => GingerContext m -> Template -> m ()
-runGingerM context tpl = runReaderT (runTemplate tpl) context
+runGingerT :: (Monad m, Functor m) => GingerContext m -> Template -> m ()
+runGingerT context tpl = runReaderT (runTemplate tpl) context
 
 -- | Internal type alias for our template-runner monad stack.
 type Run m = ReaderT (GingerContext m) m

@@ -6,7 +6,7 @@
 -- Ginger can understand.
 --
 -- Most of the types in this module are parametrized over an 'm' type, which
--- is the host monad for template execution, as passed to 'runGingerM'.
+-- is the host monad for template execution, as passed to 'runGingerT'.
 module Text.Ginger.GVal
 where
 

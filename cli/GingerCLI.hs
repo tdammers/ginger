@@ -66,7 +66,7 @@ main = do
                                     Nothing -> return ""
                                     Just sn -> loadFile sn
             displayParserError tplSource err
-        Right t -> runGingerM (makeContextM scopeLookup (putStr . Text.unpack . htmlSource)) t
+        Right t -> runGingerT (makeContextM scopeLookup (putStr . Text.unpack . htmlSource)) t
 
 printParserError :: ParserError -> IO ()
 printParserError = putStrLn . formatParserError
