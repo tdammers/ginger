@@ -1,0 +1,45 @@
+This template touches as many features as possible, for both testing
+and demonstration purposes.
+
+** Comments **
+
+There is a comment between the two dashes that should not appear in the output.
+-
+{# Comments #}
+-
+
+A comment tag ending with {{ '-#}' }} instead of {{ '#}' }} should eat
+subsequent whitespace, and a comment tag starting with {{ '{#-' }} instead of
+{{ '{#' }} should eat preceding whitespace. There is such a comment between
+the following dashes, so they should appear on the same line, with no space
+between them:
+
+-
+{#- Comment -#}
+-
+
+** Literals **
+
+String: "foobar"
+expect: foobar
+actual: {{ "foobar" }}
+
+Number: 123
+expect: 123
+actual: {{ 123 }}
+
+Number: 3.1415
+expect: 3.1415
+actual: {{ 3.1415 }}
+
+** HTML encoding **
+
+HTML in "direct mode" (outside of tags, variables, etc.) should
+be kept intact.
+
+<foo bar="baz"/>Ampersand is '&'</foo>.
+
+HTML inside interpolation statements should be escaped automatically.
+
+expect: &lt;foo bar=&quot;baz&quot;/&gt;amp is &apos;&amp;&apos;&lt;/foo&gt;.
+actual: {{ "<foo bar=\"baz\"/>amp is '&'</foo>." }}
