@@ -135,14 +135,18 @@ include sourceName = do
 
 statementsP :: Monad m => Parser m Statement
 statementsP = do
-    stmts <- many (try statementP)
+    stmts <- filter (not . isNullS) <$> many (try statementP)
     case stmts of
         [] -> return NullS
         x:[] -> return x
         xs -> return $ MultiS xs
+    where
+        isNullS NullS = True
+        isNullS _ = False
 
 statementP :: Monad m => Parser m Statement
 statementP = interpolationStmtP
+           <|> commentStmtP
            <|> ifStmtP
            <|> forStmtP
            <|> includeP
@@ -169,7 +173,14 @@ endOfLiteralP :: Monad m => Parser m ()
 endOfLiteralP =
     (ignore . lookAhead . try . string $ "{{") <|>
     (ignore . lookAhead $ openTagP) <|>
+    (ignore . lookAhead $ openCommentP) <|>
     eof
+
+commentStmtP :: Monad m => Parser m Statement
+commentStmtP = do
+    try $ openCommentP
+    manyTill anyChar (try $ closeCommentP)
+    return NullS
 
 ifStmtP :: Monad m => Parser m Statement
 ifStmtP = do
@@ -229,23 +240,46 @@ startTagP tagName inner =
 simpleTagP :: Monad m => String -> Parser m ()
 simpleTagP tagName = openTagP >> string tagName >> closeTagP
 
+openCommentP :: Monad m => Parser m ()
+openCommentP = openP '#'
+
+closeCommentP :: Monad m => Parser m ()
+closeCommentP = closeP '#'
+
 openTagP :: Monad m => Parser m ()
-openTagP = try openTagWP <|> try openTagNWP
-
-openTagWP :: Monad m => Parser m ()
-openTagWP = ignore (spaces >> string "{%-" >> spaces)
-
-openTagNWP :: Monad m => Parser m ()
-openTagNWP = ignore (string "{%" >> spaces)
+openTagP = openP '%'
 
 closeTagP :: Monad m => Parser m ()
-closeTagP = try closeTagWP <|> try closeTagNWP <?> "Closing tag ('%}')"
+closeTagP = closeP '%'
 
-closeTagWP :: Monad m => Parser m ()
-closeTagWP = ignore (spaces >> string "-%}" >> spaces)
+openP :: Monad m => Char -> Parser m ()
+openP c = try (openWP c) <|> try (openNWP c)
 
-closeTagNWP :: Monad m => Parser m ()
-closeTagNWP = ignore (spaces >> string "%}" >> (optional . ignore . char) '\n')
+openWP :: Monad m => Char -> Parser m ()
+openWP c = ignore $ do
+    spaces
+    string [ '{', c, '-' ]
+    spaces
+
+openNWP :: Monad m => Char -> Parser m ()
+openNWP c = ignore $ do
+    string [ '{', c ]
+    spaces
+
+closeP :: Monad m => Char -> Parser m ()
+closeP c = try (closeWP c) <|> try (closeNWP c)
+
+closeWP :: Monad m => Char -> Parser m ()
+closeWP c = ignore $ do
+    spaces
+    string [ '-', c, '}' ]
+    spaces
+
+closeNWP :: Monad m => Char -> Parser m ()
+closeNWP c = ignore $ do
+    spaces
+    string [ c, '}' ]
+    optional . ignore . char $ '\n'
 
 expressionP :: Monad m => Parser m Expression
 expressionP = parenthesizedExprP <|> varExprP <|> stringLiteralExprP
