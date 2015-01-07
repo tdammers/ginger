@@ -245,7 +245,7 @@ closeTagWP :: Monad m => Parser m ()
 closeTagWP = ignore (spaces >> string "-%}" >> spaces)
 
 closeTagNWP :: Monad m => Parser m ()
-closeTagNWP = ignore (spaces >> string "%}")
+closeTagNWP = ignore (spaces >> string "%}" >> (optional . ignore . char) '\n')
 
 expressionP :: Monad m => Parser m Expression
 expressionP = parenthesizedExprP <|> varExprP <|> stringLiteralExprP
