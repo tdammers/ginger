@@ -32,7 +32,6 @@ expect: 3.1415
 actual: {{ 3.1415 }}
 
 Booleans:
-
 true:
 expect: 1
 actual: {{ true }}
@@ -45,6 +44,8 @@ Null:
 expect: 
 actual: {{ null }}
 
+** Simple list/object constructs **
+
 Lists:
 expect: foobarbaz
 actual: {{ ["foo","bar","baz" ] }}
@@ -52,6 +53,14 @@ actual: {{ ["foo","bar","baz" ] }}
 Nested lists:
 expect: foobar123baz
 actual: {{ [ "foo", "bar", [ 1, 2, 3 ], "baz" ] }}
+
+Objects:
+expect: bar
+actual: {{ { "foo":"bar" } }}
+
+Nested object/list constructs:
+expect: foobarbaz
+actual: {{ { "foo":["foo", {"asdf" : "bar"}, ["baz" ]] } }}
 
 ** HTML encoding **
 

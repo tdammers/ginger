@@ -17,6 +17,7 @@ import Prelude ( (.), ($), (==), (/=)
                , Bool (..)
                , fromIntegral, floor
                , not
+               , show
                )
 import qualified Prelude
 import Data.Maybe (fromMaybe)
@@ -113,6 +114,12 @@ runExpression (VarE key) = do
     l <- asks contextLookup
     lift $ l key
 runExpression (ListE xs) = List <$> forM xs runExpression
+runExpression (ObjectE xs) = do
+    items <- forM xs $ \(a, b) -> do
+        l <- Text.pack . show <$> runExpression a
+        r <- runExpression b
+        return (l, r)
+    return . Object . HashMap.fromList $ items
 
 -- | Helper function to output a HTML value using whatever print function the
 -- context provides.

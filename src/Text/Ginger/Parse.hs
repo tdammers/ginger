@@ -308,6 +308,7 @@ closeNWP c = ignore $ do
 
 expressionP :: Monad m => Parser m Expression
 expressionP = parenthesizedExprP
+            <|> objectExprP
             <|> listExprP
             <|> stringLiteralExprP
             <|> numberLiteralExprP
@@ -323,6 +324,19 @@ parenthesizedExprP =
 
 listExprP :: Monad m => Parser m Expression
 listExprP = ListE <$> groupP "[" "]" expressionP
+
+objectExprP :: Monad m => Parser m Expression
+objectExprP = ObjectE <$> groupP "{" "}" expressionPairP
+
+expressionPairP :: Monad m => Parser m (Expression, Expression)
+expressionPairP = do
+    a <- expressionP
+    spaces
+    char ':'
+    spaces
+    b <- expressionP
+    spaces
+    return (a, b)
 
 groupP :: Monad m => String -> String -> Parser m a -> Parser m [a]
 groupP obr cbr inner =
