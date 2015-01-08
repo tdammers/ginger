@@ -34,4 +34,5 @@ data Expression
     | BoolLiteralE Bool -- ^ Boolean literal expression: true
     | NullLiteralE -- ^ Literal null
     | VarE VarName -- ^ Variable reference: foobar
+    | ListE [Expression] -- ^ List construct: [ expr, expr, expr ]
     deriving (Show)

@@ -112,6 +112,7 @@ runExpression (NullLiteralE) = return Null
 runExpression (VarE key) = do
     l <- asks contextLookup
     lift $ l key
+runExpression (ListE xs) = List <$> forM xs runExpression
 
 -- | Helper function to output a HTML value using whatever print function the
 -- context provides.

@@ -15,7 +15,7 @@ import Text.Parsec ( ParseError
                    , ParsecT
                    , runParserT
                    , try, lookAhead
-                   , manyTill, oneOf, string, notFollowedBy, between
+                   , manyTill, oneOf, string, notFollowedBy, between, sepBy
                    , eof, spaces, anyChar, char
                    , option
                    , unexpected
@@ -308,9 +308,10 @@ closeNWP c = ignore $ do
 
 expressionP :: Monad m => Parser m Expression
 expressionP = parenthesizedExprP
-            <|> varExprP
+            <|> listExprP
             <|> stringLiteralExprP
             <|> numberLiteralExprP
+            <|> varExprP
             <?> "Expression"
 
 parenthesizedExprP :: Monad m => Parser m Expression
@@ -319,6 +320,16 @@ parenthesizedExprP =
         (try . ignore $ char '(' >> spaces)
         (ignore $ char ')' >> spaces)
         expressionP
+
+listExprP :: Monad m => Parser m Expression
+listExprP = ListE <$> groupP "[" "]" expressionP
+
+groupP :: Monad m => String -> String -> Parser m a -> Parser m [a]
+groupP obr cbr inner =
+    between
+        (try . ignore $ string obr >> spaces)
+        (ignore $ string cbr >> spaces)
+        (sepBy (inner `before` spaces) (try $ string "," `before` spaces))
 
 varExprP :: Monad m => Parser m Expression
 varExprP = do
@@ -378,3 +389,9 @@ numberLiteralP = do
     integral <- string "0" <|> ((:) <$> oneOf ['1'..'9'] <*> many digit)
     fractional <- option "" $ (:) <$> char '.' <*> many digit
     return $ sign ++ integral ++ fractional
+
+followedBy :: Monad m => m b -> m a -> m a
+followedBy b a = a >>= \x -> (b >> return x)
+
+before :: Monad m => m a -> m b -> m a
+before = flip followedBy

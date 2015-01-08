@@ -45,6 +45,14 @@ Null:
 expect: 
 actual: {{ null }}
 
+Lists:
+expect: foobarbaz
+actual: {{ ["foo","bar","baz" ] }}
+
+Nested lists:
+expect: foobar123baz
+actual: {{ [ "foo", "bar", [ 1, 2, 3 ], "baz" ] }}
+
 ** HTML encoding **
 
 HTML in "direct mode" (outside of tags, variables, etc.) should
