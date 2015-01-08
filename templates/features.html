@@ -62,6 +62,14 @@ Nested object/list constructs:
 expect: foobarbaz
 actual: {{ { "foo":["foo", {"asdf" : "bar"}, ["baz" ]] } }}
 
+** Accessing object/list members **
+
+expect: bar
+actual: {{ [ "foo", "bar" ][1] }}
+
+expect: bar
+actual: {{ { "foo": "bar", "baz": "quux" }['foo'] }}
+
 ** Iteration **
 
 for x in [ "foo", "bar", "baz" ]: <x>

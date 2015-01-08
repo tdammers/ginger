@@ -120,6 +120,10 @@ runExpression (ObjectE xs) = do
         r <- runExpression b
         return (l, r)
     return . Object . HashMap.fromList $ items
+runExpression (MemberLookupE baseExpr indexExpr) = do
+    base <- runExpression baseExpr
+    index <- runExpression indexExpr
+    return . fromMaybe Null . lookupLoose index $ base
 
 -- | Helper function to output a HTML value using whatever print function the
 -- context provides.

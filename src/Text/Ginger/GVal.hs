@@ -12,6 +12,7 @@ where
 
 import Prelude ( (.), ($), (==), (/=)
                , (+), (-), (*), (/), div
+               , (>>=)
                , undefined, otherwise, id
                , Maybe (..)
                , Bool (..)
@@ -29,10 +30,11 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.List as List
-import Safe (readMay)
+import Safe (readMay, atMay)
 import Data.Monoid
 import Data.Scientific ( Scientific
                        , floatingOrInteger
+                       , toBoundedInteger
                        )
 import Control.Applicative
 import qualified Data.Aeson as JSON
@@ -95,11 +97,33 @@ instance ToHtml (GVal m) where
     toHtml (Boolean True) = html "1"
     toHtml _ = html ""
 
+toText :: GVal m -> Text
+toText (List xs) = mconcat . Prelude.map toText $ xs
+toText (Object o) = mconcat . Prelude.map toText . HashMap.elems $ o
+toText (String s) = s
+toText (Html h) = htmlSource h -- TODO: find a better way.
+toText (Number n) = Text.pack . show $ Number n
+toText (Boolean False) = ""
+toText (Boolean True) = "1"
+toText _ = ""
+
 -- | Treat a 'GVal' as a dictionary and look up a value by key.
 -- If the value is not a dictionary, return 'Nothing'.
 lookup :: Text -> GVal m -> Maybe (GVal m)
 lookup k (Object o) = HashMap.lookup k o
 lookup k _ = Nothing
+
+-- | Treat a 'GVal' as a flat list and look up a value by index.
+-- If the value is not a List, or if the index exceeds the list length,
+-- return 'Nothing'.
+lookupIndex :: Int -> GVal m -> Maybe (GVal m)
+lookupIndex i (List xs) = atMay xs i
+lookupIndex _ _ = Nothing
+
+lookupLoose :: GVal m -> GVal m -> Maybe (GVal m)
+lookupLoose k (Object o) = lookup (toText k) (Object o)
+lookupLoose i (List xs) = lookupIndex (fromMaybe 0 $ toInt i) (List xs)
+lookupLoose _ _ = Nothing
 
 -- | Treat a 'GVal' as a dictionary and list all the keys, with no particular
 -- ordering.
@@ -139,6 +163,12 @@ toNumber (String s) = readMay . Text.unpack $ s
 toNumber (Boolean False) = Nothing
 toNumber (Boolean True) = Just 1
 toNumber _ = Nothing
+
+-- | Convert a 'GVal' to an 'Int'.
+-- The conversion will fail when the value is not numeric, and also if
+-- it is too large to fit in an 'Int'.
+toInt :: GVal m -> Maybe Int
+toInt x = toNumber x >>= toBoundedInteger
 
 -- | Loose cast to boolean.
 --

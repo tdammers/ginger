@@ -36,4 +36,5 @@ data Expression
     | VarE VarName -- ^ Variable reference: foobar
     | ListE [Expression] -- ^ List construct: [ expr, expr, expr ]
     | ObjectE [(Expression, Expression)] -- ^ Object construct: { expr: expr, expr: expr, ... }
+    | MemberLookupE Expression Expression -- ^ foo[bar] (also dot access)
     deriving (Show)

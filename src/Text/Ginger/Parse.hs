@@ -41,6 +41,7 @@ import Data.Text (Text)
 import Data.Maybe ( fromMaybe )
 import Data.Scientific ( Scientific )
 import qualified Data.Text as Text
+import Data.List ( foldr )
 
 import System.FilePath ( takeDirectory, (</>) )
 
@@ -307,13 +308,39 @@ closeNWP c = ignore $ do
     optional . ignore . char $ '\n'
 
 expressionP :: Monad m => Parser m Expression
-expressionP = parenthesizedExprP
+expressionP = postfixExprP
+
+postfixExprP :: Monad m => Parser m Expression
+postfixExprP = do
+    base <- atomicExprP
+    spaces
+    postfixes <- many . try $ postfixP `before` spaces
+    return $ foldr ($) base postfixes
+
+postfixP :: Monad m => Parser m (Expression -> Expression)
+postfixP = dotPostfixP
+         <|> arrayAccessP
+
+dotPostfixP :: Monad m => Parser m (Expression -> Expression)
+dotPostfixP = do
+    char '.'
+    spaces
+    i <- StringLiteralE . Text.pack <$> identifierP
+    return $ \e -> MemberLookupE e i
+
+arrayAccessP :: Monad m => Parser m (Expression -> Expression)
+arrayAccessP = do
+    i <- bracedP "[" "]" expressionP
+    return $ \e -> MemberLookupE e i
+
+
+atomicExprP :: Monad m => Parser m Expression
+atomicExprP = parenthesizedExprP
             <|> objectExprP
             <|> listExprP
             <|> stringLiteralExprP
             <|> numberLiteralExprP
             <|> varExprP
-            <?> "Expression"
 
 parenthesizedExprP :: Monad m => Parser m Expression
 parenthesizedExprP =
@@ -340,10 +367,14 @@ expressionPairP = do
 
 groupP :: Monad m => String -> String -> Parser m a -> Parser m [a]
 groupP obr cbr inner =
+    bracedP obr cbr
+        (sepBy (inner `before` spaces) (try $ string "," `before` spaces))
+
+bracedP :: Monad m => String -> String -> Parser m a -> Parser m a
+bracedP obr cbr =
     between
         (try . ignore $ string obr >> spaces)
         (ignore $ string cbr >> spaces)
-        (sepBy (inner `before` spaces) (try $ string "," `before` spaces))
 
 varExprP :: Monad m => Parser m Expression
 varExprP = do
