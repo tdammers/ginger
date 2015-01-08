@@ -107,6 +107,9 @@ keys :: GVal m -> [Text]
 keys (Object o) = HashMap.keys o
 keys _ = []
 
+-- | List the keys for list-like values. For dictionaries, these are the
+-- dictionary keys, in no particular order; for plain lists, they are
+-- 0-based integer indexes.
 iterKeys :: GVal m -> [GVal m]
 iterKeys (Object o) = Prelude.map String . HashMap.keys $ o
 iterKeys (List xs) = Prelude.map (Number . fromIntegral) [0..Prelude.length xs]
@@ -158,7 +161,9 @@ toFunction :: GVal m -> Maybe (Function m)
 toFunction (Function f) = Just f
 toFunction _ = Nothing
 
--- |
+-- | Convert Aeson 'Value's to 'GVal's over an arbitrary host monad. Because
+-- JSON cannot represent functions, this conversion will never produce a
+-- 'Function'.
 instance ToGVal m JSON.Value where
     toGVal (JSON.Number n) = Number n
     toGVal (JSON.String s) = String s

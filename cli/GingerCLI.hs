@@ -46,9 +46,8 @@ main = do
         Just fn -> (decodeFile fn :: IO (Maybe (HashMap Text Value)))
 
     let scopeLookup key = case scope of
-            Nothing -> return Null
-            Just scope -> return . fromMaybe Null . HashMap.lookup key $ scope
-
+            Nothing -> return JSON.Null
+            Just scope -> return . fromMaybe JSON.Null . HashMap.lookup key $ scope 
         resolve = loadFileMay
 
     (tpl, src) <- case srcFn of
