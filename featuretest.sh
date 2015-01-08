@@ -1,6 +1,6 @@
 #!/bin/bash
-OUT=$(./.cabal-sandbox/bin/ginger templates/features.html)
-echo "$OUT" | grep -A3 '^templates/'
-EXPECT=$(echo "$OUT" | grep '^expect:')
-ACTUAL=$(echo "$OUT" | grep '^actual:')
+OUTPUT=$(./.cabal-sandbox/bin/ginger templates/features.html)
+echo "$OUTPUT" | grep -A3 '^templates/'
+EXPECT=$(echo "$OUTPUT" | grep '^expect:')
+ACTUAL=$(echo "$OUTPUT" | grep '^actual:')
 diff -i -u <(echo "$EXPECT" | sed 's/^expect://') <(echo "$ACTUAL" | sed 's/^actual://')
