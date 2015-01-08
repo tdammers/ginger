@@ -116,7 +116,7 @@ runExpression (VarE key) = do
 runExpression (ListE xs) = List <$> forM xs runExpression
 runExpression (ObjectE xs) = do
     items <- forM xs $ \(a, b) -> do
-        l <- Text.pack . show <$> runExpression a
+        l <- toText <$> runExpression a
         r <- runExpression b
         return (l, r)
     return . Object . HashMap.fromList $ items

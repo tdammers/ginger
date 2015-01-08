@@ -70,6 +70,12 @@ actual: {{ [ "foo", "bar" ][1] }}
 expect: bar
 actual: {{ { "foo": "bar", "baz": "quux" }['foo'] }}
 
+expect: bar
+actual: {{ { "foo": "bar", "baz": "quux" }.foo }}
+
+expect: bar
+actual: {{ { "foo": { "oink": "nope", "baz": { "boop": [], "quux": "bar" }}}.foo.baz["quux"] }}
+
 ** Iteration **
 
 for x in [ "foo", "bar", "baz" ]: <x>

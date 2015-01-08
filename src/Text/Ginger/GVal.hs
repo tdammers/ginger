@@ -121,7 +121,8 @@ lookupIndex i (List xs) = atMay xs i
 lookupIndex _ _ = Nothing
 
 lookupLoose :: GVal m -> GVal m -> Maybe (GVal m)
-lookupLoose k (Object o) = lookup (toText k) (Object o)
+lookupLoose k (Object o) =
+    HashMap.lookup (toText k) o
 lookupLoose i (List xs) = lookupIndex (fromMaybe 0 $ toInt i) (List xs)
 lookupLoose _ _ = Nothing
 

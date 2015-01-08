@@ -315,7 +315,7 @@ postfixExprP = do
     base <- atomicExprP
     spaces
     postfixes <- many . try $ postfixP `before` spaces
-    return $ foldr ($) base postfixes
+    return $ foldl (flip ($)) base postfixes
 
 postfixP :: Monad m => Parser m (Expression -> Expression)
 postfixP = dotPostfixP
