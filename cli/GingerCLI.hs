@@ -8,7 +8,7 @@ module Main where
 import Text.Ginger
 import Text.Ginger.Html
 import Data.Text as Text
-import Data.Aeson as JSON
+import qualified Data.Aeson as JSON
 import Data.Maybe
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
@@ -20,6 +20,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Control.Monad.Trans.Class ( lift )
 import Control.Monad.Trans.Maybe
+import Control.Monad
 
 loadFile fn = openFile fn ReadMode >>= hGetContents
 
@@ -31,8 +32,17 @@ loadFileMay fn =
                 print err
                 return Nothing
 
-decodeFile :: (FromJSON v) => FilePath -> IO (Maybe v)
+decodeFile :: (JSON.FromJSON v) => FilePath -> IO (Maybe v)
 decodeFile fn = JSON.decode <$> (openFile fn ReadMode >>= LBS.hGetContents)
+
+printF :: GVal IO
+printF = Function $ go
+    where
+        go :: [(Maybe Text, GVal IO)] -> IO (GVal IO)
+        go args = forM_ args printArg >> return Null
+        printArg (Nothing, String s) = putStrLn (Text.unpack s)
+        printArg (Nothing, v) = print v
+        printArg (Just x, _) = return ()
 
 main = do
     args <- getArgs
@@ -43,12 +53,15 @@ main = do
 
     scope <- case scopeFn of
         Nothing -> return Nothing
-        Just fn -> (decodeFile fn :: IO (Maybe (HashMap Text Value)))
+        Just fn -> (decodeFile fn :: IO (Maybe (HashMap Text JSON.Value)))
 
-    let scopeLookup key = case scope of
-            Nothing -> return JSON.Null
-            Just scope -> return . fromMaybe JSON.Null . HashMap.lookup key $ scope 
+    let scopeLookup key = toGVal (scope >>= HashMap.lookup key)
         resolve = loadFileMay
+    let contextLookup :: Text -> IO (GVal IO)
+        contextLookup key =
+            case key of
+                "print" -> return printF
+                _ -> return $ scopeLookup key
 
     (tpl, src) <- case srcFn of
             Just fn -> (,) <$> parseGingerFile resolve fn <*> return Nothing
@@ -65,7 +78,7 @@ main = do
                                     Nothing -> return ""
                                     Just sn -> loadFile sn
             displayParserError tplSource err
-        Right t -> runGingerT (makeContextM scopeLookup (putStr . Text.unpack . htmlSource)) t
+        Right t -> runGingerT (makeContextM contextLookup (putStr . Text.unpack . htmlSource)) t
 
 printParserError :: ParserError -> IO ()
 printParserError = putStrLn . formatParserError

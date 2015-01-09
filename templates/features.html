@@ -82,6 +82,16 @@ for x in [ "foo", "bar", "baz" ]: <x>
 expect: <foo><bar><baz>
 actual: {% for x in [ "foo", "bar", "baz" ] %}<{{x}}>{% endfor %}
 
+** Function calls **
+
+print("Hello")
+expect: Hello
+actual: {{ print("Hello") }}
+
+"Hello"|print
+expect: Hello
+actual: {{ "Hello"|print }}
+
 ** HTML encoding **
 
 HTML in "direct mode" (outside of tags, variables, etc.) should

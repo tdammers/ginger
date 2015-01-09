@@ -17,6 +17,7 @@ import Prelude ( (.), ($), (==), (/=)
                , Maybe (..)
                , Bool (..)
                , Either (..)
+               , Char
                , Int
                , Integer
                , Double
@@ -202,3 +203,19 @@ instance ToGVal m JSON.Value where
     toGVal (JSON.Null) = Null
     toGVal (JSON.Array a) = List (List.map toGVal $ Vector.toList a)
     toGVal (JSON.Object o) = Object (HashMap.map toGVal $ o)
+
+instance ToGVal m v => ToGVal m (Maybe v) where
+    toGVal Nothing = Null
+    toGVal (Just x) = toGVal x
+
+instance ToGVal m v => ToGVal m [v] where
+    toGVal = List . List.map toGVal
+
+instance ToGVal m Bool where
+    toGVal = Boolean
+
+instance ToGVal m [Char] where
+    toGVal = String . Text.pack
+
+instance ToGVal m Text where
+    toGVal = String

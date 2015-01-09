@@ -1,5 +1,6 @@
 {-#LANGUAGE FlexibleContexts #-}
 {-#LANGUAGE OverloadedStrings #-}
+{-#LANGUAGE TupleSections #-}
 -- | Execute Ginger templates in an arbitrary monad.
 module Text.Ginger.Run
 ( runGingerT
@@ -124,6 +125,13 @@ runExpression (MemberLookupE baseExpr indexExpr) = do
     base <- runExpression baseExpr
     index <- runExpression indexExpr
     return . fromMaybe Null . lookupLoose index $ base
+runExpression (CallE funcE argsEs) = do
+    args <- forM argsEs $
+        \(argName, argE) -> (argName,) <$> runExpression argE
+    func <- toFunction <$> runExpression funcE
+    case func of
+        Nothing -> return Null
+        Just f -> lift $ f args
 
 -- | Helper function to output a HTML value using whatever print function the
 -- context provides.

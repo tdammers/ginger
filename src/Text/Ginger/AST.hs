@@ -37,4 +37,5 @@ data Expression
     | ListE [Expression] -- ^ List construct: [ expr, expr, expr ]
     | ObjectE [(Expression, Expression)] -- ^ Object construct: { expr: expr, expr: expr, ... }
     | MemberLookupE Expression Expression -- ^ foo[bar] (also dot access)
+    | CallE Expression [(Maybe Text, Expression)] -- ^ foo(bar=baz, quux)
     deriving (Show)

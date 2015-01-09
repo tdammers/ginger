@@ -1,3 +1,4 @@
+{-#LANGUAGE TupleSections #-}
 -- | Ginger parser.
 module Text.Ginger.Parse
 ( parseGinger
@@ -320,6 +321,8 @@ postfixExprP = do
 postfixP :: Monad m => Parser m (Expression -> Expression)
 postfixP = dotPostfixP
          <|> arrayAccessP
+         <|> funcCallP
+         <|> filterP
 
 dotPostfixP :: Monad m => Parser m (Expression -> Expression)
 dotPostfixP = do
@@ -333,6 +336,30 @@ arrayAccessP = do
     i <- bracedP "[" "]" expressionP
     return $ \e -> MemberLookupE e i
 
+funcCallP :: Monad m => Parser m (Expression -> Expression)
+funcCallP = do
+    args <- bracedP "(" ")" (many funcArgP)
+    return $ \e -> CallE e args
+
+funcArgP :: Monad m => Parser m (Maybe Text, Expression)
+funcArgP = namedFuncArgP <|> positionalFuncArgP
+
+namedFuncArgP :: Monad m => Parser m (Maybe Text, Expression)
+namedFuncArgP = do
+    name <- try $ identifierP `before` (between spaces spaces $ string "=")
+    expr <- expressionP
+    return (Just . Text.pack $ name, expr)
+
+positionalFuncArgP :: Monad m => Parser m (Maybe Text, Expression)
+positionalFuncArgP = try $ (Nothing,) <$> expressionP
+
+filterP :: Monad m => Parser m (Expression -> Expression)
+filterP = do
+    char '|'
+    spaces
+    func <- atomicExprP
+    args <- option [] $ bracedP "(" ")" (many funcArgP)
+    return $ \e -> CallE func ((Nothing, e):args)
 
 atomicExprP :: Monad m => Parser m Expression
 atomicExprP = parenthesizedExprP
