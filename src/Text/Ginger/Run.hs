@@ -114,15 +114,17 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
     let values = toList iteree
         indexes = iterKeys iteree
     parentLookup <- asks contextLookup
-    forM_ (Prelude.zip indexes values) f
+    sequence_ (Prelude.zipWith iteration indexes values)
     where
-        f (index, value) = withLocalState $ do
+        iteration index value = withLocalState $ do
             setVar varNameValue value
             case varNameIndex of
                 Nothing -> return ()
                 Just n -> setVar n index
             runStatement body
 
+-- | Helper function to run a State action with a temporary state, reverting
+-- to the old state after the action has finished.
 withLocalState :: (Monad m, MonadState s m) => m a -> m a
 withLocalState a = do
     s <- get
