@@ -156,6 +156,7 @@ statementP :: Monad m => Parser m Statement
 statementP = interpolationStmtP
            <|> commentStmtP
            <|> ifStmtP
+           <|> setStmtP
            <|> forStmtP
            <|> includeP
            <|> literalStmtP
@@ -199,6 +200,19 @@ ifStmtP = do
         statementsP
     simpleTagP "endif"
     return $ IfS condExpr trueStmt falseStmt
+
+setStmtP :: Monad m => Parser m Statement
+setStmtP = startTagP "set" setStmtInnerP
+
+setStmtInnerP :: Monad m => Parser m Statement
+setStmtInnerP = do
+    name <- Text.pack <$> identifierP
+    spaces
+    char '='
+    spaces
+    val <- expressionP
+    spaces
+    return $ SetVarS name val
 
 forStmtP :: Monad m => Parser m Statement
 forStmtP = do

@@ -76,12 +76,6 @@ actual: {{ { "foo": "bar", "baz": "quux" }.foo }}
 expect: bar
 actual: {{ { "foo": { "oink": "nope", "baz": { "boop": [], "quux": "bar" }}}.foo.baz["quux"] }}
 
-** Iteration **
-
-for x in [ "foo", "bar", "baz" ]: <x>
-expect: <foo><bar><baz>
-actual: {% for x in [ "foo", "bar", "baz" ] %}<{{x}}>{% endfor %}
-
 ** Function calls **
 
 print("Hello")
@@ -91,6 +85,24 @@ actual: {{ print("Hello") }}
 "Hello"|print
 expect: Hello
 actual: {{ "Hello"|print }}
+
+** Iteration **
+
+for x in [ "foo", "bar", "baz" ]: <x>
+expect: <foo><bar><baz>
+actual: {% for x in [ "foo", "bar", "baz" ] %}<{{x}}>{% endfor %}
+
+** Setting variables **
+
+set x = "world"; print x
+expect: Hello, world!
+actual: {% set x = "world" %}Hello, {{ x }}!
+
+** Setting variables self-referentially
+
+set x = { "foo": "bar" }; set x = x["foo"]; print x
+expect: Hello, bar!
+actual: {% set x = { "foo":"bar" } %}{% set x = x["foo"] %}Hello, {{ x }}!
 
 ** HTML encoding **
 

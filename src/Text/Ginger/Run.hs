@@ -105,27 +105,39 @@ runStatement (IfS condExpr true false) = do
     cond <- runExpression condExpr
     runStatement $ if toBoolean cond then true else false
 
+runStatement (SetVarS name valExpr) = do
+    val <- runExpression valExpr
+    setVar name val
+
 runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
     iteree <- runExpression itereeExpr
     let values = toList iteree
         indexes = iterKeys iteree
     parentLookup <- asks contextLookup
-    forM_ (Prelude.zip indexes values) $ \(index, value) -> do
-        let localLookup k
-                | k == varNameValue = return value
-                | Just k == varNameIndex = return index
-                | otherwise = parentLookup k
-        local
-            (\c -> c { contextLookup = localLookup })
-            (runStatement body)
+    forM_ (Prelude.zip indexes values) f
+    where
+        f (index, value) = withLocalState $ do
+            setVar varNameValue value
+            case varNameIndex of
+                Nothing -> return ()
+                Just n -> setVar n index
+            runStatement body
 
--- | Run (evaluate) an expression and return its value into the Run monad
-runExpression :: (Monad m, Functor m) => Expression -> Run m (GVal m)
-runExpression (StringLiteralE str) = return . String $ str
-runExpression (NumberLiteralE n) = return . Number $ n
-runExpression (BoolLiteralE b) = return . Boolean $ b
-runExpression (NullLiteralE) = return Null
-runExpression (VarE key) = do
+withLocalState :: (Monad m, MonadState s m) => m a -> m a
+withLocalState a = do
+    s <- get
+    r <- a
+    put s
+    return r
+
+setVar :: Monad m => VarName -> GVal m -> Run m ()
+setVar name val = do
+    vars <- gets rsScope
+    let vars' = HashMap.insert name val vars
+    modify (\s -> s { rsScope = vars' })
+
+getVar :: Monad m => VarName -> Run m (GVal m)
+getVar key = do
     vars <- gets rsScope
     case HashMap.lookup key vars of
         Just val ->
@@ -133,6 +145,14 @@ runExpression (VarE key) = do
         Nothing -> do
             l <- asks contextLookup
             lift . lift $ l key
+
+-- | Run (evaluate) an expression and return its value into the Run monad
+runExpression :: (Monad m, Functor m) => Expression -> Run m (GVal m)
+runExpression (StringLiteralE str) = return . String $ str
+runExpression (NumberLiteralE n) = return . Number $ n
+runExpression (BoolLiteralE b) = return . Boolean $ b
+runExpression (NullLiteralE) = return Null
+runExpression (VarE key) = getVar key
 runExpression (ListE xs) = List <$> forM xs runExpression
 runExpression (ObjectE xs) = do
     items <- forM xs $ \(a, b) -> do

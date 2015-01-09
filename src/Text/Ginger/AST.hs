@@ -24,6 +24,7 @@ data Statement
     | InterpolationS Expression -- ^ {{ expression }}
     | IfS Expression Statement Statement -- ^ {% if expression %}statement{% else %}statement{% endif %}
     | ForS (Maybe VarName) VarName Expression Statement -- ^ {% for index, varname in expression %}statement{% endfor %}
+    | SetVarS VarName Expression -- ^ {% set varname = expr %}
     | NullS -- ^ The do-nothing statement (NOP)
     deriving (Show)
 
