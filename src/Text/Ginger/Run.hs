@@ -32,6 +32,7 @@ import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.Writer
 import Control.Monad.Reader
+import Control.Monad.State
 import Control.Applicative
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
@@ -45,6 +46,19 @@ data GingerContext m
         { contextLookup :: VarName -> m (GVal m)
         , contextWriteHtml :: Html -> m ()
         }
+
+data RunState m
+    = RunState
+        { rsScope :: HashMap VarName (GVal m)
+        }
+
+defRunState :: Monad m => RunState m
+defRunState =
+    RunState . HashMap.fromList $
+        [ ("raw", Function gfnRawHtml) ]
+    where
+        gfnRawHtml [] = return Null
+        gfnRawHtml ((Nothing, v):_) = return . Html . unsafeRawHtml . toText $ v
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad
@@ -72,10 +86,10 @@ runGinger context template = execWriter $ runGingerT context template
 -- | Monadically run a Ginger template. The @m@ parameter is the carrier monad,
 -- the @v@ parameter is the type for Ginger values.
 runGingerT :: (Monad m, Functor m) => GingerContext m -> Template -> m ()
-runGingerT context tpl = runReaderT (runTemplate tpl) context
+runGingerT context tpl = runReaderT (evalStateT (runTemplate tpl) defRunState) context
 
 -- | Internal type alias for our template-runner monad stack.
-type Run m = ReaderT (GingerContext m) m
+type Run m = StateT (RunState m) (ReaderT (GingerContext m) m)
 
 -- | Run a template.
 runTemplate :: (Monad m, Functor m) => Template -> Run m ()
@@ -112,8 +126,13 @@ runExpression (NumberLiteralE n) = return . Number $ n
 runExpression (BoolLiteralE b) = return . Boolean $ b
 runExpression (NullLiteralE) = return Null
 runExpression (VarE key) = do
-    l <- asks contextLookup
-    lift $ l key
+    vars <- gets rsScope
+    case HashMap.lookup key vars of
+        Just val ->
+            return val
+        Nothing -> do
+            l <- asks contextLookup
+            lift . lift $ l key
 runExpression (ListE xs) = List <$> forM xs runExpression
 runExpression (ObjectE xs) = do
     items <- forM xs $ \(a, b) -> do
@@ -131,11 +150,11 @@ runExpression (CallE funcE argsEs) = do
     func <- toFunction <$> runExpression funcE
     case func of
         Nothing -> return Null
-        Just f -> lift $ f args
+        Just f -> lift . lift $ f args
 
 -- | Helper function to output a HTML value using whatever print function the
 -- context provides.
 echo :: (Monad m, Functor m, ToHtml h) => h -> Run m ()
 echo src = do
     p <- asks contextWriteHtml
-    lift $ p (toHtml src)
+    lift . lift $ p (toHtml src)
