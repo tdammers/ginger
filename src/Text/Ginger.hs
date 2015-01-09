@@ -17,24 +17,50 @@ module Text.Ginger
 --   >     <head>
 --   >         <title>{{ title }}</title>
 --   >     </head>
+--   >     {# This is a comment. Comments are removed from the output. #}
 --   >     <body>
 --   >         <menu id="nav-main">
 --   >         {% for item in navigation %}
 --   >             <li><a href="{{ item.url }}">{{ item.label }}</a></li>
 --   >         {% endfor %}
 --   >         </menu>
---   > 
 --   >         <div class="layout-content-main">
 --   >             <h1>{{ title }}</h1>
---   >             
 --   >             {{ body }}
 --   >         </div>
 --   >     </body>
 --   > </html>
+
+-- There are two kinds of delimiters. `{% ... %}` and `{{ ... }}`. The first
+-- one is used to execute statements such as for-loops or assign values, the
+-- latter prints the result of an expression to the template.
 --
---   /Not implemented yet/: Jinja2 allows the programmer to override the default
---   tags from @{% %}@ and @{{ }}@ to different tokens, e.g. @\<% %\>@ and @\<\< \>\>@.
---   Ginger does not currently support this.
+-- /Not implemented yet/: Jinja2 allows the programmer to override the default
+-- tags from @{% %}@ and @{{ }}@ to different tokens, e.g. @\<% %\>@ and @\<\<
+-- \>\>@.  Ginger does not currently support this.
+
+-- ** Variables
+-- | You can mess around with the variables in templates provided they are
+-- passed in by the application. Variables may have attributes or elements
+-- on them you can access too. What attributes a variable has depends
+-- heavily on the application providing that variable.
+--
+-- You can use a dot (@.@) to access attributes of a variable, but
+-- alternatively the so-called “subscript” syntax (@[]@) can be used. The
+-- following lines do the same thing:
+--
+-- > {{ foo.bar }}
+-- > {{ foo['bar'] }}
+--
+-- It’s important to know that the curly braces are /not/ part of the
+-- variable, but the print statement. If you access variables inside tags
+-- don’t put the braces around them.
+--
+-- If a variable or attribute does not exist you will get back an undefined
+-- value. What you can do with that kind of value depends on the
+-- application configuration: the default behavior is that it evaluates to
+-- an empty string if printed and that you can iterate over it, but every
+-- other operation fails.
 
 -- * Haskell API
 -- ** General
