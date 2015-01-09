@@ -103,3 +103,8 @@ HTML inside interpolation statements should be escaped automatically.
 
 expect: &lt;foo bar=&quot;baz&quot;/&gt;amp is &apos;&amp;&apos;&lt;/foo&gt;.
 actual: {{ "<foo bar=\"baz\"/>amp is '&'</foo>." }}
+
+The "raw" filter should pass raw HTML through
+
+expect: <a>&amp;
+actual: {{ "<a>&amp;"|raw }}
