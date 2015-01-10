@@ -120,3 +120,23 @@ The "raw" filter should pass raw HTML through
 
 expect: <a>&amp;
 actual: {{ "<a>&amp;"|raw }}
+
+** Includes **
+
+include 'features-included.html'
+
+expect: This is an included template
+actual: {% include 'features-included.html' %}
+
+include 'features-included2.html', with a variable
+
+{% set user="world" %}
+
+expect: Hello, world!
+actual: {% include 'features-included2.html' %}
+
+include a variable from 'features-included3.html'
+
+{% include 'features-included3.html' %}
+expect: Hello, foobar!
+actual: Hello, {{ user3 }}!
