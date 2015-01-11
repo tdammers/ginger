@@ -149,3 +149,12 @@ baz
 
 expect: baz
 actual: {{ foobar() }}
+
+** Macros with arguments **
+
+{% macro foobar2(baz) -%}
+{{ baz }}oo
+{%- endmacro %}
+
+expect: blabberoo
+actual: {{ foobar2(boink="nope", baz="blabber") }}

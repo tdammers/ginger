@@ -11,8 +11,8 @@ module Text.Ginger.GVal
 where
 
 import Prelude ( (.), ($), (==), (/=)
-               , (+), (-), (*), (/), div
-               , (>>=)
+               , (++), (+), (-), (*), (/), div
+               , (>>=), return
                , undefined, otherwise, id
                , Maybe (..)
                , Bool (..)
@@ -27,7 +27,7 @@ import Prelude ( (.), ($), (==), (/=)
                )
 import qualified Prelude
 import qualified Data.List as List
-import Data.Maybe (fromMaybe)
+import Data.Maybe ( fromMaybe, catMaybes )
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.List as List
@@ -42,11 +42,35 @@ import qualified Data.Aeson as JSON
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 import qualified Data.Vector as Vector
+import Control.Monad ( forM, mapM )
 
 import Text.Ginger.Html
 
 -- | A function that can be called from within a template execution context.
 type Function m = [(Maybe Text, GVal m)] -> m (GVal m)
+
+-- | Match arguments passed to a function at runtime against a list of declared
+-- argument names.
+-- @matchFuncArgs argNames argsPassed@ returns @(matchedArgs, positionalArgs, namedArgs)@,
+-- where @matchedArgs@ is a list of arguments matched against declared names
+-- (by name or by position), @positionalArgs@ are the unused positional
+-- (unnamed) arguments, and @namedArgs@ are the unused named arguments.
+matchFuncArgs :: [Text] -> [(Maybe Text, GVal m)] -> (HashMap Text (GVal m), [GVal m], HashMap Text (GVal m))
+matchFuncArgs names args =
+    (matched, positional, named)
+    where
+        positionalRaw = [ v | (Nothing, v) <- args ]
+        namedRaw = HashMap.fromList [ (n, v) | (Just n, v) <- args ]
+        fromPositional = Prelude.zip names positionalRaw
+        numPositional = Prelude.length fromPositional
+        namesRemaining = Prelude.drop numPositional names
+        positional = Prelude.drop numPositional positionalRaw
+        fromNamed = catMaybes $ (List.map lookupName namesRemaining)
+        lookupName n = do
+            v <- HashMap.lookup n namedRaw
+            return (n, v)
+        matched = HashMap.fromList $ fromPositional ++ fromNamed
+        named = HashMap.difference namedRaw (HashMap.fromList fromNamed)
 
 -- | Ginger value.
 data GVal m =

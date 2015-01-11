@@ -23,6 +23,7 @@ import Prelude ( (.), ($), (==), (/=)
                , fromIntegral, floor
                , not
                , show
+               , uncurry
                )
 import qualified Prelude
 import Data.Maybe (fromMaybe)
@@ -156,6 +157,10 @@ macroToGVal (Macro argNames body) =
             -- rewiring it to append any output to the state's capture.
             local (\c -> c { contextWriteHtml = appendCapture }) $ do
                 -- TODO: import args into local scope
+                let (matchedArgs, positionalArgs, namedArgs) = matchFuncArgs argNames args
+                forM (HashMap.toList matchedArgs) (uncurry setVar)
+                setVar "varargs" $ List positionalArgs
+                setVar "kwargs" $ Object namedArgs
                 runStatement body
                 -- At this point, we're still inside the local state, so the
                 -- capture contains the macro's output; we now simply return
