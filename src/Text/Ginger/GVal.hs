@@ -46,7 +46,7 @@ import qualified Data.Vector as Vector
 import Text.Ginger.Html
 
 -- | A function that can be called from within a template execution context.
-type Function m = ([(Maybe Text, GVal m)] -> m (GVal m))
+type Function m = [(Maybe Text, GVal m)] -> m (GVal m)
 
 -- | Ginger value.
 data GVal m =

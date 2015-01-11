@@ -35,13 +35,13 @@ loadFileMay fn =
 decodeFile :: (JSON.FromJSON v) => FilePath -> IO (Maybe v)
 decodeFile fn = JSON.decode <$> (openFile fn ReadMode >>= LBS.hGetContents)
 
-printF :: GVal IO
+printF :: GVal (Run IO)
 printF = Function $ go
     where
-        go :: [(Maybe Text, GVal IO)] -> IO (GVal IO)
+        go :: [(Maybe Text, GVal (Run IO))] -> Run IO (GVal (Run IO))
         go args = forM_ args printArg >> return Null
-        printArg (Nothing, String s) = putStrLn (Text.unpack s)
-        printArg (Nothing, v) = print v
+        printArg (Nothing, String s) = liftRun $ putStrLn (Text.unpack s)
+        printArg (Nothing, v) = liftRun $ print v
         printArg (Just x, _) = return ()
 
 main = do
@@ -57,7 +57,7 @@ main = do
 
     let scopeLookup key = toGVal (scope >>= HashMap.lookup key)
         resolve = loadFileMay
-    let contextLookup :: Text -> IO (GVal IO)
+    let contextLookup :: Text -> Run IO (GVal (Run IO))
         contextLookup key =
             case key of
                 "print" -> return printF
@@ -66,6 +66,8 @@ main = do
     (tpl, src) <- case srcFn of
             Just fn -> (,) <$> parseGingerFile resolve fn <*> return Nothing
             Nothing -> getContents >>= \s -> (,) <$> parseGinger resolve Nothing s <*> return (Just s)
+
+    print tpl
 
     case tpl of
         Left err -> do

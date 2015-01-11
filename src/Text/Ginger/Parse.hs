@@ -1,4 +1,5 @@
 {-#LANGUAGE TupleSections #-}
+{-#LANGUAGE OverloadedStrings #-}
 -- | Ginger parser.
 module Text.Ginger.Parse
 ( parseGinger
@@ -43,6 +44,7 @@ import Data.Maybe ( fromMaybe )
 import Data.Scientific ( Scientific )
 import qualified Data.Text as Text
 import Data.List ( foldr )
+import qualified Data.HashMap.Strict as HashMap
 
 import System.FilePath ( takeDirectory, (</>) )
 
@@ -122,12 +124,6 @@ type Parser m a = ParsecT String () (ReaderT (ParseContext m) m) a
 ignore :: Monad m => m a -> m ()
 ignore = (>> return ())
 
-templateP :: Monad m => Parser m Template
-templateP = do
-    t <- Template <$> statementsP
-    eof
-    return t
-
 getResolver :: Monad m => Parser m (IncludeResolver m)
 getResolver = asks pcResolve
 
@@ -141,13 +137,17 @@ include sourceName = do
         Right (Template s) -> return s
         Left err -> fail (show err)
 
+reduceStatements :: [Statement] -> Statement
+reduceStatements [] = NullS
+reduceStatements (x:[]) = x
+reduceStatements xs = MultiS xs
+
+templateP :: Monad m => Parser m Template
+templateP = Template <$> statementsP
+
 statementsP :: Monad m => Parser m Statement
 statementsP = do
-    stmts <- filter (not . isNullS) <$> many (try statementP)
-    case stmts of
-        [] -> return NullS
-        x:[] -> return x
-        xs -> return $ MultiS xs
+    reduceStatements . filter (not . isNullS) <$> many (try statementP)
     where
         isNullS NullS = True
         isNullS _ = False
@@ -159,6 +159,7 @@ statementP = interpolationStmtP
            <|> setStmtP
            <|> forStmtP
            <|> includeP
+           <|> macroStmtP
            <|> literalStmtP
 
 interpolationStmtP :: Monad m => Parser m Statement
@@ -193,7 +194,7 @@ commentStmtP = do
 
 ifStmtP :: Monad m => Parser m Statement
 ifStmtP = do
-    condExpr <- startTagP "if" expressionP
+    condExpr <- fancyTagP "if" expressionP
     trueStmt <- statementsP
     falseStmt <- option NullS $ do
         try $ simpleTagP "else"
@@ -202,11 +203,11 @@ ifStmtP = do
     return $ IfS condExpr trueStmt falseStmt
 
 setStmtP :: Monad m => Parser m Statement
-setStmtP = startTagP "set" setStmtInnerP
+setStmtP = fancyTagP "set" setStmtInnerP
 
 setStmtInnerP :: Monad m => Parser m Statement
 setStmtInnerP = do
-    name <- Text.pack <$> identifierP
+    name <- identifierP
     spaces
     char '='
     spaces
@@ -214,16 +215,31 @@ setStmtInnerP = do
     spaces
     return $ SetVarS name val
 
+macroStmtP :: Monad m => Parser m Statement
+macroStmtP = do
+    (name, args) <- try $ fancyTagP "macro" macroHeadP
+    body <- statementsP
+    fancyTagP "endmacro" (optional $ string (Text.unpack name) >> spaces)
+    return $ DefMacroS name (Macro args body)
+
+macroHeadP :: Monad m => Parser m (VarName, [VarName])
+macroHeadP = do
+    name <- identifierP
+    spaces
+    args <- option [] $ groupP "(" ")" identifierP
+    spaces
+    return (name, args)
+
 forStmtP :: Monad m => Parser m Statement
 forStmtP = do
-    (iteree, varNameVal, varNameIndex) <- startTagP "for" forHeadP
+    (iteree, varNameVal, varNameIndex) <- fancyTagP "for" forHeadP
     body <- statementsP
     simpleTagP "endfor"
     return $ ForS varNameIndex varNameVal iteree body
 
 includeP :: Monad m => Parser m Statement
 includeP = do
-    sourceName <- startTagP "include" stringLiteralP
+    sourceName <- fancyTagP "include" stringLiteralP
     include sourceName
 
 forHeadP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
@@ -234,17 +250,17 @@ forIteratorP = try forIndexedIteratorP <|> try forSimpleIteratorP <?> "iteration
 
 forIndexedIteratorP :: Monad m => Parser m (VarName, Maybe VarName)
 forIndexedIteratorP = do
-    indexIdent <- Text.pack <$> identifierP
+    indexIdent <- identifierP
     spaces
     char ','
     spaces
-    varIdent <- Text.pack <$> identifierP
+    varIdent <- identifierP
     spaces
     return (varIdent, Just indexIdent)
 
 forSimpleIteratorP :: Monad m => Parser m (VarName, Maybe VarName)
 forSimpleIteratorP = do
-    varIdent <- Text.pack <$> identifierP
+    varIdent <- identifierP
     spaces
     return (varIdent, Nothing)
 
@@ -268,8 +284,8 @@ forHeadAsP = do
     (varIdent, indexIdent) <- forIteratorP
     return (iteree, varIdent, indexIdent)
 
-startTagP :: Monad m => String -> Parser m a -> Parser m a
-startTagP tagName inner =
+fancyTagP :: Monad m => String -> Parser m a -> Parser m a
+fancyTagP tagName inner =
     between
         (try $ do
             openTagP
@@ -342,7 +358,7 @@ dotPostfixP :: Monad m => Parser m (Expression -> Expression)
 dotPostfixP = do
     char '.'
     spaces
-    i <- StringLiteralE . Text.pack <$> identifierP
+    i <- StringLiteralE <$> identifierP
     return $ \e -> MemberLookupE e i
 
 arrayAccessP :: Monad m => Parser m (Expression -> Expression)
@@ -362,7 +378,7 @@ namedFuncArgP :: Monad m => Parser m (Maybe Text, Expression)
 namedFuncArgP = do
     name <- try $ identifierP `before` (between spaces spaces $ string "=")
     expr <- expressionP
-    return (Just . Text.pack $ name, expr)
+    return (Just name, expr)
 
 positionalFuncArgP :: Monad m => Parser m (Maybe Text, Expression)
 positionalFuncArgP = try $ (Nothing,) <$> expressionP
@@ -425,13 +441,14 @@ varExprP = do
         "true" -> BoolLiteralE True
         "false" -> BoolLiteralE False
         "null" -> NullLiteralE
-        _ -> VarE . Text.pack $ litName
+        _ -> VarE litName
 
-identifierP :: Monad m => Parser m String
+identifierP :: Monad m => Parser m Text
 identifierP =
+    Text.pack <$> (
     (:)
         <$> oneOf (['a'..'z'] ++ ['A'..'Z'] ++ ['_'])
-        <*> many identCharP
+        <*> many identCharP)
 
 identCharP :: Monad m => Parser m Char
 identCharP = oneOf (['a'..'z'] ++ ['A'..'Z'] ++ ['_'] ++ ['0'..'9'])

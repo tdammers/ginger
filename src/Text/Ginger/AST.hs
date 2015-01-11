@@ -6,6 +6,9 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import Text.Ginger.Html
 import Data.Scientific (Scientific)
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HashMap
+
 
 -- | A context variable name.
 type VarName = Text
@@ -17,6 +20,10 @@ data Template
         }
         deriving (Show)
 
+data Macro
+    = Macro { macroArgs :: [VarName], macroBody :: Statement }
+    deriving (Show)
+
 -- | Ginger statements.
 data Statement
     = MultiS [Statement] -- ^ A sequence of multiple statements
@@ -25,6 +32,7 @@ data Statement
     | IfS Expression Statement Statement -- ^ {% if expression %}statement{% else %}statement{% endif %}
     | ForS (Maybe VarName) VarName Expression Statement -- ^ {% for index, varname in expression %}statement{% endfor %}
     | SetVarS VarName Expression -- ^ {% set varname = expr %}
+    | DefMacroS VarName Macro -- ^ {% macro varname %}statements{% endmacro %}
     | NullS -- ^ The do-nothing statement (NOP)
     deriving (Show)
 
