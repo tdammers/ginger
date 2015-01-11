@@ -368,7 +368,7 @@ arrayAccessP = do
 
 funcCallP :: Monad m => Parser m (Expression -> Expression)
 funcCallP = do
-    args <- bracedP "(" ")" (many funcArgP)
+    args <- groupP "(" ")" funcArgP
     return $ \e -> CallE e args
 
 funcArgP :: Monad m => Parser m (Maybe Text, Expression)
