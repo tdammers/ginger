@@ -132,6 +132,8 @@ runStatement (DefMacroS name macro) = do
     let val = macroToGVal macro
     setVar name val
 
+runStatement (ScopedS body) = withLocalState $ runStatement body
+
 runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
     iteree <- runExpression itereeExpr
     let values = toList iteree

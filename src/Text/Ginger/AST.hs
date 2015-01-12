@@ -27,6 +27,7 @@ data Macro
 -- | Ginger statements.
 data Statement
     = MultiS [Statement] -- ^ A sequence of multiple statements
+    | ScopedS Statement -- ^ Run wrapped statement in a local scope
     | LiteralS Html -- ^ Literal output (anything outside of any tag)
     | InterpolationS Expression -- ^ {{ expression }}
     | IfS Expression Statement Statement -- ^ {% if expression %}statement{% else %}statement{% endif %}

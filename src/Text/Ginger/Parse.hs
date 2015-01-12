@@ -160,6 +160,7 @@ statementP = interpolationStmtP
            <|> forStmtP
            <|> includeP
            <|> macroStmtP
+           <|> scopeStmtP
            <|> literalStmtP
 
 interpolationStmtP :: Monad m => Parser m Statement
@@ -229,6 +230,14 @@ macroHeadP = do
     args <- option [] $ groupP "(" ")" identifierP
     spaces
     return (name, args)
+
+scopeStmtP :: Monad m => Parser m Statement
+scopeStmtP =
+    ScopedS <$>
+        between
+            (simpleTagP "scope")
+            (simpleTagP "endscope")
+            statementsP
 
 forStmtP :: Monad m => Parser m Statement
 forStmtP = do

@@ -141,6 +141,19 @@ include a variable from 'features-included3.html'
 expect: Hello, foobar!
 actual: Hello, {{ user3 }}!
 
+** Explicit Local Scopes **
+
+{% set bedazzle = "no" %}
+expect: no
+actual: {{ bedazzle }}
+{% scope %}
+{% set bedazzle = "ya" %}
+expect: ya
+actual: {{ bedazzle }}
+{% endscope %}
+expect: no
+actual: {{ bedazzle }}
+
 ** Macros **
 
 {% macro foobar -%}
