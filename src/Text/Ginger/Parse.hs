@@ -114,7 +114,7 @@ data ParseContext m
 -- | Parse Ginger source from memory.
 parseGinger :: Monad m => IncludeResolver m -> Maybe SourceName -> Source -> m (Either ParserError Template)
 parseGinger resolve sn src = do
-    result <- runReaderT (runParserT templateP () (fromMaybe "<<unknown>>" sn) src) (ParseContext resolve sn)
+    result <- runReaderT (runParserT (templateP `before` eof) () (fromMaybe "<<unknown>>" sn) src) (ParseContext resolve sn)
     case result of
         Right t -> return . Right $ t
         Left e -> return . Left $ fromParsecError e
