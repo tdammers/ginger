@@ -160,6 +160,7 @@ statementP = interpolationStmtP
            <|> forStmtP
            <|> includeP
            <|> macroStmtP
+           <|> callStmtP
            <|> scopeStmtP
            <|> literalStmtP
 
@@ -230,6 +231,34 @@ macroHeadP = do
     args <- option [] $ groupP "(" ")" identifierP
     spaces
     return (name, args)
+
+-- {% call (foo) bar(baz) %}quux{% endcall %}
+--
+-- is the same as:
+--
+-- {% scope %}
+-- {% macro __lambda(foo) %}quux{% endmacro %}
+-- {% set caller = __lambda %}
+-- {{ bar(baz) }}
+-- {% endscope %]
+callStmtP :: Monad m => Parser m Statement
+callStmtP = do
+    (callerArgs, call) <- try $ fancyTagP "call" callHeadP
+    body <- statementsP
+    simpleTagP "endcall"
+    return (
+        ScopedS (
+            MultiS [ DefMacroS "caller" (Macro callerArgs body)
+                   , InterpolationS call
+                   ]))
+
+callHeadP :: Monad m => Parser m ([Text], Expression)
+callHeadP = do
+    callerArgs <- option [] $ groupP "(" ")" identifierP
+    spaces
+    call <- expressionP
+    spaces
+    return (callerArgs, call)
 
 scopeStmtP :: Monad m => Parser m Statement
 scopeStmtP =
@@ -397,7 +426,7 @@ filterP = do
     char '|'
     spaces
     func <- atomicExprP
-    args <- option [] $ bracedP "(" ")" (many funcArgP)
+    args <- option [] $ groupP "(" ")" funcArgP
     return $ \e -> CallE func ((Nothing, e):args)
 
 atomicExprP :: Monad m => Parser m Expression

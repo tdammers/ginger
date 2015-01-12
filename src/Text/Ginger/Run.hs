@@ -156,6 +156,7 @@ macroToGVal (Macro argNames body) =
         withLocalState $ do
             -- Establish a local context, where we override the HTML writer,
             -- rewiring it to append any output to the state's capture.
+            clearCapture
             local (\c -> c { contextWriteHtml = appendCapture }) $ do
                 -- TODO: import args into local scope
                 let (matchedArgs, positionalArgs, namedArgs) = matchFuncArgs argNames args
@@ -192,6 +193,9 @@ getVar key = do
         Nothing -> do
             l <- asks contextLookup
             l key
+
+clearCapture :: Monad m => Run m ()
+clearCapture = modify (\s -> s { rsCapture = unsafeRawHtml "" })
 
 appendCapture :: Monad m => Html -> Run m ()
 appendCapture h = modify (\s -> s { rsCapture = rsCapture s <> h })
