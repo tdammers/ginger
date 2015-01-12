@@ -174,12 +174,10 @@ actual: {{ foobar2(boink="nope", baz="blabber") }}
 
 ** Call syntax **
 
-{% macro foobar3() -%}
-( {{ caller("asdf") }} )
+{% macro foobar3(a) -%}
+{{ a }}({{ caller("asdf") }})
 {%- endmacro %}
 
-expect: Foobar3/asdf/qwert1
-actual: {% call (a) foobar3() %}<{{a}}>{% endcall %}
-
-other: {{ foobar3() }}
+expect: hey(<asdf>)
+actual: {% call (a) foobar3("hey") %}<{{a}}>{% endcall %}
 
