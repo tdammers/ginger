@@ -138,7 +138,6 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
     iteree <- runExpression itereeExpr
     let values = toList iteree
         indexes = iterKeys iteree
-    parentLookup <- asks contextLookup
     sequence_ (Prelude.zipWith iteration indexes values)
     where
         iteration index value = withLocalState $ do
