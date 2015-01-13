@@ -42,6 +42,7 @@ import Control.Applicative
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 import Data.Scientific (Scientific)
+import Data.Default (def)
 import Safe (readMay)
 
 -- | Execution context. Determines how to look up variables from the
@@ -61,12 +62,12 @@ data RunState m
 defRunState :: Monad m => RunState m
 defRunState =
     RunState
-        { rsScope = HashMap.fromList [ ("raw", Function gfnRawHtml) ]
+        { rsScope = HashMap.fromList [ ("raw", toGVal gfnRawHtml) ]
         , rsCapture = html ""
         }
     where
-        gfnRawHtml [] = return Null
-        gfnRawHtml ((Nothing, v):_) = return . Html . unsafeRawHtml . toText $ v
+        gfnRawHtml [] = return def
+        gfnRawHtml ((Nothing, v):_) = return . toGVal . unsafeRawHtml . toText $ v
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad
