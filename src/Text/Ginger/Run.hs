@@ -62,12 +62,23 @@ data RunState m
 defRunState :: Monad m => RunState m
 defRunState =
     RunState
-        { rsScope = HashMap.fromList [ ("raw", toGVal gfnRawHtml) ]
+        { rsScope = HashMap.empty
         , rsCapture = html ""
         }
-    where
-        gfnRawHtml [] = return def
-        gfnRawHtml ((Nothing, v):_) = return . toGVal . unsafeRawHtml . toText $ v
+    -- where
+    --     scope :: Monad m => [(Text, (GVal m))]
+    --     scope = [ ("raw", toGVal gfnRawHtml) ]
+    --     gfnRawHtml :: Monad m => [(Maybe Text, GVal m)] -> m (GVal m)
+    --     gfnRawHtml [] =
+    --         return x
+    --         where
+    --             x :: GVal m
+    --             x = def
+    --     gfnRawHtml ((Nothing, v):_) =
+    --         return . toGVal . helper $ v
+    --         where
+    --             helper :: GVal m -> Html
+    --             helper = unsafeRawHtml . asText
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad
@@ -137,7 +148,7 @@ runStatement (ScopedS body) = withLocalState $ runStatement body
 
 runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
     iteree <- runExpression itereeExpr
-    let values = toList iteree
+    let values = asList iteree
         indexes = iterKeys iteree
     sequence_ (Prelude.zipWith iteration indexes values)
     where
@@ -151,24 +162,27 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
 -- | Deeply magical function that converts a 'Macro' into a Function.
 macroToGVal :: (Functor m, Monad m) => Macro -> GVal (Run m)
 macroToGVal (Macro argNames body) =
-    Function $ \args -> (
-        -- Establish a local state to not contaminate the parent scope
-        -- with function arguments and local variables
-        withLocalState $ do
-            -- Establish a local context, where we override the HTML writer,
-            -- rewiring it to append any output to the state's capture.
-            clearCapture
-            local (\c -> c { contextWriteHtml = appendCapture }) $ do
-                -- TODO: import args into local scope
-                let (matchedArgs, positionalArgs, namedArgs) = matchFuncArgs argNames args
-                forM (HashMap.toList matchedArgs) (uncurry setVar)
-                setVar "varargs" $ List positionalArgs
-                setVar "kwargs" $ Object namedArgs
-                runStatement body
-                -- At this point, we're still inside the local state, so the
-                -- capture contains the macro's output; we now simply return
-                -- the capture as the function's return value.
-                Html <$> fetchCapture)
+    toGVal f
+    where
+        f :: [(Maybe Text, GVal (Run m))] -> Run m (GVal (Run m))
+        f args =
+            -- Establish a local state to not contaminate the parent scope
+            -- with function arguments and local variables
+            withLocalState $ do
+                -- Establish a local context, where we override the HTML writer,
+                -- rewiring it to append any output to the state's capture.
+                clearCapture
+                local (\c -> c { contextWriteHtml = appendCapture }) $ do
+                    -- TODO: import args into local scope
+                    let (matchedArgs, positionalArgs, namedArgs) = matchFuncArgs argNames args
+                    forM (HashMap.toList matchedArgs) (uncurry setVar)
+                    setVar "varargs" $ toGVal positionalArgs
+                    setVar "kwargs" $ toGVal namedArgs
+                    runStatement body
+                    -- At this point, we're still inside the local state, so the
+                    -- capture contains the macro's output; we now simply return
+                    -- the capture as the function's return value.
+                    toGVal <$> fetchCapture
 
 -- | Helper function to run a State action with a temporary state, reverting
 -- to the old state after the action has finished.
@@ -205,29 +219,28 @@ fetchCapture :: Monad m => Run m Html
 fetchCapture = gets rsCapture
 
 -- | Run (evaluate) an expression and return its value into the Run monad
-runExpression :: (Monad m, Functor m) => Expression -> Run m (GVal (Run m))
-runExpression (StringLiteralE str) = return . String $ str
-runExpression (NumberLiteralE n) = return . Number $ n
-runExpression (BoolLiteralE b) = return . Boolean $ b
-runExpression (NullLiteralE) = return Null
+runExpression (StringLiteralE str) = return . toGVal $ str
+runExpression (NumberLiteralE n) = return . toGVal $ n
+runExpression (BoolLiteralE b) = return . toGVal $ b
+runExpression (NullLiteralE) = return def
 runExpression (VarE key) = getVar key
-runExpression (ListE xs) = List <$> forM xs runExpression
+runExpression (ListE xs) = toGVal <$> forM xs runExpression
 runExpression (ObjectE xs) = do
     items <- forM xs $ \(a, b) -> do
-        l <- toText <$> runExpression a
+        l <- asText <$> runExpression a
         r <- runExpression b
         return (l, r)
-    return . Object . HashMap.fromList $ items
+    return . toGVal . HashMap.fromList $ items
 runExpression (MemberLookupE baseExpr indexExpr) = do
     base <- runExpression baseExpr
     index <- runExpression indexExpr
-    return . fromMaybe Null . lookupLoose index $ base
+    return . fromMaybe def . lookupLoose index $ base
 runExpression (CallE funcE argsEs) = do
     args <- forM argsEs $
         \(argName, argE) -> (argName,) <$> runExpression argE
     func <- toFunction <$> runExpression funcE
     case func of
-        Nothing -> return Null
+        Nothing -> return def
         Just f -> f args
 
 -- | Helper function to output a HTML value using whatever print function the

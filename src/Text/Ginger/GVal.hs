@@ -292,7 +292,16 @@ instance ToGVal m Text where
             , isNull = False
             }
 
---
+instance ToGVal m Html where
+    toGVal x =
+        def
+            { asHtml = x
+            , asText = htmlSource x
+            , asBoolean = not . Text.null . htmlSource $ x
+            , asNumber = readMay . Text.unpack . htmlSource $ x
+            , isNull = False
+            }
+
 -- | Convert Aeson 'Value's to 'GVal's over an arbitrary host monad. Because
 -- JSON cannot represent functions, this conversion will never produce a
 -- 'Function'.
