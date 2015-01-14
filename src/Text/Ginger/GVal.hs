@@ -164,17 +164,6 @@ iterKeys v
     | isList v = Prelude.map toGVal [0..length v]
     | otherwise = []
 
--- | Convert a 'GVal' to a number.
---
--- * 'Number' is simply unwrapped.
---
--- * 'String' is fed through 'read', returning 'Nothing' if parsing failed.
---
--- * Boolean 'True' is returned as 1
---
--- * Anything else is considered \"not a number\" and thus converted to
--- 'Nothing'
---
 toNumber :: GVal m -> Maybe Scientific
 toNumber = asNumber
 
@@ -255,12 +244,18 @@ instance ToGVal m Int where
 instance ToGVal m Scientific where
     toGVal x =
         def
-            { asHtml = html . Text.pack . show $ x
-            , asText = Text.pack . show $ x
+            { asHtml = html $ scientificToText x
+            , asText = scientificToText x
             , asBoolean = x /= 0
             , asNumber = Just x
             , isNull = False
             }
+
+scientificToText :: Scientific -> Text
+scientificToText x =
+    Text.pack $ case floatingOrInteger x of
+        Left x -> show x
+        Right x -> show x
 
 instance ToGVal m Bool where
     toGVal x =
