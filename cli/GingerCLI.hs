@@ -21,6 +21,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Control.Monad.Trans.Class ( lift )
 import Control.Monad.Trans.Maybe
 import Control.Monad
+import Data.Default ( def )
 
 loadFile fn = openFile fn ReadMode >>= hGetContents
 
@@ -36,12 +37,11 @@ decodeFile :: (JSON.FromJSON v) => FilePath -> IO (Maybe v)
 decodeFile fn = JSON.decode <$> (openFile fn ReadMode >>= LBS.hGetContents)
 
 printF :: GVal (Run IO)
-printF = Function $ go
+printF = toGVal $ go
     where
         go :: [(Maybe Text, GVal (Run IO))] -> Run IO (GVal (Run IO))
-        go args = forM_ args printArg >> return Null
-        printArg (Nothing, String s) = liftRun $ putStrLn (Text.unpack s)
-        printArg (Nothing, v) = liftRun $ print v
+        go args = forM_ args printArg >> return def
+        printArg (Nothing, v) = liftRun . putStrLn . Text.unpack . asText $ v
         printArg (Just x, _) = return ()
 
 main = do

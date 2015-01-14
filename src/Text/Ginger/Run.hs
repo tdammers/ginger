@@ -144,7 +144,10 @@ runStatement (DefMacroS name macro) = do
     let val = macroToGVal macro
     setVar name val
 
-runStatement (ScopedS body) = withLocalState $ runStatement body
+runStatement (ScopedS body) = withLocalState runInner
+    where
+        runInner :: (Functor m, Monad m) => Run m ()
+        runInner = runStatement body
 
 runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
     iteree <- runExpression itereeExpr
@@ -161,28 +164,36 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
 
 -- | Deeply magical function that converts a 'Macro' into a Function.
 macroToGVal :: (Functor m, Monad m) => Macro -> GVal (Run m)
-macroToGVal (Macro argNames body) =
-    toGVal f
-    where
-        f :: [(Maybe Text, GVal (Run m))] -> Run m (GVal (Run m))
-        f args =
-            -- Establish a local state to not contaminate the parent scope
-            -- with function arguments and local variables
-            withLocalState $ do
-                -- Establish a local context, where we override the HTML writer,
-                -- rewiring it to append any output to the state's capture.
-                clearCapture
-                local (\c -> c { contextWriteHtml = appendCapture }) $ do
-                    -- TODO: import args into local scope
-                    let (matchedArgs, positionalArgs, namedArgs) = matchFuncArgs argNames args
-                    forM (HashMap.toList matchedArgs) (uncurry setVar)
-                    setVar "varargs" $ toGVal positionalArgs
-                    setVar "kwargs" $ toGVal namedArgs
-                    runStatement body
-                    -- At this point, we're still inside the local state, so the
-                    -- capture contains the macro's output; we now simply return
-                    -- the capture as the function's return value.
-                    toGVal <$> fetchCapture
+macroToGVal (Macro argNames body) = def
+    -- toGVal f
+    -- where
+    --     f :: Function (Run m)
+    --     f args = helper go'
+    --         -- Establish a local state to not contaminate the parent scope
+    --         -- with function arguments and local variables, and;
+    --         -- Establish a local context, where we override the HTML writer,
+    --         -- rewiring it to append any output to the state's capture.
+    --         where
+    --             helper :: Run m (GVal (Run m)) -> Run m (GVal (Run m))
+    --             helper = withLocalState
+    --             go' :: Run m (GVal (Run m))
+    --             go' = local (\c -> c { contextWriteHtml = appendCapture }) $ go
+    --             go :: Run m (GVal (Run m))
+    --             go = do
+    --                 clearCapture
+    --                 forM (HashMap.toList matchedArgs) (uncurry setVar)
+    --                 setVar "varargs" $ toGVal positionalArgs
+    --                 setVar "kwargs" $ toGVal namedArgs
+    --                 runStatement body
+    --                 -- At this point, we're still inside the local state, so the
+    --                 -- capture contains the macro's output; we now simply return
+    --                 -- the capture as the function's return value.
+    --                 toGVal <$> fetchCapture
+    --             matchedArgs :: HashMap Text (GVal (Run m))
+    --             positionalArgs :: [GVal (Run m)]
+    --             namedArgs :: HashMap Text (GVal (Run m))
+    --             (matchedArgs, positionalArgs, namedArgs) = matchFuncArgs argNames args
+
 
 -- | Helper function to run a State action with a temporary state, reverting
 -- to the old state after the action has finished.

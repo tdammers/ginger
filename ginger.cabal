@@ -47,6 +47,7 @@ executable ginger
     default-language:    Haskell2010
     build-depends: base >= 4.6 && <5
                  , bytestring
+                 , data-default >= 0.5
                  , ginger
                  , aeson
                  , text
