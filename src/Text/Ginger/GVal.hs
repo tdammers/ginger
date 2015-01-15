@@ -253,6 +253,16 @@ instance ToGVal m Int where
             , isNull = False
             }
 
+instance ToGVal m Integer where
+    toGVal x =
+        def
+            { asHtml = html . Text.pack . show $ x
+            , asText = Text.pack . show $ x
+            , asBoolean = x /= 0
+            , asNumber = Just . fromIntegral $ x
+            , isNull = False
+            }
+
 instance ToGVal m Scientific where
     toGVal x =
         def
