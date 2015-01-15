@@ -3,6 +3,7 @@
 -- Takes two optional arguments; the first one is a template file, the second
 -- one a file containing some context data in JSON format.
 {-#LANGUAGE OverloadedStrings #-}
+{-#LANGUAGE ScopedTypeVariables #-}
 module Main where
 
 import Text.Ginger
@@ -37,7 +38,7 @@ decodeFile :: (JSON.FromJSON v) => FilePath -> IO (Maybe v)
 decodeFile fn = JSON.decode <$> (openFile fn ReadMode >>= LBS.hGetContents)
 
 printF :: GVal (Run IO)
-printF = toGVal $ go
+printF = fromFunction $ go
     where
         go :: [(Maybe Text, GVal (Run IO))] -> Run IO (GVal (Run IO))
         go args = forM_ args printArg >> return def
