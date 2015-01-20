@@ -85,10 +85,17 @@ defRunState =
             , ("num", fromFunction . unaryFunc $ toGVal . asNumber)
             , ("iterable", fromFunction . unaryFunc $ toGVal . (\x -> isList x || isDict x))
             , ("show", fromFunction . unaryFunc $ fromString . show)
+            , ("default", fromFunction gfnDefault)
             ]
 
         gfnRawHtml :: Function (Run m)
         gfnRawHtml = unaryFunc (toGVal . unsafeRawHtml . asText)
+
+        gfnDefault :: Function (Run m)
+        gfnDefault [] = return def
+        gfnDefault ((_, x):xs)
+            | asBoolean x = return x
+            | otherwise = gfnDefault xs
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad
