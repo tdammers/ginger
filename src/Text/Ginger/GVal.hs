@@ -31,6 +31,7 @@ import qualified Prelude
 import qualified Data.List as List
 import Data.Maybe ( fromMaybe, catMaybes, isJust )
 import Data.Text (Text)
+import Data.String (IsString, fromString)
 import qualified Data.Text as Text
 import qualified Data.List as List
 import Safe (readMay, atMay)
@@ -283,8 +284,8 @@ instance ToGVal m Bool where
             , isNull = False
             }
 
-instance ToGVal m [Char] where
-    toGVal x =
+instance IsString (GVal m) where
+    fromString x =
         def
             { asHtml = html . Text.pack $ x
             , asText = Text.pack x

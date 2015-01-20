@@ -18,13 +18,18 @@ where
 
 import Prelude ( (.), ($), (==), (/=)
                , (+), (-), (*), (/), div
+               , (||), (&&)
+               , (++)
+               , Show, show
                , undefined, otherwise
                , Maybe (..)
                , Bool (..)
+               , Int
                , fromIntegral, floor
                , not
                , show
                , uncurry
+               , seq
                )
 import qualified Prelude
 import Data.Maybe (fromMaybe)
@@ -33,6 +38,7 @@ import Text.Ginger.Html
 import Text.Ginger.GVal
 
 import Data.Text (Text)
+import Data.String (fromString)
 import qualified Data.Text as Text
 import Control.Monad
 import Control.Monad.Identity
@@ -60,6 +66,10 @@ data RunState m
         , rsCapture :: Html
         }
 
+unaryFunc :: forall m. (Monad m) => (GVal (Run m) -> GVal (Run m)) -> Function (Run m)
+unaryFunc f [] = return def
+unaryFunc f ((_, x):[]) = return (f x)
+
 defRunState :: forall m. Monad m => RunState m
 defRunState =
     RunState
@@ -68,14 +78,17 @@ defRunState =
         }
     where
         scope :: [(Text, GVal (Run m))]
-        scope = [ ("raw", fromFunction gfnRawHtml) ]
+        scope =
+            [ ("raw", fromFunction gfnRawHtml)
+            , ("length", fromFunction . unaryFunc $ toGVal . length)
+            , ("str", fromFunction . unaryFunc $ toGVal . asText)
+            , ("num", fromFunction . unaryFunc $ toGVal . asNumber)
+            , ("iterable", fromFunction . unaryFunc $ toGVal . (\x -> isList x || isDict x))
+            , ("show", fromFunction . unaryFunc $ fromString . show)
+            ]
+
         gfnRawHtml :: Function (Run m)
-        gfnRawHtml [] = return def
-        gfnRawHtml ((Nothing, v):_) =
-            return . toGVal . helper $ v
-            where
-                helper :: GVal (Run m) -> Html
-                helper = unsafeRawHtml . asText
+        gfnRawHtml = unaryFunc (toGVal . unsafeRawHtml . asText)
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad
@@ -141,18 +154,20 @@ runStatement (DefMacroS name macro) = do
     let val = macroToGVal macro
     setVar name val
 
-runStatement (ScopedS body) = withLocalState runInner
+runStatement (ScopedS body) = withLocalScope runInner
     where
         runInner :: (Functor m, Monad m) => Run m ()
         runInner = runStatement body
 
 runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
     iteree <- runExpression itereeExpr
-    let values = asList iteree
-        indexes = iterKeys iteree
-    sequence_ (Prelude.zipWith iteration indexes values)
+    let iterPairs =
+            if isDict iteree
+                then [ (toGVal k, v) | (k, v) <- asDictItems iteree ]
+                else Prelude.zip (Prelude.map toGVal ([0..] :: [Int])) (asList iteree)
+    withLocalScope $ forM_ iterPairs iteration
     where
-        iteration index value = withLocalState $ do
+        iteration (index, value) = do
             setVar varNameValue value
             case varNameIndex of
                 Nothing -> return ()
@@ -193,6 +208,15 @@ withLocalState a = do
     s <- get
     r <- a
     put s
+    return r
+
+-- | Helper function to run a Scope action with a temporary scope, reverting
+-- to the old scope after the action has finished.
+withLocalScope :: (Monad m) => Run m a -> Run m a
+withLocalScope a = do
+    scope <- gets rsScope
+    r <- a
+    modify (\s -> s { rsScope = scope })
     return r
 
 setVar :: Monad m => VarName -> GVal (Run m) -> Run m ()
