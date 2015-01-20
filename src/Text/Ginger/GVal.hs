@@ -145,11 +145,13 @@ instance ToHtml (GVal m) where
 lookupIndex :: Int -> GVal m -> Maybe (GVal m)
 lookupIndex i v = atMay (asList v) i
 
+lookupIndexMay :: Maybe Int -> GVal m -> Maybe (GVal m)
+lookupIndexMay Nothing = const Nothing
+lookupIndexMay (Just i) = lookupIndex i
+
 lookupLoose :: GVal m -> GVal m -> Maybe (GVal m)
-lookupLoose k v
-    | isDict v = asLookup v (asText k)
-    | isList v = lookupIndex (floor . fromMaybe 0 . asNumber $ k) v
-    | otherwise = Nothing
+lookupLoose k v =
+    asLookup v (asText k) <|> lookupIndexMay (floor <$> asNumber k) v
 
 -- | Treat a 'GVal' as a dictionary and list all the keys, with no particular
 -- ordering.
