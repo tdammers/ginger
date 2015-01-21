@@ -79,37 +79,37 @@ matchFuncArgs names args =
 -- | Ginger value.
 data GVal m =
     GVal
-        { asList :: [GVal m]
-        , asDictItems :: [(Text, GVal m)]
-        , asLookup :: Text -> Maybe (GVal m)
+        { asList :: Maybe [GVal m]
+        , asDictItems :: Maybe [(Text, GVal m)]
+        , asLookup :: Maybe (Text -> Maybe (GVal m))
         , asHtml :: Html
         , asText :: Text
         , asBoolean :: Bool
         , asNumber :: Maybe Scientific
         , asFunction :: Maybe (Function m)
+        , length :: Maybe Int
         , isNull :: Bool
-        , isFunction :: Bool
-        , isList :: Bool
-        , isDict :: Bool
-        , length :: Int
         }
+
+isList :: GVal m -> Bool
+isList = isJust . asList
+
+isDict :: GVal m -> Bool
+isDict = isJust . asDictItems
 
 -- | The default 'GVal' is equivalent to NULL.
 instance Default (GVal m) where
     def = GVal
-            { asList = []
-            , asDictItems = []
-            , asLookup = const def
+            { asList = Nothing
+            , asDictItems = Nothing
+            , asLookup = Nothing
             , asHtml = unsafeRawHtml ""
             , asText = ""
             , asBoolean = False
             , asNumber = Nothing
             , asFunction = Nothing
             , isNull = True
-            , isFunction = False
-            , isList = False
-            , isDict = False
-            , length = 0
+            , length = Nothing
             }
 
 -- | Types that implement conversion to 'GVal'
@@ -125,15 +125,15 @@ instance ToGVal m (GVal m) where
 instance Show (GVal m) where
     show v
         | isNull v = "null"
-        | isFunction v = "<<function>>"
-        | isDict v = "{" <> (mconcat . List.intersperse ", " $ [ show k <> ": " <> show v | (k, v) <- asDictItems v ]) <> "}"
-        | isList v = "[" <> (mconcat . List.intersperse ", " . Prelude.map show $ asList v) <> "]"
+        | isJust (asFunction v) = "<<function>>"
+        | isJust (asDictItems v) = "{" <> (mconcat . List.intersperse ", " $ [ show k <> ": " <> show v | (k, v) <- fromMaybe [] (asDictItems v) ]) <> "}"
+        | isJust (asList v) = "[" <> (mconcat . List.intersperse ", " . Prelude.map show $ fromMaybe [] (asList v)) <> "]"
         | isJust (asNumber v) =
             case floatingOrInteger <$> asNumber v :: Maybe (Either Double Integer) of
                 Just (Left x) -> show (asNumber v)
                 Just (Right x) -> show x
                 Nothing -> ""
-        | otherwise = Text.unpack $ asText v
+        | otherwise = show $ asText v
 
 -- | Converting to HTML hooks into the ToHtml instance for 'Text' for most tags.
 -- Tags that have no obvious textual representation render as empty HTML.
@@ -144,13 +144,20 @@ instance ToHtml (GVal m) where
 -- If the value is not a List, or if the index exceeds the list length,
 -- return 'Nothing'.
 lookupIndex :: Int -> GVal m -> Maybe (GVal m)
-lookupIndex i v = atMay (asList v) i
+lookupIndex = lookupIndexMay . Just
 
 -- | Helper function; look up a value by an integer index when the index may or
 -- may not be available. If no index is given, return 'Nothing'.
 lookupIndexMay :: Maybe Int -> GVal m -> Maybe (GVal m)
-lookupIndexMay Nothing = const Nothing
-lookupIndexMay (Just i) = lookupIndex i
+lookupIndexMay i v = do
+    index <- i
+    items <- asList v
+    atMay items index
+
+lookupKey :: Text -> GVal m -> Maybe (GVal m)
+lookupKey k v = do
+    lf <- asLookup v
+    lf k
 
 -- | Loosely-typed lookup: try dictionary-style lookup first (treat index as
 -- a string, and container as a dictionary), if that doesn't yield anything
@@ -158,21 +165,12 @@ lookupIndexMay (Just i) = lookupIndex i
 -- doesn't provide dictionary-style access), try index-based lookup.
 lookupLoose :: GVal m -> GVal m -> Maybe (GVal m)
 lookupLoose k v =
-    asLookup v (asText k) <|> lookupIndexMay (floor <$> asNumber k) v
+    lookupKey (asText k) v <|> lookupIndexMay (floor <$> asNumber k) v
 
 -- | Treat a 'GVal' as a dictionary and list all the keys, with no particular
 -- ordering.
-keys :: GVal m -> [Text]
-keys v = Prelude.map fst $ asDictItems v
-
--- | List the keys for list-like values. For dictionaries, these are the
--- dictionary keys, in no particular order; for plain lists, they are
--- 0-based integer indexes.
-iterKeys :: GVal m -> [GVal m]
-iterKeys v
-    | isDict v = Prelude.map toGVal . keys $ v
-    | isList v = Prelude.map toGVal [0..length v - 1]
-    | otherwise = []
+keys :: GVal m -> Maybe [Text]
+keys v = Prelude.map fst <$> asDictItems v
 
 -- | Convert a 'GVal' to a number.
 toNumber :: GVal m -> Maybe Scientific
@@ -206,7 +204,6 @@ fromFunction f =
         , asText = ""
         , asBoolean = True
         , isNull = False
-        , isFunction = True
         , asFunction = Just f
         }
 
@@ -224,9 +221,8 @@ instance ToGVal m v => ToGVal m [v] where
                     , asText = mconcat . Prelude.map asText $ xs
                     , asBoolean = not . List.null $ xs
                     , isNull = False
-                    , isList = True
-                    , asList = Prelude.map toGVal xs
-                    , length = Prelude.length xs
+                    , asList = Just $ Prelude.map toGVal xs
+                    , length = Just $ Prelude.length xs
                     }
 
 instance ToGVal m v => ToGVal m (HashMap Text v) where
@@ -239,9 +235,8 @@ instance ToGVal m v => ToGVal m (HashMap Text v) where
                     , asText = mconcat . Prelude.map asText . HashMap.elems $ xs
                     , asBoolean = not . HashMap.null $ xs
                     , isNull = False
-                    , isDict = True
-                    , asLookup = \v -> HashMap.lookup v xs
-                    , asDictItems = HashMap.toList xs
+                    , asLookup = Just (\v -> HashMap.lookup v xs)
+                    , asDictItems = Just $ HashMap.toList xs
                     }
 
 instance ToGVal m Int where
@@ -292,6 +287,7 @@ instance IsString (GVal m) where
             , asBoolean = not $ Prelude.null x
             , asNumber = readMay x
             , isNull = False
+            , length = Just . Prelude.length $ x
             }
 
 instance ToGVal m Text where

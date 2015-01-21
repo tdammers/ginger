@@ -32,7 +32,7 @@ import Prelude ( (.), ($), (==), (/=)
                , seq
                )
 import qualified Prelude
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 import Text.Ginger.AST
 import Text.Ginger.Html
 import Text.Ginger.GVal
@@ -169,9 +169,9 @@ runStatement (ScopedS body) = withLocalScope runInner
 runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
     iteree <- runExpression itereeExpr
     let iterPairs =
-            if isDict iteree
-                then [ (toGVal k, v) | (k, v) <- asDictItems iteree ]
-                else Prelude.zip (Prelude.map toGVal ([0..] :: [Int])) (asList iteree)
+            if isJust (asDictItems iteree)
+                then [ (toGVal k, v) | (k, v) <- fromMaybe [] (asDictItems iteree) ]
+                else Prelude.zip (Prelude.map toGVal ([0..] :: [Int])) (fromMaybe [] (asList iteree))
     withLocalScope $ forM_ iterPairs iteration
     where
         iteration (index, value) = do
