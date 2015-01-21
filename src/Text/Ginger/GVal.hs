@@ -94,6 +94,7 @@ data GVal m =
         , length :: Int
         }
 
+-- | The default 'GVal' is equivalent to NULL.
 instance Default (GVal m) where
     def = GVal
             { asList = []
@@ -139,16 +140,22 @@ instance Show (GVal m) where
 instance ToHtml (GVal m) where
     toHtml = asHtml
 
--- | Treat a 'GVal' as a flat list and look up a value by index.
+-- | Treat a 'GVal' as a flat list and look up a value by integer index.
 -- If the value is not a List, or if the index exceeds the list length,
 -- return 'Nothing'.
 lookupIndex :: Int -> GVal m -> Maybe (GVal m)
 lookupIndex i v = atMay (asList v) i
 
+-- | Helper function; look up a value by an integer index when the index may or
+-- may not be available. If no index is given, return 'Nothing'.
 lookupIndexMay :: Maybe Int -> GVal m -> Maybe (GVal m)
 lookupIndexMay Nothing = const Nothing
 lookupIndexMay (Just i) = lookupIndex i
 
+-- | Loosely-typed lookup: try dictionary-style lookup first (treat index as
+-- a string, and container as a dictionary), if that doesn't yield anything
+-- (either because the index is not string-ish, or because the container
+-- doesn't provide dictionary-style access), try index-based lookup.
 lookupLoose :: GVal m -> GVal m -> Maybe (GVal m)
 lookupLoose k v =
     asLookup v (asText k) <|> lookupIndexMay (floor <$> asNumber k) v
@@ -168,16 +175,6 @@ iterKeys v
     | otherwise = []
 
 -- | Convert a 'GVal' to a number.
---
--- * 'Number' is simply unwrapped.
---
--- * 'String' is fed through 'read', returning 'Nothing' if parsing failed.
---
--- * Boolean 'True' is returned as 1
---
--- * Anything else is considered \"not a number\" and thus converted to
--- 'Nothing'
---
 toNumber :: GVal m -> Maybe Scientific
 toNumber = asNumber
 
@@ -201,6 +198,7 @@ toBoolean = asBoolean
 toFunction :: GVal m -> Maybe (Function m)
 toFunction = asFunction
 
+-- | Turn a 'Function' into a 'GVal'
 fromFunction :: Function m -> GVal m
 fromFunction f =
     def

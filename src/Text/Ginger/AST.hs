@@ -20,6 +20,7 @@ data Template
         }
         deriving (Show)
 
+-- | A macro definition ( {% macro %}
 data Macro
     = Macro { macroArgs :: [VarName], macroBody :: Statement }
     deriving (Show)
