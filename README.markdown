@@ -207,7 +207,6 @@ filename relative to the CWD, and returns the file contents on success or
 If you don't need a monadic context for resolving includes (e.g. because you
 have pre-loaded all template sources), you can use the pure 'parseGinger'
 flavor, which does not rely on a host monad.
-odule Text.Ginger.Parse
 
 ### Running
 The core function for running a template is 'runGinger' (or its monadic
