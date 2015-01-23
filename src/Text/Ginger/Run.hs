@@ -107,6 +107,9 @@ defRunState =
             , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
             , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
             , ("concat", fromFunction . variadicStringFunc $ mconcat)
+            , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
+            , ("ratio", fromFunction . variadicNumericFunc 1 $ ratio)
+            , ("modulo", fromFunction . variadicNumericFunc 1 $ fromIntegral . modulo . Prelude.map Prelude.floor)
             ]
 
         gfnRawHtml :: Function (Run m)
@@ -122,6 +125,16 @@ defRunState =
         difference (x:xs) = x - Prelude.sum xs
         difference (x:[]) = x
         difference [] = 0
+
+        ratio :: (Prelude.Fractional a, Prelude.Num a) => [a] -> a
+        ratio (x:xs) = x / Prelude.product xs
+        ratio (x:[]) = x
+        ratio [] = 0
+
+        modulo :: (Prelude.Integral a, Prelude.Num a) => [a] -> a
+        modulo (x:xs) = x `Prelude.mod` Prelude.product xs
+        modulo (x:[]) = x
+        modulo [] = 0
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad

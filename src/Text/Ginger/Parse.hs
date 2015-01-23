@@ -400,10 +400,18 @@ operativeExprP operandP operators = do
 additiveExprP :: Monad m => Parser m Expression
 additiveExprP =
     operativeExprP
-        postfixExprP
+        multiplicativeExprP
         [ ("+", "sum")
         , ("-", "difference")
         , ("~", "concat") ]
+
+multiplicativeExprP :: Monad m => Parser m Expression
+multiplicativeExprP =
+    operativeExprP
+        postfixExprP
+        [ ("*", "product")
+        , ("/", "ratio")
+        , ("%", "modulo") ]
 
 postfixExprP :: Monad m => Parser m Expression
 postfixExprP = do

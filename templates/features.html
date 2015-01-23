@@ -108,6 +108,24 @@ actual: {{ 1 - 1 }}
 expect: 1foo
 actual: {{ 1 ~ "foo" }}
 
+** Multiplication **
+
+5 * 5 = 25
+expect: 25
+actual: {{ 5 * 5 }}
+
+** Division **
+
+24 / 6 = 4
+expect: 4
+actual: {{ 24 / 6 }}
+
+** Modulo **
+
+7 % 3 = 2
+expect: 2
+actual: {{ 7 % 3 }}
+
 ** Iteration **
 
 for x in [ "foo", "bar", "baz" ]: <x>
