@@ -403,7 +403,8 @@ additiveExprP =
         multiplicativeExprP
         [ ("+", "sum")
         , ("-", "difference")
-        , ("~", "concat") ]
+        , ("~", "concat")
+        ]
 
 multiplicativeExprP :: Monad m => Parser m Expression
 multiplicativeExprP =
@@ -411,7 +412,8 @@ multiplicativeExprP =
         postfixExprP
         [ ("*", "product")
         , ("/", "ratio")
-        , ("%", "modulo") ]
+        , ("%", "modulo")
+        ]
 
 postfixExprP :: Monad m => Parser m Expression
 postfixExprP = do
