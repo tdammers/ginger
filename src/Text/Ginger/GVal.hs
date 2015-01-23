@@ -262,8 +262,12 @@ instance ToGVal m Integer where
 instance ToGVal m Scientific where
     toGVal x =
         def
-            { asHtml = html . Text.pack . show $ x
-            , asText = Text.pack . show $ x
+            { asHtml = html . Text.pack $
+                        fromMaybe (show x)
+                        (show <$> (toBoundedInteger x :: Maybe Int))
+            , asText = Text.pack $
+                        fromMaybe (show x)
+                        (show <$> (toBoundedInteger x :: Maybe Int))
             , asBoolean = x /= 0
             , asNumber = Just x
             , isNull = False
