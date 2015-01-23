@@ -26,6 +26,7 @@ import Prelude ( (.), ($), (==), (/=)
                , fromIntegral, floor
                , not
                , fst, snd
+               , Monad
                )
 import qualified Prelude
 import qualified Data.List as List
@@ -46,6 +47,7 @@ import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 import qualified Data.Vector as Vector
 import Control.Monad ( forM, mapM )
+import Control.Monad.Trans (MonadTrans, lift)
 import Data.Default (Default, def)
 
 import Text.Ginger.Html

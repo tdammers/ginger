@@ -377,7 +377,25 @@ closeNWP c = ignore $ do
     optional . ignore . char $ '\n'
 
 expressionP :: Monad m => Parser m Expression
-expressionP = postfixExprP
+expressionP = additiveExprP
+
+additiveExprP :: Monad m => Parser m Expression
+additiveExprP = do
+    lhs <- postfixExprP
+    spaces
+    tails <- many . try $ additiveTail
+    return $ foldl (flip ($)) lhs tails
+    where
+        operators = [ ("+", "sum"), ("-", "difference"), ("~", "concat") ]
+        additiveTail :: Monad m => Parser m (Expression -> Expression)
+        additiveTail = do
+            funcName <-
+                foldl (<|>) (unexpected "operator") $
+                [ string op >> return fn | (op, fn) <- operators ]
+            spaces
+            rhs <- postfixExprP
+            spaces
+            return (\lhs -> CallE (VarE funcName) [(Nothing, lhs), (Nothing, rhs)])
 
 postfixExprP :: Monad m => Parser m Expression
 postfixExprP = do

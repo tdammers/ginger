@@ -86,6 +86,16 @@ actual: {{ print("Hello") }}
 expect: Hello
 actual: {{ "Hello"|print }}
 
+** Addition **
+
+1 + 1 = 2
+expect: 2
+actual: {{ sum(1, 1) }}
+
+1 + 1 = 2
+expect: 2
+actual: {{ 1 + 1 }}
+
 ** Iteration **
 
 for x in [ "foo", "bar", "baz" ]: <x>

@@ -30,6 +30,7 @@ import Prelude ( (.), ($), (==), (/=)
                , show
                , uncurry
                , seq
+               , snd
                )
 import qualified Prelude
 import Data.Maybe (fromMaybe, isJust)
@@ -70,6 +71,16 @@ unaryFunc :: forall m. (Monad m) => (GVal (Run m) -> GVal (Run m)) -> Function (
 unaryFunc f [] = return def
 unaryFunc f ((_, x):[]) = return (f x)
 
+ignoreArgNames :: ([a] -> b) -> ([(c, a)] -> b)
+ignoreArgNames f args = f (Prelude.map snd args)
+
+variadicNumericFunc :: Monad m => Scientific -> ([Scientific] -> Scientific) -> [(Maybe Text, GVal (Run m))] -> Run m (GVal (Run m))
+variadicNumericFunc zero f args =
+    return . toGVal . f $ args'
+    where
+        args' :: [Scientific]
+        args' = Prelude.map (fromMaybe zero . asNumber . snd) args
+
 defRunState :: forall m. Monad m => RunState m
 defRunState =
     RunState
@@ -86,6 +97,7 @@ defRunState =
             , ("iterable", fromFunction . unaryFunc $ toGVal . (\x -> isList x || isDict x))
             , ("show", fromFunction . unaryFunc $ fromString . show)
             , ("default", fromFunction gfnDefault)
+            , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
             ]
 
         gfnRawHtml :: Function (Run m)
