@@ -1,5 +1,6 @@
 {-#LANGUAGE TupleSections #-}
 {-#LANGUAGE OverloadedStrings #-}
+{-#LANGUAGE ScopedTypeVariables #-}
 -- | Ginger parser.
 module Text.Ginger.Parse
 ( parseGinger
@@ -379,23 +380,30 @@ closeNWP c = ignore $ do
 expressionP :: Monad m => Parser m Expression
 expressionP = additiveExprP
 
-additiveExprP :: Monad m => Parser m Expression
-additiveExprP = do
-    lhs <- postfixExprP
+operativeExprP :: forall m. Monad m => Parser m Expression -> [ (String, Text) ] -> Parser m Expression
+operativeExprP operandP operators = do
+    lhs <- operandP
     spaces
-    tails <- many . try $ additiveTail
+    tails <- many . try $ operativeTail
     return $ foldl (flip ($)) lhs tails
     where
-        operators = [ ("+", "sum"), ("-", "difference"), ("~", "concat") ]
-        additiveTail :: Monad m => Parser m (Expression -> Expression)
-        additiveTail = do
+        operativeTail :: Parser m (Expression -> Expression)
+        operativeTail = do
             funcName <-
                 foldl (<|>) (unexpected "operator") $
                 [ string op >> return fn | (op, fn) <- operators ]
             spaces
-            rhs <- postfixExprP
+            rhs <- operandP
             spaces
             return (\lhs -> CallE (VarE funcName) [(Nothing, lhs), (Nothing, rhs)])
+
+additiveExprP :: Monad m => Parser m Expression
+additiveExprP =
+    operativeExprP
+        postfixExprP
+        [ ("+", "sum")
+        , ("-", "difference")
+        , ("~", "concat") ]
 
 postfixExprP :: Monad m => Parser m Expression
 postfixExprP = do
