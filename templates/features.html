@@ -96,6 +96,18 @@ actual: {{ sum(1, 1) }}
 expect: 2
 actual: {{ 1 + 1 }}
 
+** Subtraction **
+
+1 - 1 = 0
+expect: 0
+actual: {{ 1 - 1 }}
+
+** Concatenation **
+
+1 ~ "foo" = 1foo
+expect: 1foo
+actual: {{ 1 ~ "foo" }}
+
 ** Iteration **
 
 for x in [ "foo", "bar", "baz" ]: <x>

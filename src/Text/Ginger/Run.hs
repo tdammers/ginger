@@ -81,6 +81,13 @@ variadicNumericFunc zero f args =
         args' :: [Scientific]
         args' = Prelude.map (fromMaybe zero . asNumber . snd) args
 
+variadicStringFunc :: Monad m => ([Text] -> Text) -> [(Maybe Text, GVal (Run m))] -> Run m (GVal (Run m))
+variadicStringFunc f args =
+    return . toGVal . f $ args'
+    where
+        args' :: [Text]
+        args' = Prelude.map (asText . snd) args
+
 defRunState :: forall m. Monad m => RunState m
 defRunState =
     RunState
@@ -98,6 +105,8 @@ defRunState =
             , ("show", fromFunction . unaryFunc $ fromString . show)
             , ("default", fromFunction gfnDefault)
             , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
+            , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
+            , ("concat", fromFunction . variadicStringFunc $ mconcat)
             ]
 
         gfnRawHtml :: Function (Run m)
@@ -108,6 +117,11 @@ defRunState =
         gfnDefault ((_, x):xs)
             | asBoolean x = return x
             | otherwise = gfnDefault xs
+
+        difference :: Prelude.Num a => [a] -> a
+        difference (x:xs) = x - Prelude.sum xs
+        difference (x:[]) = x
+        difference [] = 0
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad
