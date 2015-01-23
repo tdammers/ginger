@@ -44,7 +44,7 @@ import Data.Text (Text)
 import Data.Maybe ( fromMaybe )
 import Data.Scientific ( Scientific )
 import qualified Data.Text as Text
-import Data.List ( foldr )
+import Data.List ( foldr, nub, sort )
 import qualified Data.HashMap.Strict as HashMap
 
 import System.FilePath ( takeDirectory, (</>) )
@@ -387,11 +387,13 @@ operativeExprP operandP operators = do
     tails <- many . try $ operativeTail
     return $ foldl (flip ($)) lhs tails
     where
+        opChars :: [Char]
+        opChars = nub . sort . concat . map fst $ operators
         operativeTail :: Parser m (Expression -> Expression)
         operativeTail = do
             funcName <-
-                foldl (<|>) (unexpected "operator") $
-                [ string op >> return fn | (op, fn) <- operators ]
+                foldl (<|>) (fail "operator") $
+                [ try (string op >> notFollowedBy (oneOf opChars)) >> return fn | (op, fn) <- operators ]
             spaces
             rhs <- operandP
             spaces
@@ -411,6 +413,7 @@ multiplicativeExprP =
     operativeExprP
         postfixExprP
         [ ("*", "product")
+        , ("//", "int_ratio")
         , ("/", "ratio")
         , ("%", "modulo")
         ]

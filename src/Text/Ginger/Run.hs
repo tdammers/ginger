@@ -109,6 +109,7 @@ defRunState =
             , ("concat", fromFunction . variadicStringFunc $ mconcat)
             , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
             , ("ratio", fromFunction . variadicNumericFunc 1 $ ratio)
+            , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
             , ("modulo", fromFunction . variadicNumericFunc 1 $ fromIntegral . modulo . Prelude.map Prelude.floor)
             ]
 
@@ -130,6 +131,11 @@ defRunState =
         ratio (x:xs) = x / Prelude.product xs
         ratio (x:[]) = x
         ratio [] = 0
+
+        intRatio :: (Prelude.Integral a, Prelude.Num a) => [a] -> a
+        intRatio (x:xs) = x `Prelude.div` Prelude.product xs
+        intRatio (x:[]) = x
+        intRatio [] = 0
 
         modulo :: (Prelude.Integral a, Prelude.Num a) => [a] -> a
         modulo (x:xs) = x `Prelude.mod` Prelude.product xs
