@@ -50,6 +50,7 @@ import Control.Applicative
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 import Data.Scientific (Scientific)
+import Data.Scientific as Scientific
 import Data.Default (def)
 import Safe (readMay)
 
@@ -108,7 +109,7 @@ defRunState =
             , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
             , ("concat", fromFunction . variadicStringFunc $ mconcat)
             , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
-            , ("ratio", fromFunction . variadicNumericFunc 1 $ ratio)
+            , ("ratio", fromFunction . variadicNumericFunc 1 $ Scientific.fromFloatDigits . ratio . Prelude.map Scientific.toRealFloat)
             , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
             , ("modulo", fromFunction . variadicNumericFunc 1 $ fromIntegral . modulo . Prelude.map Prelude.floor)
             ]
@@ -127,7 +128,7 @@ defRunState =
         difference (x:[]) = x
         difference [] = 0
 
-        ratio :: (Prelude.Fractional a, Prelude.Num a) => [a] -> a
+        ratio :: (Show a, Prelude.Fractional a, Prelude.Num a) => [a] -> a
         ratio (x:xs) = x / Prelude.product xs
         ratio (x:[]) = x
         ratio [] = 0
