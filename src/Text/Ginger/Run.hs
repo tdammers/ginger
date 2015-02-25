@@ -34,6 +34,7 @@ import Prelude ( (.), ($), (==), (/=)
                )
 import qualified Prelude
 import Data.Maybe (fromMaybe, isJust)
+import qualified Data.List as List
 import Text.Ginger.AST
 import Text.Ginger.Html
 import Text.Ginger.GVal
@@ -112,6 +113,7 @@ defRunState =
             , ("ratio", fromFunction . variadicNumericFunc 1 $ Scientific.fromFloatDigits . ratio . Prelude.map Scientific.toRealFloat)
             , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
             , ("modulo", fromFunction . variadicNumericFunc 1 $ fromIntegral . modulo . Prelude.map Prelude.floor)
+            , ("equals", fromFunction gfnEquals)
             ]
 
         gfnRawHtml :: Function (Run m)
@@ -122,6 +124,23 @@ defRunState =
         gfnDefault ((_, x):xs)
             | asBoolean x = return x
             | otherwise = gfnDefault xs
+
+        gfnEquals :: Function (Run m)
+        gfnEquals [] = return $ toGVal True
+        gfnEquals (x:[]) = return $ toGVal True
+        gfnEquals (x:xs) =
+            return . toGVal $ Prelude.all ((snd x `looseEquals`) . snd) xs
+
+        looseEquals :: GVal (Run m) -> GVal (Run m) -> Bool
+        looseEquals a b
+            | isJust (asFunction a) || isJust (asFunction b) = False
+            | isJust (asList a) /= isJust (asList b) = False
+            | isJust (asDictItems a) /= isJust (asDictItems b) = False
+            -- Both numbers: do numeric comparison
+            | isJust (asNumber a) && isJust (asNumber b) = asNumber a == asNumber b
+            -- If either is NULL, the other must be falsy
+            | isNull a || isNull b = asBoolean a == asBoolean b
+            | otherwise = asText a == asText b
 
         difference :: Prelude.Num a => [a] -> a
         difference (x:xs) = x - Prelude.sum xs
