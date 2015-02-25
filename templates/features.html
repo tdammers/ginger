@@ -137,7 +137,7 @@ actual: {{ 3 // 2 }}
 ** Modulo **
 
 7 % 3 = 2
-expect: 2
+expect: 1
 actual: {{ 7 % 3 }}
 
 ** Iteration **
@@ -145,6 +145,12 @@ actual: {{ 7 % 3 }}
 for x in [ "foo", "bar", "baz" ]: <x>
 expect: <foo><bar><baz>
 actual: {% for x in [ "foo", "bar", "baz" ] %}<{{x}}>{% endfor %}
+
+** Conditionals **
+
+if true then "yes" else "no"
+expect: yes
+actual: {% if true %}yes{% else %}no{% endif %}
 
 ** Setting variables **
 
