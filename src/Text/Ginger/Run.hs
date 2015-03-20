@@ -178,7 +178,7 @@ liftLookup f k = do
 -- | Create an execution context for runGinger.
 -- The argument is a lookup function that maps top-level context keys to ginger
 -- values.
-makeContext :: (ToGVal (Run (Writer Html)) v) => (VarName -> GVal (Run (Writer Html))) -> GingerContext (Writer Html)
+makeContext :: (VarName -> GVal (Run (Writer Html))) -> GingerContext (Writer Html)
 makeContext l =
     makeContextM
         (return . l)
