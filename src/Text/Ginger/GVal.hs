@@ -161,7 +161,7 @@ keys v = Prelude.map fst $ asDictItems v
 iterKeys :: GVal m -> [GVal m]
 iterKeys v
     | isDict v = Prelude.map toGVal . keys $ v
-    | isList v = Prelude.map toGVal [0..length v]
+    | isList v = Prelude.map toGVal [0..length v - 1]
     | otherwise = []
 
 toNumber :: GVal m -> Maybe Scientific
@@ -187,16 +187,16 @@ toBoolean = asBoolean
 toFunction :: GVal m -> Maybe (Function m)
 toFunction = asFunction
 
-instance ToGVal m (Function m) where
-    toGVal f =
-        def
-            { asHtml = html ""
-            , asText = ""
-            , asBoolean = True
-            , isNull = False
-            , isFunction = True
-            , asFunction = Just f
-            }
+fromFunction :: Function m -> GVal m
+fromFunction f =
+    def
+        { asHtml = html ""
+        , asText = ""
+        , asBoolean = True
+        , isNull = False
+        , isFunction = True
+        , asFunction = Just f
+        }
 
 instance ToGVal m v => ToGVal m (Maybe v) where
     toGVal Nothing = def
@@ -214,6 +214,7 @@ instance ToGVal m v => ToGVal m [v] where
                     , isNull = False
                     , isList = True
                     , asList = Prelude.map toGVal xs
+                    , length = Prelude.length xs
                     }
 
 instance ToGVal m v => ToGVal m (HashMap Text v) where
@@ -232,6 +233,16 @@ instance ToGVal m v => ToGVal m (HashMap Text v) where
                     }
 
 instance ToGVal m Int where
+    toGVal x =
+        def
+            { asHtml = html . Text.pack . show $ x
+            , asText = Text.pack . show $ x
+            , asBoolean = x /= 0
+            , asNumber = Just . fromIntegral $ x
+            , isNull = False
+            }
+
+instance ToGVal m Integer where
     toGVal x =
         def
             { asHtml = html . Text.pack . show $ x

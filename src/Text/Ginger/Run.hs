@@ -4,6 +4,7 @@
 {-#LANGUAGE TupleSections #-}
 {-#LANGUAGE TypeSynonymInstances #-}
 {-#LANGUAGE MultiParamTypeClasses #-}
+{-#LANGUAGE ScopedTypeVariables #-}
 -- | Execute Ginger templates in an arbitrary monad.
 module Text.Ginger.Run
 ( runGingerT
@@ -59,26 +60,22 @@ data RunState m
         , rsCapture :: Html
         }
 
-defRunState :: Monad m => RunState m
+defRunState :: forall m. Monad m => RunState m
 defRunState =
     RunState
-        { rsScope = HashMap.empty
+        { rsScope = HashMap.fromList scope
         , rsCapture = html ""
         }
-    -- where
-    --     scope :: Monad m => [(Text, (GVal m))]
-    --     scope = [ ("raw", toGVal gfnRawHtml) ]
-    --     gfnRawHtml :: Monad m => [(Maybe Text, GVal m)] -> m (GVal m)
-    --     gfnRawHtml [] =
-    --         return x
-    --         where
-    --             x :: GVal m
-    --             x = def
-    --     gfnRawHtml ((Nothing, v):_) =
-    --         return . toGVal . helper $ v
-    --         where
-    --             helper :: GVal m -> Html
-    --             helper = unsafeRawHtml . asText
+    where
+        scope :: [(Text, GVal (Run m))]
+        scope = [ ("raw", fromFunction gfnRawHtml) ]
+        gfnRawHtml :: Function (Run m)
+        gfnRawHtml [] = return def
+        gfnRawHtml ((Nothing, v):_) =
+            return . toGVal . helper $ v
+            where
+                helper :: GVal (Run m) -> Html
+                helper = unsafeRawHtml . asText
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad
@@ -163,36 +160,30 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
             runStatement body
 
 -- | Deeply magical function that converts a 'Macro' into a Function.
-macroToGVal :: (Functor m, Monad m) => Macro -> GVal (Run m)
-macroToGVal (Macro argNames body) = def
-    -- toGVal f
-    -- where
-    --     f :: Function (Run m)
-    --     f args = helper go'
-    --         -- Establish a local state to not contaminate the parent scope
-    --         -- with function arguments and local variables, and;
-    --         -- Establish a local context, where we override the HTML writer,
-    --         -- rewiring it to append any output to the state's capture.
-    --         where
-    --             helper :: Run m (GVal (Run m)) -> Run m (GVal (Run m))
-    --             helper = withLocalState
-    --             go' :: Run m (GVal (Run m))
-    --             go' = local (\c -> c { contextWriteHtml = appendCapture }) $ go
-    --             go :: Run m (GVal (Run m))
-    --             go = do
-    --                 clearCapture
-    --                 forM (HashMap.toList matchedArgs) (uncurry setVar)
-    --                 setVar "varargs" $ toGVal positionalArgs
-    --                 setVar "kwargs" $ toGVal namedArgs
-    --                 runStatement body
-    --                 -- At this point, we're still inside the local state, so the
-    --                 -- capture contains the macro's output; we now simply return
-    --                 -- the capture as the function's return value.
-    --                 toGVal <$> fetchCapture
-    --             matchedArgs :: HashMap Text (GVal (Run m))
-    --             positionalArgs :: [GVal (Run m)]
-    --             namedArgs :: HashMap Text (GVal (Run m))
-    --             (matchedArgs, positionalArgs, namedArgs) = matchFuncArgs argNames args
+macroToGVal :: forall m. (Functor m, Monad m) => Macro -> GVal (Run m)
+macroToGVal (Macro argNames body) =
+    fromFunction f
+    where
+        f :: Function (Run m)
+        -- Establish a local state to not contaminate the parent scope
+        -- with function arguments and local variables, and;
+        -- Establish a local context, where we override the HTML writer,
+        -- rewiring it to append any output to the state's capture.
+        f args =
+            withLocalState . local (\c -> c { contextWriteHtml = appendCapture }) $ do
+                clearCapture
+                forM (HashMap.toList matchedArgs) (uncurry setVar)
+                setVar "varargs" . toGVal $ positionalArgs
+                setVar "kwargs" . toGVal $ namedArgs
+                runStatement body
+                -- At this point, we're still inside the local state, so the
+                -- capture contains the macro's output; we now simply return
+                -- the capture as the function's return value.
+                toGVal <$> fetchCapture
+                where
+                    matchArgs' :: [(Maybe Text, GVal (Run m))] -> (HashMap Text (GVal (Run m)), [GVal (Run m)], HashMap Text (GVal (Run m)))
+                    matchArgs' = matchFuncArgs argNames
+                    (matchedArgs, positionalArgs, namedArgs) = matchArgs' args
 
 
 -- | Helper function to run a State action with a temporary state, reverting
