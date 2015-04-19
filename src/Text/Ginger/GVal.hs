@@ -34,6 +34,7 @@ import Data.Maybe ( fromMaybe, catMaybes, isJust )
 import Data.Text (Text)
 import Data.String (IsString, fromString)
 import qualified Data.Text as Text
+import qualified Data.Text.Lazy as LText
 import qualified Data.List as List
 import Safe (readMay, atMay)
 import Data.Monoid
@@ -303,6 +304,16 @@ instance ToGVal m Text where
             , asText = x
             , asBoolean = not $ Text.null x
             , asNumber = readMay . Text.unpack $ x
+            , isNull = False
+            }
+
+instance ToGVal m LText.Text where
+    toGVal x =
+        def
+            { asHtml = html (LText.toStrict x)
+            , asText = LText.toStrict x
+            , asBoolean = not $ LText.null x
+            , asNumber = readMay . LText.unpack $ x
             , isNull = False
             }
 
