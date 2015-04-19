@@ -144,22 +144,18 @@ defRunState =
 
         difference :: Prelude.Num a => [a] -> a
         difference (x:xs) = x - Prelude.sum xs
-        difference (x:[]) = x
         difference [] = 0
 
         ratio :: (Show a, Prelude.Fractional a, Prelude.Num a) => [a] -> a
         ratio (x:xs) = x / Prelude.product xs
-        ratio (x:[]) = x
         ratio [] = 0
 
         intRatio :: (Prelude.Integral a, Prelude.Num a) => [a] -> a
         intRatio (x:xs) = x `Prelude.div` Prelude.product xs
-        intRatio (x:[]) = x
         intRatio [] = 0
 
         modulo :: (Prelude.Integral a, Prelude.Num a) => [a] -> a
         modulo (x:xs) = x `Prelude.mod` Prelude.product xs
-        modulo (x:[]) = x
         modulo [] = 0
 
 -- | Create an execution context for runGingerT.
