@@ -68,7 +68,9 @@ main = do
             Just fn -> (,) <$> parseGingerFile resolve fn <*> return Nothing
             Nothing -> getContents >>= \s -> (,) <$> parseGinger resolve Nothing s <*> return (Just s)
 
-    print tpl
+    -- TODO: do some sort of arg parsing thing so that we can turn
+    -- template dumping on or off.
+    -- print tpl
 
     case tpl of
         Left err -> do

@@ -18,21 +18,29 @@ where
 
 import Prelude ( (.), ($), (==), (/=)
                , (+), (-), (*), (/), div
+               , (||), (&&)
+               , (++)
+               , Show, show
                , undefined, otherwise
                , Maybe (..)
                , Bool (..)
+               , Int
                , fromIntegral, floor
                , not
                , show
                , uncurry
+               , seq
+               , snd
                )
 import qualified Prelude
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
+import qualified Data.List as List
 import Text.Ginger.AST
 import Text.Ginger.Html
 import Text.Ginger.GVal
 
 import Data.Text (Text)
+import Data.String (fromString)
 import qualified Data.Text as Text
 import Control.Monad
 import Control.Monad.Identity
@@ -43,6 +51,7 @@ import Control.Applicative
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 import Data.Scientific (Scientific)
+import Data.Scientific as Scientific
 import Data.Default (def)
 import Safe (readMay)
 
@@ -60,6 +69,27 @@ data RunState m
         , rsCapture :: Html
         }
 
+unaryFunc :: forall m. (Monad m) => (GVal (Run m) -> GVal (Run m)) -> Function (Run m)
+unaryFunc f [] = return def
+unaryFunc f ((_, x):[]) = return (f x)
+
+ignoreArgNames :: ([a] -> b) -> ([(c, a)] -> b)
+ignoreArgNames f args = f (Prelude.map snd args)
+
+variadicNumericFunc :: Monad m => Scientific -> ([Scientific] -> Scientific) -> [(Maybe Text, GVal (Run m))] -> Run m (GVal (Run m))
+variadicNumericFunc zero f args =
+    return . toGVal . f $ args'
+    where
+        args' :: [Scientific]
+        args' = Prelude.map (fromMaybe zero . asNumber . snd) args
+
+variadicStringFunc :: Monad m => ([Text] -> Text) -> [(Maybe Text, GVal (Run m))] -> Run m (GVal (Run m))
+variadicStringFunc f args =
+    return . toGVal . f $ args'
+    where
+        args' :: [Text]
+        args' = Prelude.map (asText . snd) args
+
 defRunState :: forall m. Monad m => RunState m
 defRunState =
     RunState
@@ -68,14 +98,65 @@ defRunState =
         }
     where
         scope :: [(Text, GVal (Run m))]
-        scope = [ ("raw", fromFunction gfnRawHtml) ]
+        scope =
+            [ ("raw", fromFunction gfnRawHtml)
+            , ("length", fromFunction . unaryFunc $ toGVal . length)
+            , ("str", fromFunction . unaryFunc $ toGVal . asText)
+            , ("num", fromFunction . unaryFunc $ toGVal . asNumber)
+            , ("iterable", fromFunction . unaryFunc $ toGVal . (\x -> isList x || isDict x))
+            , ("show", fromFunction . unaryFunc $ fromString . show)
+            , ("default", fromFunction gfnDefault)
+            , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
+            , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
+            , ("concat", fromFunction . variadicStringFunc $ mconcat)
+            , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
+            , ("ratio", fromFunction . variadicNumericFunc 1 $ Scientific.fromFloatDigits . ratio . Prelude.map Scientific.toRealFloat)
+            , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
+            , ("modulo", fromFunction . variadicNumericFunc 1 $ fromIntegral . modulo . Prelude.map Prelude.floor)
+            , ("equals", fromFunction gfnEquals)
+            ]
+
         gfnRawHtml :: Function (Run m)
-        gfnRawHtml [] = return def
-        gfnRawHtml ((Nothing, v):_) =
-            return . toGVal . helper $ v
-            where
-                helper :: GVal (Run m) -> Html
-                helper = unsafeRawHtml . asText
+        gfnRawHtml = unaryFunc (toGVal . unsafeRawHtml . asText)
+
+        gfnDefault :: Function (Run m)
+        gfnDefault [] = return def
+        gfnDefault ((_, x):xs)
+            | asBoolean x = return x
+            | otherwise = gfnDefault xs
+
+        gfnEquals :: Function (Run m)
+        gfnEquals [] = return $ toGVal True
+        gfnEquals (x:[]) = return $ toGVal True
+        gfnEquals (x:xs) =
+            return . toGVal $ Prelude.all ((snd x `looseEquals`) . snd) xs
+
+        looseEquals :: GVal (Run m) -> GVal (Run m) -> Bool
+        looseEquals a b
+            | isJust (asFunction a) || isJust (asFunction b) = False
+            | isJust (asList a) /= isJust (asList b) = False
+            | isJust (asDictItems a) /= isJust (asDictItems b) = False
+            -- Both numbers: do numeric comparison
+            | isJust (asNumber a) && isJust (asNumber b) = asNumber a == asNumber b
+            -- If either is NULL, the other must be falsy
+            | isNull a || isNull b = asBoolean a == asBoolean b
+            | otherwise = asText a == asText b
+
+        difference :: Prelude.Num a => [a] -> a
+        difference (x:xs) = x - Prelude.sum xs
+        difference [] = 0
+
+        ratio :: (Show a, Prelude.Fractional a, Prelude.Num a) => [a] -> a
+        ratio (x:xs) = x / Prelude.product xs
+        ratio [] = 0
+
+        intRatio :: (Prelude.Integral a, Prelude.Num a) => [a] -> a
+        intRatio (x:xs) = x `Prelude.div` Prelude.product xs
+        intRatio [] = 0
+
+        modulo :: (Prelude.Integral a, Prelude.Num a) => [a] -> a
+        modulo (x:xs) = x `Prelude.mod` Prelude.product xs
+        modulo [] = 0
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad
@@ -93,7 +174,7 @@ liftLookup f k = do
 -- | Create an execution context for runGinger.
 -- The argument is a lookup function that maps top-level context keys to ginger
 -- values.
-makeContext :: (ToGVal (Run (Writer Html)) v) => (VarName -> GVal (Run (Writer Html))) -> GingerContext (Writer Html)
+makeContext :: (VarName -> GVal (Run (Writer Html))) -> GingerContext (Writer Html)
 makeContext l =
     makeContextM
         (return . l)
@@ -141,18 +222,20 @@ runStatement (DefMacroS name macro) = do
     let val = macroToGVal macro
     setVar name val
 
-runStatement (ScopedS body) = withLocalState runInner
+runStatement (ScopedS body) = withLocalScope runInner
     where
         runInner :: (Functor m, Monad m) => Run m ()
         runInner = runStatement body
 
 runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
     iteree <- runExpression itereeExpr
-    let values = asList iteree
-        indexes = iterKeys iteree
-    sequence_ (Prelude.zipWith iteration indexes values)
+    let iterPairs =
+            if isJust (asDictItems iteree)
+                then [ (toGVal k, v) | (k, v) <- fromMaybe [] (asDictItems iteree) ]
+                else Prelude.zip (Prelude.map toGVal ([0..] :: [Int])) (fromMaybe [] (asList iteree))
+    withLocalScope $ forM_ iterPairs iteration
     where
-        iteration index value = withLocalState $ do
+        iteration (index, value) = do
             setVar varNameValue value
             case varNameIndex of
                 Nothing -> return ()
@@ -193,6 +276,15 @@ withLocalState a = do
     s <- get
     r <- a
     put s
+    return r
+
+-- | Helper function to run a Scope action with a temporary scope, reverting
+-- to the old scope after the action has finished.
+withLocalScope :: (Monad m) => Run m a -> Run m a
+withLocalScope a = do
+    scope <- gets rsScope
+    r <- a
+    modify (\s -> s { rsScope = scope })
     return r
 
 setVar :: Monad m => VarName -> GVal (Run m) -> Run m ()

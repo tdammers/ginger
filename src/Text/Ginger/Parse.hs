@@ -1,5 +1,6 @@
 {-#LANGUAGE TupleSections #-}
 {-#LANGUAGE OverloadedStrings #-}
+{-#LANGUAGE ScopedTypeVariables #-}
 -- | Ginger parser.
 module Text.Ginger.Parse
 ( parseGinger
@@ -43,7 +44,7 @@ import Data.Text (Text)
 import Data.Maybe ( fromMaybe )
 import Data.Scientific ( Scientific )
 import qualified Data.Text as Text
-import Data.List ( foldr )
+import Data.List ( foldr, nub, sort )
 import qualified Data.HashMap.Strict as HashMap
 
 import System.FilePath ( takeDirectory, (</>) )
@@ -377,7 +378,52 @@ closeNWP c = ignore $ do
     optional . ignore . char $ '\n'
 
 expressionP :: Monad m => Parser m Expression
-expressionP = postfixExprP
+expressionP = comparativeExprP
+
+operativeExprP :: forall m. Monad m => Parser m Expression -> [ (String, Text) ] -> Parser m Expression
+operativeExprP operandP operators = do
+    lhs <- operandP
+    spaces
+    tails <- many . try $ operativeTail
+    return $ foldl (flip ($)) lhs tails
+    where
+        opChars :: [Char]
+        opChars = nub . sort . concat . map fst $ operators
+        operativeTail :: Parser m (Expression -> Expression)
+        operativeTail = do
+            funcName <-
+                foldl (<|>) (fail "operator") $
+                [ try (string op >> notFollowedBy (oneOf opChars)) >> return fn | (op, fn) <- operators ]
+            spaces
+            rhs <- operandP
+            spaces
+            return (\lhs -> CallE (VarE funcName) [(Nothing, lhs), (Nothing, rhs)])
+
+comparativeExprP :: Monad m => Parser m Expression
+comparativeExprP =
+    operativeExprP
+        additiveExprP
+        [ ("==", "equals")
+        ]
+
+additiveExprP :: Monad m => Parser m Expression
+additiveExprP =
+    operativeExprP
+        multiplicativeExprP
+        [ ("+", "sum")
+        , ("-", "difference")
+        , ("~", "concat")
+        ]
+
+multiplicativeExprP :: Monad m => Parser m Expression
+multiplicativeExprP =
+    operativeExprP
+        postfixExprP
+        [ ("*", "product")
+        , ("//", "int_ratio")
+        , ("/", "ratio")
+        , ("%", "modulo")
+        ]
 
 postfixExprP :: Monad m => Parser m Expression
 postfixExprP = do

@@ -86,11 +86,77 @@ actual: {{ print("Hello") }}
 expect: Hello
 actual: {{ "Hello"|print }}
 
+** Addition **
+
+1 + 1 = 2
+expect: 2
+actual: {{ sum(1, 1) }}
+
+1 + 1 = 2
+expect: 2
+actual: {{ 1 + 1 }}
+
+** Subtraction **
+
+1 - 1 = 0
+expect: 0
+actual: {{ 1 - 1 }}
+
+** Concatenation **
+
+1 ~ "foo" = 1foo
+expect: 1foo
+actual: {{ 1 ~ "foo" }}
+
+** Multiplication **
+
+5 * 5 = 25
+expect: 25
+actual: {{ 5 * 5 }}
+
+** Division **
+
+24 / 6 = 4
+expect: 4
+actual: {{ 24 / 6 }}
+
+3 / 2 = 1.5
+expect: 1.5
+actual: {{ 3 / 2 }}
+
+** Integer Division **
+
+24 // 6 = 4
+expect: 4
+actual: {{ 24 // 6 }}
+
+3 // 2 = 1
+expect: 1
+actual: {{ 3 // 2 }}
+
+** Modulo **
+
+7 % 3 = 2
+expect: 1
+actual: {{ 7 % 3 }}
+
 ** Iteration **
 
 for x in [ "foo", "bar", "baz" ]: <x>
 expect: <foo><bar><baz>
 actual: {% for x in [ "foo", "bar", "baz" ] %}<{{x}}>{% endfor %}
+
+** Conditionals **
+
+if true then "yes" else "no"
+expect: yes
+actual: {% if true %}yes{% else %}no{% endif %}
+
+** Comparisons **
+
+if 1 == 1 then "yes" else "no"
+expect: yes
+actual: {% if (1 == 1) %}yes{% else %}no{% endif %}
 
 ** Setting variables **
 

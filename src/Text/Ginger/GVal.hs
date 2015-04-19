@@ -26,12 +26,15 @@ import Prelude ( (.), ($), (==), (/=)
                , fromIntegral, floor
                , not
                , fst, snd
+               , Monad
                )
 import qualified Prelude
 import qualified Data.List as List
 import Data.Maybe ( fromMaybe, catMaybes, isJust )
 import Data.Text (Text)
+import Data.String (IsString, fromString)
 import qualified Data.Text as Text
+import qualified Data.Text.Lazy as LText
 import qualified Data.List as List
 import Safe (readMay, atMay)
 import Data.Monoid
@@ -45,6 +48,7 @@ import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 import qualified Data.Vector as Vector
 import Control.Monad ( forM, mapM )
+import Control.Monad.Trans (MonadTrans, lift)
 import Data.Default (Default, def)
 
 import Text.Ginger.Html
@@ -78,36 +82,37 @@ matchFuncArgs names args =
 -- | Ginger value.
 data GVal m =
     GVal
-        { asList :: [GVal m]
-        , asDictItems :: [(Text, GVal m)]
-        , asLookup :: Text -> Maybe (GVal m)
+        { asList :: Maybe [GVal m]
+        , asDictItems :: Maybe [(Text, GVal m)]
+        , asLookup :: Maybe (Text -> Maybe (GVal m))
         , asHtml :: Html
         , asText :: Text
         , asBoolean :: Bool
         , asNumber :: Maybe Scientific
         , asFunction :: Maybe (Function m)
+        , length :: Maybe Int
         , isNull :: Bool
-        , isFunction :: Bool
-        , isList :: Bool
-        , isDict :: Bool
-        , length :: Int
         }
 
+isList :: GVal m -> Bool
+isList = isJust . asList
+
+isDict :: GVal m -> Bool
+isDict = isJust . asDictItems
+
+-- | The default 'GVal' is equivalent to NULL.
 instance Default (GVal m) where
     def = GVal
-            { asList = []
-            , asDictItems = []
-            , asLookup = const def
+            { asList = Nothing
+            , asDictItems = Nothing
+            , asLookup = Nothing
             , asHtml = unsafeRawHtml ""
             , asText = ""
             , asBoolean = False
             , asNumber = Nothing
             , asFunction = Nothing
             , isNull = True
-            , isFunction = False
-            , isList = False
-            , isDict = False
-            , length = 0
+            , length = Nothing
             }
 
 -- | Types that implement conversion to 'GVal'
@@ -123,47 +128,54 @@ instance ToGVal m (GVal m) where
 instance Show (GVal m) where
     show v
         | isNull v = "null"
-        | isFunction v = "<<function>>"
-        | isDict v = "{" <> (mconcat . List.intersperse ", " $ [ show k <> ": " <> show v | (k, v) <- asDictItems v ]) <> "}"
-        | isList v = "[" <> (mconcat . List.intersperse ", " . Prelude.map show $ asList v) <> "]"
+        | isJust (asFunction v) = "<<function>>"
+        | isJust (asDictItems v) = "{" <> (mconcat . List.intersperse ", " $ [ show k <> ": " <> show v | (k, v) <- fromMaybe [] (asDictItems v) ]) <> "}"
+        | isJust (asList v) = "[" <> (mconcat . List.intersperse ", " . Prelude.map show $ fromMaybe [] (asList v)) <> "]"
         | isJust (asNumber v) =
             case floatingOrInteger <$> asNumber v :: Maybe (Either Double Integer) of
                 Just (Left x) -> show (asNumber v)
                 Just (Right x) -> show x
                 Nothing -> ""
-        | otherwise = Text.unpack $ asText v
+        | otherwise = show $ asText v
 
 -- | Converting to HTML hooks into the ToHtml instance for 'Text' for most tags.
 -- Tags that have no obvious textual representation render as empty HTML.
 instance ToHtml (GVal m) where
     toHtml = asHtml
 
--- | Treat a 'GVal' as a flat list and look up a value by index.
+-- | Treat a 'GVal' as a flat list and look up a value by integer index.
 -- If the value is not a List, or if the index exceeds the list length,
 -- return 'Nothing'.
 lookupIndex :: Int -> GVal m -> Maybe (GVal m)
-lookupIndex i v = atMay (asList v) i
+lookupIndex = lookupIndexMay . Just
 
+-- | Helper function; look up a value by an integer index when the index may or
+-- may not be available. If no index is given, return 'Nothing'.
+lookupIndexMay :: Maybe Int -> GVal m -> Maybe (GVal m)
+lookupIndexMay i v = do
+    index <- i
+    items <- asList v
+    atMay items index
+
+lookupKey :: Text -> GVal m -> Maybe (GVal m)
+lookupKey k v = do
+    lf <- asLookup v
+    lf k
+
+-- | Loosely-typed lookup: try dictionary-style lookup first (treat index as
+-- a string, and container as a dictionary), if that doesn't yield anything
+-- (either because the index is not string-ish, or because the container
+-- doesn't provide dictionary-style access), try index-based lookup.
 lookupLoose :: GVal m -> GVal m -> Maybe (GVal m)
-lookupLoose k v
-    | isDict v = asLookup v (asText k)
-    | isList v = lookupIndex (floor . fromMaybe 0 . asNumber $ k) v
-    | otherwise = Nothing
+lookupLoose k v =
+    lookupKey (asText k) v <|> lookupIndexMay (floor <$> asNumber k) v
 
 -- | Treat a 'GVal' as a dictionary and list all the keys, with no particular
 -- ordering.
-keys :: GVal m -> [Text]
-keys v = Prelude.map fst $ asDictItems v
+keys :: GVal m -> Maybe [Text]
+keys v = Prelude.map fst <$> asDictItems v
 
--- | List the keys for list-like values. For dictionaries, these are the
--- dictionary keys, in no particular order; for plain lists, they are
--- 0-based integer indexes.
-iterKeys :: GVal m -> [GVal m]
-iterKeys v
-    | isDict v = Prelude.map toGVal . keys $ v
-    | isList v = Prelude.map toGVal [0..length v - 1]
-    | otherwise = []
-
+-- | Convert a 'GVal' to a number.
 toNumber :: GVal m -> Maybe Scientific
 toNumber = asNumber
 
@@ -187,6 +199,7 @@ toBoolean = asBoolean
 toFunction :: GVal m -> Maybe (Function m)
 toFunction = asFunction
 
+-- | Turn a 'Function' into a 'GVal'
 fromFunction :: Function m -> GVal m
 fromFunction f =
     def
@@ -194,7 +207,6 @@ fromFunction f =
         , asText = ""
         , asBoolean = True
         , isNull = False
-        , isFunction = True
         , asFunction = Just f
         }
 
@@ -212,9 +224,8 @@ instance ToGVal m v => ToGVal m [v] where
                     , asText = mconcat . Prelude.map asText $ xs
                     , asBoolean = not . List.null $ xs
                     , isNull = False
-                    , isList = True
-                    , asList = Prelude.map toGVal xs
-                    , length = Prelude.length xs
+                    , asList = Just $ Prelude.map toGVal xs
+                    , length = Just $ Prelude.length xs
                     }
 
 instance ToGVal m v => ToGVal m (HashMap Text v) where
@@ -227,9 +238,8 @@ instance ToGVal m v => ToGVal m (HashMap Text v) where
                     , asText = mconcat . Prelude.map asText . HashMap.elems $ xs
                     , asBoolean = not . HashMap.null $ xs
                     , isNull = False
-                    , isDict = True
-                    , asLookup = \v -> HashMap.lookup v xs
-                    , asDictItems = HashMap.toList xs
+                    , asLookup = Just (\v -> HashMap.lookup v xs)
+                    , asDictItems = Just $ HashMap.toList xs
                     }
 
 instance ToGVal m Int where
@@ -278,14 +288,15 @@ instance ToGVal m Bool where
             , isNull = False
             }
 
-instance ToGVal m [Char] where
-    toGVal x =
+instance IsString (GVal m) where
+    fromString x =
         def
             { asHtml = html . Text.pack $ x
             , asText = Text.pack x
             , asBoolean = not $ Prelude.null x
             , asNumber = readMay x
             , isNull = False
+            , length = Just . Prelude.length $ x
             }
 
 instance ToGVal m Text where
@@ -295,6 +306,16 @@ instance ToGVal m Text where
             , asText = x
             , asBoolean = not $ Text.null x
             , asNumber = readMay . Text.unpack $ x
+            , isNull = False
+            }
+
+instance ToGVal m LText.Text where
+    toGVal x =
+        def
+            { asHtml = html (LText.toStrict x)
+            , asText = LText.toStrict x
+            , asBoolean = not $ LText.null x
+            , asNumber = readMay . LText.unpack $ x
             , isNull = False
             }
 

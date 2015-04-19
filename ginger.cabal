@@ -25,7 +25,7 @@ library
                  , Text.Ginger.Run
   -- other-modules:       
   -- other-extensions:    
-  build-depends: base >=4.6 && <5
+  build-depends: base >=4.5 && <5
                , aeson
                , bytestring
                , data-default >= 0.5
@@ -40,12 +40,13 @@ library
                , vector
   hs-source-dirs:      src
   default-language:    Haskell2010
+  GHC-options: -O0
 
 executable ginger
     main-is: GingerCLI.hs
     hs-source-dirs: cli
     default-language:    Haskell2010
-    build-depends: base >= 4.6 && <5
+    build-depends: base >= 4.5 && <5
                  , bytestring
                  , data-default >= 0.5
                  , ginger
@@ -53,3 +54,4 @@ executable ginger
                  , text
                  , transformers
                  , unordered-containers >= 0.2.5
+    GHC-options: -O0
