@@ -17,12 +17,19 @@ type VarName = Text
 data Template
     = Template
         { templateBody :: Statement
+        , templateBlocks :: HashMap VarName Block
+        , templateParent :: Maybe Template
         }
         deriving (Show)
 
 -- | A macro definition ( {% macro %}
 data Macro
     = Macro { macroArgs :: [VarName], macroBody :: Statement }
+    deriving (Show)
+
+-- | A block definition ( {% block %}
+data Block
+    = Block { blockBody :: Statement } -- TODO: scoped blocks
     deriving (Show)
 
 -- | Ginger statements.
@@ -35,6 +42,7 @@ data Statement
     | ForS (Maybe VarName) VarName Expression Statement -- ^ {% for index, varname in expression %}statement{% endfor %}
     | SetVarS VarName Expression -- ^ {% set varname = expr %}
     | DefMacroS VarName Macro -- ^ {% macro varname %}statements{% endmacro %}
+    | BlockRefS VarName
     | NullS -- ^ The do-nothing statement (NOP)
     deriving (Show)
 

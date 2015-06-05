@@ -67,6 +67,8 @@ data RunState m
     = RunState
         { rsScope :: HashMap VarName (GVal (Run m))
         , rsCapture :: Html
+        , rsCurrentTemplate :: Template -- the template we are currently running
+        , rsCurrentBlockName :: Maybe Text -- the name of the innermost block we're currently in
         }
 
 unaryFunc :: forall m. (Monad m) => (GVal (Run m) -> GVal (Run m)) -> Function (Run m)
@@ -90,11 +92,13 @@ variadicStringFunc f args =
         args' :: [Text]
         args' = Prelude.map (asText . snd) args
 
-defRunState :: forall m. Monad m => RunState m
-defRunState =
+defRunState :: forall m. Monad m => Template -> RunState m
+defRunState tpl =
     RunState
         { rsScope = HashMap.fromList scope
         , rsCapture = html ""
+        , rsCurrentTemplate = tpl
+        , rsCurrentBlockName = Nothing
         }
     where
         scope :: [(Text, GVal (Run m))]
@@ -187,7 +191,7 @@ runGinger context template = execWriter $ runGingerT context template
 -- | Monadically run a Ginger template. The @m@ parameter is the carrier monad,
 -- the @v@ parameter is the type for Ginger values.
 runGingerT :: (Monad m, Functor m) => GingerContext m -> Template -> m ()
-runGingerT context tpl = runReaderT (evalStateT (runTemplate tpl) defRunState) context
+runGingerT context tpl = runReaderT (evalStateT (runTemplate tpl) (defRunState tpl)) context
 
 -- | Internal type alias for our template-runner monad stack.
 type Run m = StateT (RunState m) (ReaderT (GingerContext m) m)
@@ -200,9 +204,41 @@ liftRun = lift . lift
 liftRun2 :: Monad m => (a -> m b) -> a -> Run m b
 liftRun2 f x = liftRun $ f x
 
+-- | Find the effective base template of an inheritance chain
+baseTemplate :: Template -> Template
+baseTemplate t =
+    case templateParent t of
+        Nothing -> t
+        Just p -> baseTemplate p
+
 -- | Run a template.
 runTemplate :: (Monad m, Functor m) => Template -> Run m ()
-runTemplate = runStatement . templateBody
+runTemplate = runStatement . templateBody . baseTemplate
+
+-- | Run a statement within a block context
+withBlockName :: (Monad m, Functor m) => VarName -> Run m a -> Run m a
+withBlockName blockName a = do
+    oldBlockName <- gets rsCurrentBlockName
+    modify (\s -> s { rsCurrentBlockName = Just blockName })
+    result <- a
+    modify (\s -> s { rsCurrentBlockName = oldBlockName })
+    return result
+
+lookupBlock :: (Monad m, Functor m) => VarName -> Run m Block
+lookupBlock blockName = do
+    tpl <- gets rsCurrentTemplate
+    let blockMay = resolveBlock blockName tpl
+    case blockMay of
+        Nothing -> fail $ "Block " <> (Text.unpack blockName) <> " not defined"
+        Just block -> return block
+    where
+        resolveBlock :: VarName -> Template -> Maybe Block
+        resolveBlock name tpl =
+            case HashMap.lookup name (templateBlocks tpl) of
+                Just block ->
+                    return block -- Found it!
+                Nothing ->
+                    templateParent tpl >>= resolveBlock name
 
 -- | Run one statement.
 runStatement :: (Monad m, Functor m) => Statement -> Run m ()
@@ -221,6 +257,11 @@ runStatement (SetVarS name valExpr) = do
 runStatement (DefMacroS name macro) = do
     let val = macroToGVal macro
     setVar name val
+
+runStatement (BlockRefS blockName) = do
+    block <- lookupBlock blockName
+    withBlockName blockName $
+        runStatement (blockBody block)
 
 runStatement (ScopedS body) = withLocalScope runInner
     where

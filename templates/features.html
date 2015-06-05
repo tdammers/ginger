@@ -247,3 +247,7 @@ actual: {{ foobar2(boink="nope", baz="blabber") }}
 expect: hey(<asdf>)
 actual: {% call (a) foobar3("hey") %}<{{a}}>{% endcall %}
 
+** Inheritance **
+
+expect: This is right.
+actual: {% include "inherit-child.html" %}

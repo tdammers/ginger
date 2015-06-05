@@ -23,6 +23,7 @@ import Text.Parsec ( ParseError
                    , option
                    , unexpected
                    , digit
+                   , getState, modifyState
                    , (<?>)
                    )
 import Text.Parsec.Error ( errorMessages
@@ -45,6 +46,7 @@ import Data.Maybe ( fromMaybe )
 import Data.Scientific ( Scientific )
 import qualified Data.Text as Text
 import Data.List ( foldr, nub, sort )
+import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 
 import System.FilePath ( takeDirectory, (</>) )
@@ -112,15 +114,26 @@ data ParseContext m
         , pcCurrentSource :: Maybe SourceName
         }
 
+data ParseState
+    = ParseState
+        { psBlocks :: HashMap VarName Block
+        }
+
+defParseState :: ParseState
+defParseState =
+    ParseState
+        { psBlocks = HashMap.empty
+        }
+
 -- | Parse Ginger source from memory.
 parseGinger :: Monad m => IncludeResolver m -> Maybe SourceName -> Source -> m (Either ParserError Template)
 parseGinger resolve sn src = do
-    result <- runReaderT (runParserT (templateP `before` eof) () (fromMaybe "<<unknown>>" sn) src) (ParseContext resolve sn)
+    result <- runReaderT (runParserT (templateP `before` eof) defParseState (fromMaybe "<<unknown>>" sn) src) (ParseContext resolve sn)
     case result of
         Right t -> return . Right $ t
         Left e -> return . Left $ fromParsecError e
 
-type Parser m a = ParsecT String () (ReaderT (ParseContext m) m) a
+type Parser m a = ParsecT String ParseState (ReaderT (ParseContext m) m) a
 
 ignore :: Monad m => m a -> m ()
 ignore = (>> return ())
@@ -129,13 +142,16 @@ getResolver :: Monad m => Parser m (IncludeResolver m)
 getResolver = asks pcResolve
 
 include :: Monad m => SourceName -> Parser m Statement
-include sourceName = do
+include sourceName = templateBody <$> includeTemplate sourceName
+
+includeTemplate :: Monad m => SourceName -> Parser m Template
+includeTemplate sourceName = do
     resolver <- getResolver
     currentSource <- fromMaybe "" <$> asks pcCurrentSource
     let includeSourceName = takeDirectory currentSource </> sourceName
     pres <- lift . lift $ parseGingerFile resolver includeSourceName
     case pres of
-        Right (Template s) -> return s
+        Right t -> return t
         Left err -> fail (show err)
 
 reduceStatements :: [Statement] -> Statement
@@ -144,7 +160,20 @@ reduceStatements (x:[]) = x
 reduceStatements xs = MultiS xs
 
 templateP :: Monad m => Parser m Template
-templateP = Template <$> statementsP
+templateP = derivedTemplateP <|> baseTemplateP
+
+derivedTemplateP :: Monad m => Parser m Template
+derivedTemplateP = do
+    parentName <- try (spaces >> fancyTagP "extends" stringLiteralP)
+    parentTemplate <- includeTemplate parentName
+    blocks <- HashMap.fromList <$> many blockP
+    return $ Template { templateBody = NullS, templateParent = Just parentTemplate, templateBlocks = blocks }
+
+baseTemplateP :: Monad m => Parser m Template
+baseTemplateP = do
+    body <- statementsP
+    blocks <- psBlocks <$> getState
+    return $ Template { templateBody = body, templateParent = Nothing, templateBlocks = blocks }
 
 statementsP :: Monad m => Parser m Statement
 statementsP = do
@@ -161,6 +190,7 @@ statementP = interpolationStmtP
            <|> forStmtP
            <|> includeP
            <|> macroStmtP
+           <|> blockStmtP
            <|> callStmtP
            <|> scopeStmtP
            <|> literalStmtP
@@ -217,6 +247,23 @@ setStmtInnerP = do
     val <- expressionP
     spaces
     return $ SetVarS name val
+
+defineBlock :: VarName -> Block -> ParseState -> ParseState
+defineBlock name block s =
+    s { psBlocks = HashMap.insert name block (psBlocks s) }
+
+blockStmtP :: Monad m => Parser m Statement
+blockStmtP = do
+    (name, block) <- blockP
+    modifyState (defineBlock name block)
+    return $ BlockRefS name
+
+blockP :: Monad m => Parser m (VarName, Block)
+blockP = do
+    name <- fancyTagP "block" identifierP
+    body <- statementsP
+    fancyTagP "endblock" (optional $ string (Text.unpack name) >> spaces)
+    return (name, Block body)
 
 macroStmtP :: Monad m => Parser m Statement
 macroStmtP = do
