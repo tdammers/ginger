@@ -43,6 +43,7 @@ data Statement
     | SetVarS VarName Expression -- ^ {% set varname = expr %}
     | DefMacroS VarName Macro -- ^ {% macro varname %}statements{% endmacro %}
     | BlockRefS VarName
+    | PreprocessedIncludeS Template -- ^ {% include "template" %}
     | NullS -- ^ The do-nothing statement (NOP)
     deriving (Show)
 

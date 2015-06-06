@@ -215,7 +215,17 @@ baseTemplate t =
 runTemplate :: (Monad m, Functor m) => Template -> Run m ()
 runTemplate = runStatement . templateBody . baseTemplate
 
--- | Run a statement within a block context
+-- | Run an action within a different template context.
+withTemplate :: (Monad m, Functor m) => Template -> Run m a -> Run m a
+withTemplate tpl a = do
+    oldTpl <- gets rsCurrentTemplate
+    oldBlockName <- gets rsCurrentBlockName
+    modify (\s -> s { rsCurrentTemplate = tpl, rsCurrentBlockName = Nothing })
+    result <- a
+    modify (\s -> s { rsCurrentTemplate = oldTpl, rsCurrentBlockName = oldBlockName })
+    return result
+
+-- | Run an action within a block context
 withBlockName :: (Monad m, Functor m) => VarName -> Run m a -> Run m a
 withBlockName blockName a = do
     oldBlockName <- gets rsCurrentBlockName
@@ -282,6 +292,9 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
                 Nothing -> return ()
                 Just n -> setVar n index
             runStatement body
+
+runStatement (PreprocessedIncludeS tpl) =
+    withTemplate tpl $ runTemplate tpl
 
 -- | Deeply magical function that converts a 'Macro' into a Function.
 macroToGVal :: forall m. (Functor m, Monad m) => Macro -> GVal (Run m)

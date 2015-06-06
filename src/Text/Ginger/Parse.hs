@@ -142,7 +142,9 @@ getResolver :: Monad m => Parser m (IncludeResolver m)
 getResolver = asks pcResolve
 
 include :: Monad m => SourceName -> Parser m Statement
-include sourceName = templateBody <$> includeTemplate sourceName
+include sourceName = PreprocessedIncludeS <$> includeTemplate sourceName
+
+-- include sourceName = templateBody <$> includeTemplate sourceName
 
 includeTemplate :: Monad m => SourceName -> Parser m Template
 includeTemplate sourceName = do
