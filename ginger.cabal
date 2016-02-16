@@ -4,7 +4,8 @@
 name:                ginger
 version:             0.1.1.0
 synopsis:            An implementation of the Jinja2 template language in Haskell
--- description:         
+description:         Ginger is Jinja, minus the most blatant pythonisms. Wants
+                     to be feature complete, but isn't quite there yet.
 homepage:            https://bitbucket.org/tdammers/ginger
 license:             MIT
 license-file:        LICENSE
@@ -54,4 +55,3 @@ executable ginger
                  , text
                  , transformers
                  , unordered-containers >= 0.2.5
-    GHC-options: -O0
