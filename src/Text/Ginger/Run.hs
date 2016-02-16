@@ -85,6 +85,15 @@ variadicNumericFunc zero f args =
         args' :: [Scientific]
         args' = Prelude.map (fromMaybe zero . asNumber . snd) args
 
+unaryNumericFunc :: Monad m => Scientific -> (Scientific -> Scientific) -> [(Maybe Text, GVal (Run m))] -> Run m (GVal (Run m))
+unaryNumericFunc zero f args =
+    return . toGVal . f $ args'
+    where
+        args' :: Scientific
+        args' = case args of
+                    [] -> 0
+                    (arg:_) -> fromMaybe zero . asNumber . snd $ arg
+
 variadicStringFunc :: Monad m => ([Text] -> Text) -> [(Maybe Text, GVal (Run m))] -> Run m (GVal (Run m))
 variadicStringFunc f args =
     return . toGVal . f $ args'
@@ -104,20 +113,29 @@ defRunState tpl =
         scope :: [(Text, GVal (Run m))]
         scope =
             [ ("raw", fromFunction gfnRawHtml)
-            , ("length", fromFunction . unaryFunc $ toGVal . length)
-            , ("str", fromFunction . unaryFunc $ toGVal . asText)
-            , ("num", fromFunction . unaryFunc $ toGVal . asNumber)
-            , ("iterable", fromFunction . unaryFunc $ toGVal . (\x -> isList x || isDict x))
-            , ("show", fromFunction . unaryFunc $ fromString . show)
-            , ("default", fromFunction gfnDefault)
-            , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
-            , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
+            , ("abs", fromFunction . unaryNumericFunc 0 $ Prelude.abs)
+            -- TODO: batch
+            , ("ceil", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.ceiling)
+            , ("capitalize", fromFunction . variadicStringFunc $ mconcat . Prelude.map capitalize)
+            , ("center", fromFunction gfnCenter)
             , ("concat", fromFunction . variadicStringFunc $ mconcat)
+            , ("default", fromFunction gfnDefault)
+            , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
+            , ("equals", fromFunction gfnEquals)
+            , ("floor", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.floor)
+            , ("int", fromFunction . unaryFunc $ toGVal . (fmap (Prelude.truncate :: Scientific -> Int)) . asNumber)
+            , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
+            , ("iterable", fromFunction . unaryFunc $ toGVal . (\x -> isList x || isDict x))
+            , ("length", fromFunction . unaryFunc $ toGVal . length)
+            , ("modulo", fromFunction . variadicNumericFunc 1 $ fromIntegral . modulo . Prelude.map Prelude.floor)
+            , ("num", fromFunction . unaryFunc $ toGVal . asNumber)
             , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
             , ("ratio", fromFunction . variadicNumericFunc 1 $ Scientific.fromFloatDigits . ratio . Prelude.map Scientific.toRealFloat)
-            , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
-            , ("modulo", fromFunction . variadicNumericFunc 1 $ fromIntegral . modulo . Prelude.map Prelude.floor)
-            , ("equals", fromFunction gfnEquals)
+            , ("round", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.round)
+            , ("show", fromFunction . unaryFunc $ fromString . show)
+            , ("str", fromFunction . unaryFunc $ toGVal . asText)
+            , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
+            , ("truncate", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.truncate)
             ]
 
         gfnRawHtml :: Function (Run m)
@@ -161,6 +179,30 @@ defRunState tpl =
         modulo :: (Prelude.Integral a, Prelude.Num a) => [a] -> a
         modulo (x:xs) = x `Prelude.mod` Prelude.product xs
         modulo [] = 0
+
+        capitalize :: Text -> Text
+        capitalize txt = Text.toUpper (Text.take 1 txt) <> Text.drop 1 txt
+
+        gfnCenter :: Function (Run m)
+        gfnCenter [] = gfnCenter [(Nothing, toGVal ("" :: Text))]
+        gfnCenter (x:[]) = gfnCenter [x, (Nothing, toGVal (80 :: Int))]
+        gfnCenter (x:y:[]) = gfnCenter [x, y, (Nothing, toGVal (" " :: Text))]
+        gfnCenter ((_, s):(_, w):(_, pad):_) =
+            return . toGVal $ center (asText s) (fromMaybe 80 $ Prelude.truncate <$> asNumber w) (asText pad)
+
+        center :: Text -> Prelude.Int -> Text -> Text
+        center str width pad =
+            if Text.length str Prelude.>= width
+                then str
+                else paddingL <> str <> paddingR
+            where
+                chars = width - Text.length str
+                charsL = chars `div` 2
+                charsR = chars - charsL
+                repsL = Prelude.succ charsL `div` Text.length pad
+                paddingL = Text.take charsL . Text.replicate repsL $ pad
+                repsR = Prelude.succ charsR `div` Text.length pad
+                paddingR = Text.take charsR . Text.replicate repsR $ pad
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad

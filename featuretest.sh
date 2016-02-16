@@ -1,5 +1,5 @@
 #!/bin/bash
-OUTPUT=$(./.cabal-sandbox/bin/ginger templates/features.html)
+OUTPUT=$(ginger templates/features.html)
 echo "$OUTPUT" | grep -A3 '^templates/'
 EXPECT=$(echo "$OUTPUT" | grep '^expect:')
 ACTUAL=$(echo "$OUTPUT" | grep '^actual:')
