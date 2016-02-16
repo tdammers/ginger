@@ -6,6 +6,18 @@
 {-#LANGUAGE MultiParamTypeClasses #-}
 {-#LANGUAGE ScopedTypeVariables #-}
 -- | Execute Ginger templates in an arbitrary monad.
+--
+-- Usage example:
+--
+-- > render :: Template -> Text -> Text -> Text
+-- > render template -> username imageURL = do
+-- >    let contextLookup varName =
+-- >            case varName of
+-- >                "username" -> toGVal username
+-- >                "imageURL" -> toGVal imageURL
+-- >                _ -> def -- def for GVal is equivalent to a NULL value
+-- >        context = makeContext contextLookup
+-- >    in htmlSource $ runGinger context template
 module Text.Ginger.Run
 ( runGingerT
 , runGinger
@@ -219,19 +231,27 @@ liftLookup f k = do
 
 -- | Create an execution context for runGinger.
 -- The argument is a lookup function that maps top-level context keys to ginger
--- values.
+-- values. 'makeContext' is a specialized version of 'makeContextM', targeting
+-- the 'Writer' 'Html' monad (which is what is used for the non-monadic
+-- template interpreter 'runGinger').
+--
+-- The type of the lookup function may look intimidating, but in most cases,
+-- marshalling values from Haskell to Ginger is a matter of calling 'toGVal'
+-- on them, so the 'GVal (Run (Writer Html))' part can usually be ignored.
+-- See the 'Text.Ginger.GVal' module for details.
 makeContext :: (VarName -> GVal (Run (Writer Html))) -> GingerContext (Writer Html)
 makeContext l =
     makeContextM
         (return . l)
         tell
 
--- | Purely expand a Ginger template. @v@ is the type for Ginger values.
+-- | Purely expand a Ginger template. The underlying carrier monad is 'Writer'
+-- 'Html', which is used to collect the output and render it into a 'Html'
+-- value.
 runGinger :: GingerContext (Writer Html) -> Template -> Html
 runGinger context template = execWriter $ runGingerT context template
 
--- | Monadically run a Ginger template. The @m@ parameter is the carrier monad,
--- the @v@ parameter is the type for Ginger values.
+-- | Monadically run a Ginger template. The @m@ parameter is the carrier monad.
 runGingerT :: (Monad m, Functor m) => GingerContext m -> Template -> m ()
 runGingerT context tpl = runReaderT (evalStateT (runTemplate tpl) (defRunState tpl)) context
 
