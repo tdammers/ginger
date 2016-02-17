@@ -278,6 +278,10 @@ actual: {{ -14.1|truncate }}
 expect: -14
 actual: {{ -14.8|truncate }}
 
+"urlencode"
+expect: a%2Fb%20c
+actual: {{ "a/b c"|urlencode }}
+
 ** Setting variables **
 
 set x = "world"; print x

@@ -54,6 +54,7 @@ import Text.Ginger.GVal
 import Data.Text (Text)
 import Data.String (fromString)
 import qualified Data.Text as Text
+import qualified Data.ByteString.UTF8 as UTF8
 import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.Writer
@@ -66,6 +67,7 @@ import Data.Scientific (Scientific)
 import Data.Scientific as Scientific
 import Data.Default (def)
 import Safe (readMay)
+import Network.HTTP.Types (urlEncode)
 
 -- | Execution context. Determines how to look up variables from the
 -- environment, and how to write out template output.
@@ -148,10 +150,23 @@ defRunState tpl =
             , ("str", fromFunction . unaryFunc $ toGVal . asText)
             , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
             , ("truncate", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.truncate)
+            , ("urlencode", fromFunction $ gfnUrlEncode)
             ]
 
         gfnRawHtml :: Function (Run m)
         gfnRawHtml = unaryFunc (toGVal . unsafeRawHtml . asText)
+
+        gfnUrlEncode :: Function (Run m)
+        gfnUrlEncode =
+            unaryFunc
+                ( toGVal
+                . Text.pack
+                . UTF8.toString
+                . urlEncode True
+                . UTF8.fromString
+                . Text.unpack
+                . asText
+                )
 
         gfnDefault :: Function (Run m)
         gfnDefault [] = return def
