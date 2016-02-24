@@ -152,6 +152,14 @@ if true then "yes" else "no"
 expect: yes
 actual: {% if true %}yes{% else %}no{% endif %}
 
+if false then "yes" else if false then "maybe" else "no"
+expect: no
+actual: {% if false %}yes{% elif false %}maybe{% else %}no{% endif %}
+
+if false then "yes" else if true then "maybe" else "no"
+expect: maybe
+actual: {% if false %}yes{% elif true %}maybe{% else %}no{% endif %}
+
 ** Comparisons **
 
 if 1 == 1 then "yes" else "no"
