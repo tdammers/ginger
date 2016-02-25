@@ -231,10 +231,21 @@ ifStmtP :: Monad m => Parser m Statement
 ifStmtP = do
     condExpr <- fancyTagP "if" expressionP
     trueStmt <- statementsP
-    falseStmt <- option NullS $ do
-        try $ simpleTagP "else"
-        statementsP
+    falseStmt <- elifBranchP <|> elseBranchP <|> return NullS
     simpleTagP "endif"
+    return $ IfS condExpr trueStmt falseStmt
+
+elseBranchP :: Monad m => Parser m Statement
+elseBranchP = do
+    try $ simpleTagP "else"
+    statementsP
+
+elifBranchP :: Monad m => Parser m Statement
+elifBranchP = do
+    condExpr <- try $ fancyTagP "elif" expressionP
+    trueStmt <- statementsP
+    falseStmt <- elifBranchP <|> elseBranchP <|> return NullS
+    -- No endif here: the parent {% if %} owns that one.
     return $ IfS condExpr trueStmt falseStmt
 
 setStmtP :: Monad m => Parser m Statement

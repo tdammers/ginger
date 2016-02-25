@@ -31,13 +31,21 @@ module Text.Ginger
 --   >     </body>
 --   > </html>
 
--- There are two kinds of delimiters. `{% ... %}` and `{{ ... }}`. The first
+-- | There are two kinds of delimiters: @{% ... %}@ and @{{ ... }}@. The first
 -- one is used to execute statements such as for-loops or assign values, the
 -- latter prints the result of an expression to the template.
+--
+-- Both kinds of delimiters support adding a dash (@-@) on either side or both,
+-- putting them in whitespace-eating mode on the respective side.
+-- Whitespace-eating means that any whitespace that precedes cq. follows the
+-- delimited construct is removed, including newlines. For example,
+-- @A {{ "b" }}@ renders as @\"A b\"@, but @A {{- "b" }}@ renders as @\"Ab\"@.
+-- Note that whitespace /inside/ delimiters is never printed; the dash only
+-- ever removes whitespace on the outside.
 
--- /Not implemented yet/: Jinja2 allows the programmer to override the default
--- tags from @{% %}@ and @{{ }}@ to different tokens, e.g. @\<% %\>@ and @\<\<
--- \>\>@.  Ginger does not currently support this.
+-- | /Not implemented yet/: Jinja2 allows the programmer to override the
+-- default tags from @{% %}@ and @{{ }}@ to different tokens, e.g. @\<% %\>@
+-- and @\<\< \>\>@.  Ginger does not currently support this.
 
 -- ** Variables
 -- | You can mess around with the variables in templates provided they are
@@ -51,12 +59,12 @@ module Text.Ginger
 
 -- | @
 -- {{ foo.bar }}
--- {{ foo['bar'] }}
+-- {{ foo[\'bar\'] }}
 -- @
 
 -- | It’s important to know that the curly braces are /not/ part of the
 -- variable, but the print statement. If you access variables inside tags
--- don’t put the braces around them.
+-- don't put the braces around them.
 
 -- | If a variable or attribute does not exist you will get back an undefined
 -- value. What you can do with that kind of value depends on the
@@ -172,10 +180,16 @@ module Text.Ginger
 
 -- | > {{ append(x, "foobar") }}
 
+-- | A list of available filters can be found in the 'Text.Ginger.Run' module.
+
 -- | /Deviation from Jinja2:/ Ginger does not distinguish between filters and
 -- functions at the semantics level; any function can be called as a filter,
 -- and vv., and the filter syntax is merely a syntactic variant of a function
--- call.
+-- call. Ginger doesn't really distinguish between functions and values,
+-- either: a function is a value that happens to be callable; other than that,
+-- functions live in the same namespace as any other value, and if you bind
+-- a function to a context value on the host side, you can use it just like
+-- any other function / filter.
 
 -- * Haskell API
 -- ** General
@@ -212,6 +226,7 @@ module Text.Ginger
 -- have pre-loaded all template sources), you can use the pure 'parseGinger'
 -- flavor, which does not rely on a host monad.
   module Text.Ginger.Parse
+
 -- ** Running
 -- | The core function for running a template is 'runGinger' (or its monadic
 -- flavor 'runGingerT'); in order to pass an initial context to the template
@@ -221,11 +236,15 @@ module Text.Ginger
 -- | An example call (for running a template in 'IO') would look something like
 -- this:
 
--- > runGingerT (makeContextM scopeLookup (putStr . Text.unpack . htmlSource)) tpl
+-- | > runGingerT (makeContextM scopeLookup (putStr . Text.unpack . htmlSource)) tpl
+
 , module Text.Ginger.Run
+
 -- ** Other concerns
--- | Ginger's unitype value
+-- *** GVal: Ginger's unitype value
 , module Text.Ginger.GVal
+
+-- *** AST
 -- | The data structures used to represent templates, statements and
 -- expressions internally.
 , module Text.Ginger.AST

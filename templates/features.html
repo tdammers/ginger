@@ -152,11 +152,143 @@ if true then "yes" else "no"
 expect: yes
 actual: {% if true %}yes{% else %}no{% endif %}
 
+if false then "yes" else if false then "maybe" else "no"
+expect: no
+actual: {% if false %}yes{% elif false %}maybe{% else %}no{% endif %}
+
+if false then "yes" else if true then "maybe" else "no"
+expect: maybe
+actual: {% if false %}yes{% elif true %}maybe{% else %}no{% endif %}
+
 ** Comparisons **
 
 if 1 == 1 then "yes" else "no"
 expect: yes
 actual: {% if (1 == 1) %}yes{% else %}no{% endif %}
+
+** Built-in filters/functions **
+
+"abs"
+expect: 2
+actual: {{ -2|abs }}
+
+"ceil"
+expect: 15
+actual: {{ 14.1|ceil }}
+expect: 15
+actual: {{ 14.8|ceil }}
+expect: -14
+actual: {{ -14.1|ceil }}
+expect: -14
+actual: {{ -14.8|ceil }}
+
+"capitalize"
+expect: This is the end of the world
+actual: {{ "this is the end of the world"|capitalize }}
+
+"center"
+expect:     asdf    
+actual: {{ "asdf"|center(12) }}
+expect: foobar
+actual: {{ "foobar"|center(2) }}
+
+"concat"
+expect: helloworld
+actual: {{ ["hello", "world"]|concat }}
+
+"default"
+expect: hi
+actual: {{ 0|default("hi") }}
+expect: hi
+actual: {{ "hi"|default("nope") }}
+
+"difference"
+expect: 3
+actual: {{ difference(5,2) }}
+
+"equals"
+expect: yes
+actual: {% if equals(1, 1, 1) %}yes{% else %}no{% endif %}
+
+expect: no
+actual: {% if equals(1, 1, 2) %}yes{% else %}no{% endif %}
+
+"floor"
+expect: 14
+actual: {{ 14.1|floor }}
+expect: 14
+actual: {{ 14.8|floor }}
+expect: -15
+actual: {{ -14.1|floor }}
+expect: -15
+actual: {{ -14.8|floor }}
+
+"int"
+expect: 14
+actual: {{ 14.1|int }}
+expect: 14
+actual: {{ 14.8|int }}
+expect: -14
+actual: {{ -14.1|int }}
+expect: -14
+actual: {{ -14.8|int }}
+
+"int_ratio"
+TODO
+
+"iterable"
+TODO
+
+"length"
+expect: 3
+actual: {{ [1,2,3]|length }}
+
+"modulo"
+"num"
+TODO
+
+"product"
+expect: 6
+actual: {{ product(1,2,3) }}
+
+"ratio"
+expect: 2
+actual: {{ ratio(6, 1.5, 2) }}
+
+"round"
+expect: 14
+actual: {{ 14.1|round }}
+expect: 15
+actual: {{ 14.8|round }}
+expect: -14
+actual: {{ -14.1|round }}
+expect: -15
+actual: {{ -14.8|round }}
+
+"show"
+TODO
+
+"str"
+expect: 123
+actual: {{ str(123) }}
+
+"sum"
+expect: 6
+actual: {{sum(1, 2, 3)}}
+
+"truncate"
+expect: 14
+actual: {{ 14.1|truncate }}
+expect: 14
+actual: {{ 14.8|truncate }}
+expect: -14
+actual: {{ -14.1|truncate }}
+expect: -14
+actual: {{ -14.8|truncate }}
+
+"urlencode"
+expect: a%2Fb%20c
+actual: {{ "a/b c"|urlencode }}
 
 ** Setting variables **
 

@@ -22,12 +22,12 @@ data Template
         }
         deriving (Show)
 
--- | A macro definition ( {% macro %}
+-- | A macro definition ( @{% macro %}@ )
 data Macro
     = Macro { macroArgs :: [VarName], macroBody :: Statement }
     deriving (Show)
 
--- | A block definition ( {% block %}
+-- | A block definition ( @{% block %}@ )
 data Block
     = Block { blockBody :: Statement } -- TODO: scoped blocks
     deriving (Show)

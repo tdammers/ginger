@@ -2,9 +2,10 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                ginger
-version:             0.1.0.0
+version:             0.1.3.0
 synopsis:            An implementation of the Jinja2 template language in Haskell
--- description:
+description:         Ginger is Jinja, minus the most blatant pythonisms. Wants
+                     to be feature complete, but isn't quite there yet.
 homepage:            https://bitbucket.org/tdammers/ginger
 license:             MIT
 license-file:        LICENSE
@@ -30,6 +31,7 @@ library
                , bytestring
                , data-default >= 0.5
                , filepath >= 1.3
+               , http-types
                , mtl >= 2.2
                , parsec >= 3.0
                , safe >= 0.3
@@ -37,6 +39,7 @@ library
                , text
                , transformers >= 0.3
                , unordered-containers >= 0.2.5
+               , utf8-string
                , vector
   hs-source-dirs:      src
   default-language:    Haskell2010
@@ -54,4 +57,3 @@ executable ginger
                  , text
                  , transformers
                  , unordered-containers >= 0.2.5
-    GHC-options: -O0

@@ -6,6 +6,18 @@
 {-#LANGUAGE MultiParamTypeClasses #-}
 {-#LANGUAGE ScopedTypeVariables #-}
 -- | Execute Ginger templates in an arbitrary monad.
+--
+-- Usage example:
+--
+-- > render :: Template -> Text -> Text -> Text
+-- > render template -> username imageURL = do
+-- >    let contextLookup varName =
+-- >            case varName of
+-- >                "username" -> toGVal username
+-- >                "imageURL" -> toGVal imageURL
+-- >                _ -> def -- def for GVal is equivalent to a NULL value
+-- >        context = makeContext contextLookup
+-- >    in htmlSource $ runGinger context template
 module Text.Ginger.Run
 ( runGingerT
 , runGinger
@@ -42,6 +54,7 @@ import Text.Ginger.GVal
 import Data.Text (Text)
 import Data.String (fromString)
 import qualified Data.Text as Text
+import qualified Data.ByteString.UTF8 as UTF8
 import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.Writer
@@ -54,6 +67,7 @@ import Data.Scientific (Scientific)
 import Data.Scientific as Scientific
 import Data.Default (def)
 import Safe (readMay)
+import Network.HTTP.Types (urlEncode)
 
 -- | Execution context. Determines how to look up variables from the
 -- environment, and how to write out template output.
@@ -85,6 +99,15 @@ variadicNumericFunc zero f args =
         args' :: [Scientific]
         args' = Prelude.map (fromMaybe zero . asNumber . snd) args
 
+unaryNumericFunc :: Monad m => Scientific -> (Scientific -> Scientific) -> [(Maybe Text, GVal (Run m))] -> Run m (GVal (Run m))
+unaryNumericFunc zero f args =
+    return . toGVal . f $ args'
+    where
+        args' :: Scientific
+        args' = case args of
+                    [] -> 0
+                    (arg:_) -> fromMaybe zero . asNumber . snd $ arg
+
 variadicStringFunc :: Monad m => ([Text] -> Text) -> [(Maybe Text, GVal (Run m))] -> Run m (GVal (Run m))
 variadicStringFunc f args =
     return . toGVal . f $ args'
@@ -104,24 +127,46 @@ defRunState tpl =
         scope :: [(Text, GVal (Run m))]
         scope =
             [ ("raw", fromFunction gfnRawHtml)
-            , ("length", fromFunction . unaryFunc $ toGVal . length)
-            , ("str", fromFunction . unaryFunc $ toGVal . asText)
-            , ("num", fromFunction . unaryFunc $ toGVal . asNumber)
-            , ("iterable", fromFunction . unaryFunc $ toGVal . (\x -> isList x || isDict x))
-            , ("show", fromFunction . unaryFunc $ fromString . show)
-            , ("default", fromFunction gfnDefault)
-            , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
-            , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
+            , ("abs", fromFunction . unaryNumericFunc 0 $ Prelude.abs)
+            -- TODO: batch
+            , ("ceil", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.ceiling)
+            , ("capitalize", fromFunction . variadicStringFunc $ mconcat . Prelude.map capitalize)
+            , ("center", fromFunction gfnCenter)
             , ("concat", fromFunction . variadicStringFunc $ mconcat)
+            , ("default", fromFunction gfnDefault)
+            , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
+            , ("equals", fromFunction gfnEquals)
+            , ("floor", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.floor)
+            , ("int", fromFunction . unaryFunc $ toGVal . (fmap (Prelude.truncate :: Scientific -> Int)) . asNumber)
+            , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
+            , ("iterable", fromFunction . unaryFunc $ toGVal . (\x -> isList x || isDict x))
+            , ("length", fromFunction . unaryFunc $ toGVal . length)
+            , ("modulo", fromFunction . variadicNumericFunc 1 $ fromIntegral . modulo . Prelude.map Prelude.floor)
+            , ("num", fromFunction . unaryFunc $ toGVal . asNumber)
             , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
             , ("ratio", fromFunction . variadicNumericFunc 1 $ Scientific.fromFloatDigits . ratio . Prelude.map Scientific.toRealFloat)
-            , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
-            , ("modulo", fromFunction . variadicNumericFunc 1 $ fromIntegral . modulo . Prelude.map Prelude.floor)
-            , ("equals", fromFunction gfnEquals)
+            , ("round", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.round)
+            , ("show", fromFunction . unaryFunc $ fromString . show)
+            , ("str", fromFunction . unaryFunc $ toGVal . asText)
+            , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
+            , ("truncate", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.truncate)
+            , ("urlencode", fromFunction $ gfnUrlEncode)
             ]
 
         gfnRawHtml :: Function (Run m)
         gfnRawHtml = unaryFunc (toGVal . unsafeRawHtml . asText)
+
+        gfnUrlEncode :: Function (Run m)
+        gfnUrlEncode =
+            unaryFunc
+                ( toGVal
+                . Text.pack
+                . UTF8.toString
+                . urlEncode True
+                . UTF8.fromString
+                . Text.unpack
+                . asText
+                )
 
         gfnDefault :: Function (Run m)
         gfnDefault [] = return def
@@ -162,6 +207,30 @@ defRunState tpl =
         modulo (x:xs) = x `Prelude.mod` Prelude.product xs
         modulo [] = 0
 
+        capitalize :: Text -> Text
+        capitalize txt = Text.toUpper (Text.take 1 txt) <> Text.drop 1 txt
+
+        gfnCenter :: Function (Run m)
+        gfnCenter [] = gfnCenter [(Nothing, toGVal ("" :: Text))]
+        gfnCenter (x:[]) = gfnCenter [x, (Nothing, toGVal (80 :: Int))]
+        gfnCenter (x:y:[]) = gfnCenter [x, y, (Nothing, toGVal (" " :: Text))]
+        gfnCenter ((_, s):(_, w):(_, pad):_) =
+            return . toGVal $ center (asText s) (fromMaybe 80 $ Prelude.truncate <$> asNumber w) (asText pad)
+
+        center :: Text -> Prelude.Int -> Text -> Text
+        center str width pad =
+            if Text.length str Prelude.>= width
+                then str
+                else paddingL <> str <> paddingR
+            where
+                chars = width - Text.length str
+                charsL = chars `div` 2
+                charsR = chars - charsL
+                repsL = Prelude.succ charsL `div` Text.length pad
+                paddingL = Text.take charsL . Text.replicate repsL $ pad
+                repsR = Prelude.succ charsR `div` Text.length pad
+                paddingR = Text.take charsR . Text.replicate repsR $ pad
+
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad
 -- based on a lookup key, and a writer function (outputting HTML by whatever
@@ -177,19 +246,27 @@ liftLookup f k = do
 
 -- | Create an execution context for runGinger.
 -- The argument is a lookup function that maps top-level context keys to ginger
--- values.
+-- values. 'makeContext' is a specialized version of 'makeContextM', targeting
+-- the 'Writer' 'Html' monad (which is what is used for the non-monadic
+-- template interpreter 'runGinger').
+--
+-- The type of the lookup function may look intimidating, but in most cases,
+-- marshalling values from Haskell to Ginger is a matter of calling 'toGVal'
+-- on them, so the 'GVal (Run (Writer Html))' part can usually be ignored.
+-- See the 'Text.Ginger.GVal' module for details.
 makeContext :: (VarName -> GVal (Run (Writer Html))) -> GingerContext (Writer Html)
 makeContext l =
     makeContextM
         (return . l)
         tell
 
--- | Purely expand a Ginger template. @v@ is the type for Ginger values.
+-- | Purely expand a Ginger template. The underlying carrier monad is 'Writer'
+-- 'Html', which is used to collect the output and render it into a 'Html'
+-- value.
 runGinger :: GingerContext (Writer Html) -> Template -> Html
 runGinger context template = execWriter $ runGingerT context template
 
--- | Monadically run a Ginger template. The @m@ parameter is the carrier monad,
--- the @v@ parameter is the type for Ginger values.
+-- | Monadically run a Ginger template. The @m@ parameter is the carrier monad.
 runGingerT :: (Monad m, Functor m) => GingerContext m -> Template -> m ()
 runGingerT context tpl = runReaderT (evalStateT (runTemplate tpl) (defRunState tpl)) context
 
