@@ -1,6 +1,7 @@
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE MultiParamTypeClasses #-}
 {-#LANGUAGE FlexibleInstances #-}
+{-#LANGUAGE ScopedTypeVariables #-}
 
 -- | GVal is a generic unitype value, representing the kind of values that
 -- Ginger can understand.
@@ -224,6 +225,34 @@ instance ToGVal m Scientific where
             , asNumber = Just x
             , isNull = False
             }
+
+instance (ToGVal m a, ToGVal m b) => ToGVal m (a, b) where
+    toGVal (a, b) = toGVal ([ toGVal a, toGVal b ] :: [GVal m])
+
+instance (ToGVal m a, ToGVal m b, ToGVal m c) => ToGVal m (a, b, c) where
+    toGVal (a, b, c) = toGVal ([ toGVal a, toGVal b, toGVal c ] :: [GVal m])
+
+instance (ToGVal m a, ToGVal m b, ToGVal m c, ToGVal m d) => ToGVal m (a, b, c, d) where
+    toGVal (a, b, c, d) = toGVal ([ toGVal a, toGVal b, toGVal c, toGVal d ] :: [GVal m])
+
+-- * Convenience API for constructing heterogenous dictionaries.
+--
+-- Example usage:
+--
+-- > context :: GVal m
+-- > context = dict [ "number" ~> (15 :: Int), "name" ~> ("Joe" :: String) ]
+
+-- | A key/value pair, used for constructing dictionary GVals using a
+-- compact syntax.
+type Pair m = (Text, GVal m)
+
+-- | Construct a dictionary GVal from a list of pairs.
+dict :: [Pair m] -> GVal m
+dict = toGVal . HashMap.fromList
+
+-- | Construct a pair from a key and a value.
+(~>) :: ToGVal m a => Text -> a -> Pair m
+k ~> v = (k, toGVal v)
 
 -- | Silly helper function, needed to bypass the default 'Show' instance of
 -- 'Scientific' in order to make integral 'Scientific's look like integers.
