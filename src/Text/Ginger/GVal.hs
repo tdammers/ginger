@@ -246,9 +246,26 @@ instance (ToGVal m a, ToGVal m b, ToGVal m c, ToGVal m d) => ToGVal m (a, b, c, 
 -- compact syntax.
 type Pair m = (Text, GVal m)
 
--- | Construct a dictionary GVal from a list of pairs.
+-- | Construct a dictionary GVal from a list of pairs. Internally, this uses
+-- a hashmap, so element order will not be preserved.
 dict :: [Pair m] -> GVal m
 dict = toGVal . HashMap.fromList
+
+-- | Construct an ordered dictionary GVal from a list of pairs. Internally,
+-- this conversion uses both a hashmap (for O(1) lookup) and the original list,
+-- so element order is preserved, but there is a bit of a memory overhead.
+orderedDict :: [Pair m] -> GVal m
+orderedDict xs =
+    def
+        { asHtml = mconcat . Prelude.map asHtml . Prelude.map snd $ xs
+        , asText = mconcat . Prelude.map asText . Prelude.map snd $ xs
+        , asBoolean = not . Prelude.null $ xs
+        , isNull = False
+        , asLookup = Just (\v -> HashMap.lookup v hm)
+        , asDictItems = Just xs
+        }
+    where
+        hm = HashMap.fromList xs
 
 -- | Construct a pair from a key and a value.
 (~>) :: ToGVal m a => Text -> a -> Pair m
