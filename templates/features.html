@@ -196,6 +196,16 @@ actual: {{ "foobar"|center(2) }}
 expect: helloworld
 actual: {{ ["hello", "world"]|concat }}
 
+"contains"
+expect: yes
+actual: {% if ['hello', 'world']|contains('hello') %}yes{% else %}no{% endif %}
+
+expect: yes
+actual: {% if ['hello', 'world']|contains('hello', 'world') %}yes{% else %}no{% endif %}
+
+expect: no
+actual: {% if ['hello', 'world']|contains('hello', 'you', 'world') %}yes{% else %}no{% endif %}
+
 "default"
 expect: hi
 actual: {{ 0|default("hi") }}

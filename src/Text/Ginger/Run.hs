@@ -133,6 +133,7 @@ defRunState tpl =
             , ("capitalize", fromFunction . variadicStringFunc $ mconcat . Prelude.map capitalize)
             , ("center", fromFunction gfnCenter)
             , ("concat", fromFunction . variadicStringFunc $ mconcat)
+            , ("contains", fromFunction gfnContains)
             , ("default", fromFunction gfnDefault)
             , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
             , ("equals", fromFunction gfnEquals)
@@ -186,6 +187,15 @@ defRunState tpl =
         gfnNEquals (x:[]) = return $ toGVal True
         gfnNEquals (x:xs) =
             return . toGVal $ Prelude.any (not . (snd x `looseEquals`) . snd) xs
+
+        gfnContains :: Function (Run m)
+        gfnContains [] = return $ toGVal False
+        gfnContains (list:elems) =
+            let rawList = fromMaybe [] . asList . snd $ list
+                rawElems = fmap snd elems
+                e `isInList` xs = Prelude.any (looseEquals e) xs
+                es `areInList` xs = Prelude.all (`isInList` xs) es
+            in return . toGVal $ rawElems `areInList` rawList
 
         looseEquals :: GVal (Run m) -> GVal (Run m) -> Bool
         looseEquals a b
