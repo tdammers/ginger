@@ -438,7 +438,7 @@ closeNWP c = ignore $ do
     optional . ignore . char $ '\n'
 
 expressionP :: Monad m => Parser m Expression
-expressionP = comparativeExprP
+expressionP = booleanExprP
 
 operativeExprP :: forall m. Monad m => Parser m Expression -> [ (String, Text) ] -> Parser m Expression
 operativeExprP operandP operators = do
@@ -458,6 +458,14 @@ operativeExprP operandP operators = do
             rhs <- operandP
             spaces
             return (\lhs -> CallE (VarE funcName) [(Nothing, lhs), (Nothing, rhs)])
+
+booleanExprP :: Monad m => Parser m Expression
+booleanExprP =
+    operativeExprP
+        comparativeExprP
+        [ ("||", "any")
+        , ("&&", "all")
+        ]
 
 comparativeExprP :: Monad m => Parser m Expression
 comparativeExprP =
