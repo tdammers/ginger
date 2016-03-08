@@ -213,6 +213,13 @@ actual: {% if equals(1, 1, 1) %}yes{% else %}no{% endif %}
 expect: no
 actual: {% if equals(1, 1, 2) %}yes{% else %}no{% endif %}
 
+"not-equals"
+expect: no
+actual: {% if nequals(1, 1, 1) %}yes{% else %}no{% endif %}
+
+expect: yes
+actual: {% if nequals(1, 1, 2) %}yes{% else %}no{% endif %}
+
 "floor"
 expect: 14
 actual: {{ 14.1|floor }}

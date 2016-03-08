@@ -464,6 +464,7 @@ comparativeExprP =
     operativeExprP
         additiveExprP
         [ ("==", "equals")
+        , ("!=", "nequals")
         ]
 
 additiveExprP :: Monad m => Parser m Expression

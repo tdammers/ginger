@@ -136,6 +136,7 @@ defRunState tpl =
             , ("default", fromFunction gfnDefault)
             , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
             , ("equals", fromFunction gfnEquals)
+            , ("nequals", fromFunction gfnNEquals)
             , ("floor", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.floor)
             , ("int", fromFunction . unaryFunc $ toGVal . (fmap (Prelude.truncate :: Scientific -> Int)) . asNumber)
             , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
@@ -179,6 +180,12 @@ defRunState tpl =
         gfnEquals (x:[]) = return $ toGVal True
         gfnEquals (x:xs) =
             return . toGVal $ Prelude.all ((snd x `looseEquals`) . snd) xs
+
+        gfnNEquals :: Function (Run m)
+        gfnNEquals [] = return $ toGVal True
+        gfnNEquals (x:[]) = return $ toGVal True
+        gfnNEquals (x:xs) =
+            return . toGVal $ Prelude.any (not . (snd x `looseEquals`) . snd) xs
 
         looseEquals :: GVal (Run m) -> GVal (Run m) -> Bool
         looseEquals a b
