@@ -172,6 +172,26 @@ actual: {% if (1 == 1) %}yes{% else %}no{% endif %}
 expect: 2
 actual: {{ -2|abs }}
 
+"any"
+expect: yes
+actual: {% if any(1, 1, true) %}yes{% else %}no{% endif %}
+
+expect: yes
+actual: {% if any(0, 1, false) %}yes{% else %}no{% endif %}
+
+expect: no
+actual: {% if any(0, 0, false) %}yes{% else %}no{% endif %}
+
+"all"
+expect: yes
+actual: {% if all(1, 1, true) %}yes{% else %}no{% endif %}
+
+expect: no
+actual: {% if all(0, 1, false) %}yes{% else %}no{% endif %}
+
+expect: no
+actual: {% if all(0, 0, false) %}yes{% else %}no{% endif %}
+
 "ceil"
 expect: 15
 actual: {{ 14.1|ceil }}

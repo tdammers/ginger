@@ -128,6 +128,8 @@ defRunState tpl =
         scope =
             [ ("raw", fromFunction gfnRawHtml)
             , ("abs", fromFunction . unaryNumericFunc 0 $ Prelude.abs)
+            , ("any", fromFunction gfnAny)
+            , ("all", fromFunction gfnAll)
             -- TODO: batch
             , ("ceil", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.ceiling)
             , ("capitalize", fromFunction . variadicStringFunc $ mconcat . Prelude.map capitalize)
@@ -175,6 +177,12 @@ defRunState tpl =
         gfnDefault ((_, x):xs)
             | asBoolean x = return x
             | otherwise = gfnDefault xs
+
+        gfnAny :: Function (Run m)
+        gfnAny xs = return . toGVal $ Prelude.any (asBoolean . snd) xs
+
+        gfnAll :: Function (Run m)
+        gfnAll xs = return . toGVal $ Prelude.all (asBoolean . snd) xs
 
         gfnEquals :: Function (Run m)
         gfnEquals [] = return $ toGVal True
