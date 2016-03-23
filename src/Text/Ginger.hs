@@ -191,6 +191,35 @@ module Text.Ginger
 -- a function to a context value on the host side, you can use it just like
 -- any other function / filter.
 
+-- ** Control Constructs
+-- *** Conditionals: `{% if %}`
+-- | Simplest form:
+
+-- | > {% if condition %}Hello!{% endif %}
+
+-- | Slightly more elaborate:
+
+-- | > {% if condition %}Hello!{% else %}Goodbye!{% endif %}
+
+-- | Full glory:
+
+-- | > {% if condition %}Hello!{% elseif otherCondition %}Sayonara!{% else %}Goodbye!{% endif %}
+
+-- *** set
+-- | TODO
+-- *** for
+-- | TODO
+-- *** include
+-- | TODO
+-- *** macro
+-- | TODO
+-- *** block
+-- | TODO
+-- *** call
+-- | TODO
+-- *** scope
+-- | TODO
+
 -- * Haskell API
 -- ** General
 -- | On the Haskell side of things, executing a template is a two-step process.
@@ -208,7 +237,7 @@ module Text.Ginger
 -- example implementation for 'IO' would look like this:
 
 -- | > loadFile fn = openFile fn ReadMode >>= hGetContents
--- > 
+-- >
 -- > loadFileMay fn =
 -- >     tryIOError (loadFile fn) >>= \e ->
 -- >          case e of
