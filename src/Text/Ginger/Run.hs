@@ -29,6 +29,7 @@ module Text.Ginger.Run
 where
 
 import Prelude ( (.), ($), (==), (/=)
+               , (>), (<), (>=), (<=)
                , (+), (-), (*), (/), div
                , (||), (&&)
                , (++)
@@ -140,6 +141,10 @@ defRunState tpl =
             , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
             , ("equals", fromFunction gfnEquals)
             , ("nequals", fromFunction gfnNEquals)
+            , ("greaterEquals", fromFunction gfnGreaterEquals)
+            , ("lessEquals", fromFunction gfnLessEquals)
+            , ("greater", fromFunction gfnGreater)
+            , ("less", fromFunction gfnLess)
             , ("floor", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.floor)
             , ("int", fromFunction . unaryFunc $ toGVal . (fmap (Prelude.truncate :: Scientific -> Int)) . asNumber)
             , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
@@ -215,6 +220,46 @@ defRunState tpl =
             -- If either is NULL, the other must be falsy
             | isNull a || isNull b = asBoolean a == asBoolean b
             | otherwise = asText a == asText b
+
+        gfnLess :: Function (Run m)
+        gfnLess [] = return . toGVal $ False
+        gfnLess xs' =
+            let xs = fmap snd xs'
+            in return . toGVal $
+                Prelude.all (== Just True) (Prelude.zipWith less xs (Prelude.tail xs))
+
+        gfnGreater :: Function (Run m)
+        gfnGreater [] = return . toGVal $ False
+        gfnGreater xs' =
+            let xs = fmap snd xs'
+            in return . toGVal $
+                Prelude.all (== Just True) (Prelude.zipWith greater xs (Prelude.tail xs))
+
+        gfnLessEquals :: Function (Run m)
+        gfnLessEquals [] = return . toGVal $ False
+        gfnLessEquals xs' =
+            let xs = fmap snd xs'
+            in return . toGVal $
+                Prelude.all (== Just True) (Prelude.zipWith lessEq xs (Prelude.tail xs))
+
+        gfnGreaterEquals :: Function (Run m)
+        gfnGreaterEquals [] = return . toGVal $ False
+        gfnGreaterEquals xs' =
+            let xs = fmap snd xs'
+            in return . toGVal $
+                Prelude.all (== Just True) (Prelude.zipWith greaterEq xs (Prelude.tail xs))
+
+        less :: GVal (Run m) -> GVal (Run m) -> Maybe Bool
+        less a b = (<) <$> asNumber a <*> asNumber b
+
+        greater :: GVal (Run m) -> GVal (Run m) -> Maybe Bool
+        greater a b = (>) <$> asNumber a <*> asNumber b
+
+        lessEq :: GVal (Run m) -> GVal (Run m) -> Maybe Bool
+        lessEq a b = (<=) <$> asNumber a <*> asNumber b
+
+        greaterEq :: GVal (Run m) -> GVal (Run m) -> Maybe Bool
+        greaterEq a b = (>=) <$> asNumber a <*> asNumber b
 
         difference :: Prelude.Num a => [a] -> a
         difference (x:xs) = x - Prelude.sum xs

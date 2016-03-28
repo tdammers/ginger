@@ -473,6 +473,10 @@ comparativeExprP =
         additiveExprP
         [ ("==", "equals")
         , ("!=", "nequals")
+        , (">=", "greaterEquals")
+        , ("<=", "lessEquals")
+        , (">", "greater")
+        , ("<", "less")
         ]
 
 additiveExprP :: Monad m => Parser m Expression
