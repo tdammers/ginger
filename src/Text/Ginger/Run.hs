@@ -24,6 +24,12 @@ module Text.Ginger.Run
 , GingerContext
 , makeContext
 , makeContextM
+, makeContext'
+, makeContextM'
+, makeContextHtml
+, makeContextHtmlM
+, makeContextText
+, makeContextTextM
 , Run, liftRun, liftRun2
 )
 where
@@ -72,35 +78,40 @@ import Network.HTTP.Types (urlEncode)
 
 -- | Execution context. Determines how to look up variables from the
 -- environment, and how to write out template output.
-data GingerContext m
+data GingerContext m h
     = GingerContext
-        { contextLookup :: VarName -> Run m (GVal (Run m))
-        , contextWriteHtml :: Html -> Run m ()
+        { contextLookup :: VarName -> Run m h (GVal (Run m h))
+        , contextWrite :: h -> Run m h ()
+        , contextEncode :: GVal (Run m h) -> h
         }
 
-data RunState m
+contextWriteEncoded :: GingerContext m h -> GVal (Run m h) -> Run m h ()
+contextWriteEncoded context =
+    contextWrite context . contextEncode context
+
+data RunState m h
     = RunState
-        { rsScope :: HashMap VarName (GVal (Run m))
-        , rsCapture :: Html
+        { rsScope :: HashMap VarName (GVal (Run m h))
+        , rsCapture :: h
         , rsCurrentTemplate :: Template -- the template we are currently running
         , rsCurrentBlockName :: Maybe Text -- the name of the innermost block we're currently in
         }
 
-unaryFunc :: forall m. (Monad m) => (GVal (Run m) -> GVal (Run m)) -> Function (Run m)
+unaryFunc :: forall m h. (Monad m) => (GVal (Run m h) -> GVal (Run m h)) -> Function (Run m h)
 unaryFunc f [] = return def
 unaryFunc f ((_, x):[]) = return (f x)
 
 ignoreArgNames :: ([a] -> b) -> ([(c, a)] -> b)
 ignoreArgNames f args = f (Prelude.map snd args)
 
-variadicNumericFunc :: Monad m => Scientific -> ([Scientific] -> Scientific) -> [(Maybe Text, GVal (Run m))] -> Run m (GVal (Run m))
+variadicNumericFunc :: Monad m => Scientific -> ([Scientific] -> Scientific) -> [(Maybe Text, GVal (Run m h))] -> Run m h (GVal (Run m h))
 variadicNumericFunc zero f args =
     return . toGVal . f $ args'
     where
         args' :: [Scientific]
         args' = Prelude.map (fromMaybe zero . asNumber . snd) args
 
-unaryNumericFunc :: Monad m => Scientific -> (Scientific -> Scientific) -> [(Maybe Text, GVal (Run m))] -> Run m (GVal (Run m))
+unaryNumericFunc :: Monad m => Scientific -> (Scientific -> Scientific) -> [(Maybe Text, GVal (Run m h))] -> Run m h (GVal (Run m h))
 unaryNumericFunc zero f args =
     return . toGVal . f $ args'
     where
@@ -109,23 +120,23 @@ unaryNumericFunc zero f args =
                     [] -> 0
                     (arg:_) -> fromMaybe zero . asNumber . snd $ arg
 
-variadicStringFunc :: Monad m => ([Text] -> Text) -> [(Maybe Text, GVal (Run m))] -> Run m (GVal (Run m))
+variadicStringFunc :: Monad m => ([Text] -> Text) -> [(Maybe Text, GVal (Run m h))] -> Run m h (GVal (Run m h))
 variadicStringFunc f args =
     return . toGVal . f $ args'
     where
         args' :: [Text]
         args' = Prelude.map (asText . snd) args
 
-defRunState :: forall m. Monad m => Template -> RunState m
+defRunState :: forall m h. (Monoid h, Monad m) => Template -> RunState m h
 defRunState tpl =
     RunState
         { rsScope = HashMap.fromList scope
-        , rsCapture = html ""
+        , rsCapture = mempty
         , rsCurrentTemplate = tpl
         , rsCurrentBlockName = Nothing
         }
     where
-        scope :: [(Text, GVal (Run m))]
+        scope :: [(Text, GVal (Run m h))]
         scope =
             [ ("raw", fromFunction gfnRawHtml)
             , ("abs", fromFunction . unaryNumericFunc 0 $ Prelude.abs)
@@ -162,10 +173,10 @@ defRunState tpl =
             , ("urlencode", fromFunction $ gfnUrlEncode)
             ]
 
-        gfnRawHtml :: Function (Run m)
+        gfnRawHtml :: Function (Run m h)
         gfnRawHtml = unaryFunc (toGVal . unsafeRawHtml . asText)
 
-        gfnUrlEncode :: Function (Run m)
+        gfnUrlEncode :: Function (Run m h)
         gfnUrlEncode =
             unaryFunc
                 ( toGVal
@@ -177,31 +188,31 @@ defRunState tpl =
                 . asText
                 )
 
-        gfnDefault :: Function (Run m)
+        gfnDefault :: Function (Run m h)
         gfnDefault [] = return def
         gfnDefault ((_, x):xs)
             | asBoolean x = return x
             | otherwise = gfnDefault xs
 
-        gfnAny :: Function (Run m)
+        gfnAny :: Function (Run m h)
         gfnAny xs = return . toGVal $ Prelude.any (asBoolean . snd) xs
 
-        gfnAll :: Function (Run m)
+        gfnAll :: Function (Run m h)
         gfnAll xs = return . toGVal $ Prelude.all (asBoolean . snd) xs
 
-        gfnEquals :: Function (Run m)
+        gfnEquals :: Function (Run m h)
         gfnEquals [] = return $ toGVal True
         gfnEquals (x:[]) = return $ toGVal True
         gfnEquals (x:xs) =
             return . toGVal $ Prelude.all ((snd x `looseEquals`) . snd) xs
 
-        gfnNEquals :: Function (Run m)
+        gfnNEquals :: Function (Run m h)
         gfnNEquals [] = return $ toGVal True
         gfnNEquals (x:[]) = return $ toGVal True
         gfnNEquals (x:xs) =
             return . toGVal $ Prelude.any (not . (snd x `looseEquals`) . snd) xs
 
-        gfnContains :: Function (Run m)
+        gfnContains :: Function (Run m h)
         gfnContains [] = return $ toGVal False
         gfnContains (list:elems) =
             let rawList = fromMaybe [] . asList . snd $ list
@@ -210,7 +221,7 @@ defRunState tpl =
                 es `areInList` xs = Prelude.all (`isInList` xs) es
             in return . toGVal $ rawElems `areInList` rawList
 
-        looseEquals :: GVal (Run m) -> GVal (Run m) -> Bool
+        looseEquals :: GVal (Run m h) -> GVal (Run m h) -> Bool
         looseEquals a b
             | isJust (asFunction a) || isJust (asFunction b) = False
             | isJust (asList a) /= isJust (asList b) = False
@@ -221,44 +232,44 @@ defRunState tpl =
             | isNull a || isNull b = asBoolean a == asBoolean b
             | otherwise = asText a == asText b
 
-        gfnLess :: Function (Run m)
+        gfnLess :: Function (Run m h)
         gfnLess [] = return . toGVal $ False
         gfnLess xs' =
             let xs = fmap snd xs'
             in return . toGVal $
                 Prelude.all (== Just True) (Prelude.zipWith less xs (Prelude.tail xs))
 
-        gfnGreater :: Function (Run m)
+        gfnGreater :: Function (Run m h)
         gfnGreater [] = return . toGVal $ False
         gfnGreater xs' =
             let xs = fmap snd xs'
             in return . toGVal $
                 Prelude.all (== Just True) (Prelude.zipWith greater xs (Prelude.tail xs))
 
-        gfnLessEquals :: Function (Run m)
+        gfnLessEquals :: Function (Run m h)
         gfnLessEquals [] = return . toGVal $ False
         gfnLessEquals xs' =
             let xs = fmap snd xs'
             in return . toGVal $
                 Prelude.all (== Just True) (Prelude.zipWith lessEq xs (Prelude.tail xs))
 
-        gfnGreaterEquals :: Function (Run m)
+        gfnGreaterEquals :: Function (Run m h)
         gfnGreaterEquals [] = return . toGVal $ False
         gfnGreaterEquals xs' =
             let xs = fmap snd xs'
             in return . toGVal $
                 Prelude.all (== Just True) (Prelude.zipWith greaterEq xs (Prelude.tail xs))
 
-        less :: GVal (Run m) -> GVal (Run m) -> Maybe Bool
+        less :: GVal (Run m h) -> GVal (Run m h) -> Maybe Bool
         less a b = (<) <$> asNumber a <*> asNumber b
 
-        greater :: GVal (Run m) -> GVal (Run m) -> Maybe Bool
+        greater :: GVal (Run m h) -> GVal (Run m h) -> Maybe Bool
         greater a b = (>) <$> asNumber a <*> asNumber b
 
-        lessEq :: GVal (Run m) -> GVal (Run m) -> Maybe Bool
+        lessEq :: GVal (Run m h) -> GVal (Run m h) -> Maybe Bool
         lessEq a b = (<=) <$> asNumber a <*> asNumber b
 
-        greaterEq :: GVal (Run m) -> GVal (Run m) -> Maybe Bool
+        greaterEq :: GVal (Run m h) -> GVal (Run m h) -> Maybe Bool
         greaterEq a b = (>=) <$> asNumber a <*> asNumber b
 
         difference :: Prelude.Num a => [a] -> a
@@ -280,7 +291,7 @@ defRunState tpl =
         capitalize :: Text -> Text
         capitalize txt = Text.toUpper (Text.take 1 txt) <> Text.drop 1 txt
 
-        gfnCenter :: Function (Run m)
+        gfnCenter :: Function (Run m h)
         gfnCenter [] = gfnCenter [(Nothing, toGVal ("" :: Text))]
         gfnCenter (x:[]) = gfnCenter [x, (Nothing, toGVal (80 :: Int))]
         gfnCenter (x:y:[]) = gfnCenter [x, y, (Nothing, toGVal (" " :: Text))]
@@ -306,10 +317,19 @@ defRunState tpl =
 -- based on a lookup key, and a writer function (outputting HTML by whatever
 -- means the carrier monad provides, e.g. @putStr@ for @IO@, or @tell@ for
 -- @Writer@s).
-makeContextM :: (Monad m, Functor m) => (VarName -> Run m (GVal (Run m))) -> (Html -> m ()) -> GingerContext m
-makeContextM l w = GingerContext l (liftRun2 w)
+makeContextM' :: (Monad m, Functor m)
+             => (VarName -> Run m h (GVal (Run m h)))
+             -> (h -> m ())
+             -> (GVal (Run m h) -> h)
+             -> GingerContext m h
+makeContextM' lookupFn writeFn encodeFn =
+    GingerContext
+        { contextLookup = lookupFn
+        , contextWrite = liftRun2 writeFn
+        , contextEncode = encodeFn
+        }
 
-liftLookup :: (Monad m, ToGVal (Run m) v) => (VarName -> m v) -> VarName -> Run m (GVal (Run m))
+liftLookup :: (Monad m, ToGVal (Run m h) v) => (VarName -> m v) -> VarName -> Run m h (GVal (Run m h))
 liftLookup f k = do
     v <- liftRun $ f k
     return . toGVal $ v
@@ -324,31 +344,67 @@ liftLookup f k = do
 -- marshalling values from Haskell to Ginger is a matter of calling 'toGVal'
 -- on them, so the 'GVal (Run (Writer Html))' part can usually be ignored.
 -- See the 'Text.Ginger.GVal' module for details.
-makeContext :: (VarName -> GVal (Run (Writer Html))) -> GingerContext (Writer Html)
-makeContext l =
-    makeContextM
-        (return . l)
+makeContext' :: Monoid h
+            => (VarName -> GVal (Run (Writer h) h))
+            -> (GVal (Run (Writer h) h) -> h)
+            -> GingerContext (Writer h) h
+makeContext' lookupFn encodeFn =
+    makeContextM'
+        (return . lookupFn)
         tell
+        encodeFn
+
+{-#DEPRECATED makeContext "Compatibility alias for makeContextHtml" #-}
+makeContext :: (VarName -> GVal (Run (Writer Html) Html))
+            -> GingerContext (Writer Html) Html
+makeContext = makeContextHtml
+
+{-#DEPRECATED makeContextM "Compatibility alias for makeContextHtmlM" #-}
+makeContextM :: (Monad m, Functor m)
+             => (VarName -> Run m Html (GVal (Run m Html)))
+             -> (Html -> m ())
+             -> GingerContext m Html
+makeContextM = makeContextHtmlM
+
+makeContextHtml :: (VarName -> GVal (Run (Writer Html) Html))
+                -> GingerContext (Writer Html) Html
+makeContextHtml l = makeContext' l toHtml
+
+makeContextHtmlM :: (Monad m, Functor m)
+                 => (VarName -> Run m Html (GVal (Run m Html)))
+                 -> (Html -> m ())
+                 -> GingerContext m Html
+makeContextHtmlM l w = makeContextM' l w toHtml
+
+makeContextText :: (VarName -> GVal (Run (Writer Text) Text))
+                -> GingerContext (Writer Text) Text
+makeContextText l = makeContext' l asText
+
+makeContextTextM :: (Monad m, Functor m)
+                 => (VarName -> Run m Text (GVal (Run m Text)))
+                 -> (Text -> m ())
+                 -> GingerContext m Text
+makeContextTextM l w = makeContextM' l w asText
 
 -- | Purely expand a Ginger template. The underlying carrier monad is 'Writer'
--- 'Html', which is used to collect the output and render it into a 'Html'
+-- 'h', which is used to collect the output and render it into a 'h'
 -- value.
-runGinger :: GingerContext (Writer Html) -> Template -> Html
+runGinger :: (ToGVal (Run (Writer h) h) h, Monoid h) => GingerContext (Writer h) h -> Template -> h
 runGinger context template = execWriter $ runGingerT context template
 
 -- | Monadically run a Ginger template. The @m@ parameter is the carrier monad.
-runGingerT :: (Monad m, Functor m) => GingerContext m -> Template -> m ()
+runGingerT :: (ToGVal (Run m h) h, Monoid h, Monad m, Functor m) => GingerContext m h -> Template -> m ()
 runGingerT context tpl = runReaderT (evalStateT (runTemplate tpl) (defRunState tpl)) context
 
 -- | Internal type alias for our template-runner monad stack.
-type Run m = StateT (RunState m) (ReaderT (GingerContext m) m)
+type Run m h = StateT (RunState m h) (ReaderT (GingerContext m h) m)
 
 -- | Lift a value from the host monad @m@ into the 'Run' monad.
-liftRun :: Monad m => m a -> Run m a
+liftRun :: Monad m => m a -> Run m h a
 liftRun = lift . lift
 
 -- | Lift a function from the host monad @m@ into the 'Run' monad.
-liftRun2 :: Monad m => (a -> m b) -> a -> Run m b
+liftRun2 :: Monad m => (a -> m b) -> a -> Run m h b
 liftRun2 f x = liftRun $ f x
 
 -- | Find the effective base template of an inheritance chain
@@ -359,11 +415,11 @@ baseTemplate t =
         Just p -> baseTemplate p
 
 -- | Run a template.
-runTemplate :: (Monad m, Functor m) => Template -> Run m ()
+runTemplate :: (ToGVal (Run m h) h, Monoid h, Monad m, Functor m) => Template -> Run m h ()
 runTemplate = runStatement . templateBody . baseTemplate
 
 -- | Run an action within a different template context.
-withTemplate :: (Monad m, Functor m) => Template -> Run m a -> Run m a
+withTemplate :: (Monad m, Functor m) => Template -> Run m h a -> Run m h a
 withTemplate tpl a = do
     oldTpl <- gets rsCurrentTemplate
     oldBlockName <- gets rsCurrentBlockName
@@ -373,7 +429,7 @@ withTemplate tpl a = do
     return result
 
 -- | Run an action within a block context
-withBlockName :: (Monad m, Functor m) => VarName -> Run m a -> Run m a
+withBlockName :: (Monad m, Functor m) => VarName -> Run m h a -> Run m h a
 withBlockName blockName a = do
     oldBlockName <- gets rsCurrentBlockName
     modify (\s -> s { rsCurrentBlockName = Just blockName })
@@ -381,7 +437,7 @@ withBlockName blockName a = do
     modify (\s -> s { rsCurrentBlockName = oldBlockName })
     return result
 
-lookupBlock :: (Monad m, Functor m) => VarName -> Run m Block
+lookupBlock :: (Monad m, Functor m) => VarName -> Run m h Block
 lookupBlock blockName = do
     tpl <- gets rsCurrentTemplate
     let blockMay = resolveBlock blockName tpl
@@ -398,10 +454,10 @@ lookupBlock blockName = do
                     templateParent tpl >>= resolveBlock name
 
 -- | Run one statement.
-runStatement :: (Monad m, Functor m) => Statement -> Run m ()
+runStatement :: forall m h. (ToGVal (Run m h) h, Monoid h, Monad m, Functor m) => Statement -> Run m h ()
 runStatement NullS = return ()
 runStatement (MultiS xs) = forM_ xs runStatement
-runStatement (LiteralS html) = echo html
+runStatement (LiteralS html) = echo (toGVal html)
 runStatement (InterpolationS expr) = runExpression expr >>= echo
 runStatement (IfS condExpr true false) = do
     cond <- runExpression condExpr
@@ -422,7 +478,7 @@ runStatement (BlockRefS blockName) = do
 
 runStatement (ScopedS body) = withLocalScope runInner
     where
-        runInner :: (Functor m, Monad m) => Run m ()
+        runInner :: (Functor m, Monad m) => Run m h ()
         runInner = runStatement body
 
 runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
@@ -444,17 +500,17 @@ runStatement (PreprocessedIncludeS tpl) =
     withTemplate tpl $ runTemplate tpl
 
 -- | Deeply magical function that converts a 'Macro' into a Function.
-macroToGVal :: forall m. (Functor m, Monad m) => Macro -> GVal (Run m)
+macroToGVal :: forall m h. (ToGVal (Run m h) h, Monoid h, Functor m, Monad m) => Macro -> GVal (Run m h)
 macroToGVal (Macro argNames body) =
     fromFunction f
     where
-        f :: Function (Run m)
+        f :: Function (Run m h)
         -- Establish a local state to not contaminate the parent scope
         -- with function arguments and local variables, and;
         -- Establish a local context, where we override the HTML writer,
         -- rewiring it to append any output to the state's capture.
         f args =
-            withLocalState . local (\c -> c { contextWriteHtml = appendCapture }) $ do
+            withLocalState . local (\c -> c { contextWrite = appendCapture }) $ do
                 clearCapture
                 forM (HashMap.toList matchedArgs) (uncurry setVar)
                 setVar "varargs" . toGVal $ positionalArgs
@@ -465,7 +521,7 @@ macroToGVal (Macro argNames body) =
                 -- the capture as the function's return value.
                 toGVal <$> fetchCapture
                 where
-                    matchArgs' :: [(Maybe Text, GVal (Run m))] -> (HashMap Text (GVal (Run m)), [GVal (Run m)], HashMap Text (GVal (Run m)))
+                    matchArgs' :: [(Maybe Text, GVal (Run m h))] -> (HashMap Text (GVal (Run m h)), [GVal (Run m h)], HashMap Text (GVal (Run m h)))
                     matchArgs' = matchFuncArgs argNames
                     (matchedArgs, positionalArgs, namedArgs) = matchArgs' args
 
@@ -481,20 +537,20 @@ withLocalState a = do
 
 -- | Helper function to run a Scope action with a temporary scope, reverting
 -- to the old scope after the action has finished.
-withLocalScope :: (Monad m) => Run m a -> Run m a
+withLocalScope :: (Monad m) => Run m h a -> Run m h a
 withLocalScope a = do
     scope <- gets rsScope
     r <- a
     modify (\s -> s { rsScope = scope })
     return r
 
-setVar :: Monad m => VarName -> GVal (Run m) -> Run m ()
+setVar :: Monad m => VarName -> GVal (Run m h) -> Run m h ()
 setVar name val = do
     vars <- gets rsScope
     let vars' = HashMap.insert name val vars
     modify (\s -> s { rsScope = vars' })
 
-getVar :: Monad m => VarName -> Run m (GVal (Run m))
+getVar :: Monad m => VarName -> Run m h (GVal (Run m h))
 getVar key = do
     vars <- gets rsScope
     case HashMap.lookup key vars of
@@ -504,13 +560,13 @@ getVar key = do
             l <- asks contextLookup
             l key
 
-clearCapture :: Monad m => Run m ()
-clearCapture = modify (\s -> s { rsCapture = unsafeRawHtml "" })
+clearCapture :: (Monoid h, Monad m) => Run m h ()
+clearCapture = modify (\s -> s { rsCapture = mempty })
 
-appendCapture :: Monad m => Html -> Run m ()
+appendCapture :: (Monoid h, Monad m) => h -> Run m h ()
 appendCapture h = modify (\s -> s { rsCapture = rsCapture s <> h })
 
-fetchCapture :: Monad m => Run m Html
+fetchCapture :: Monad m => Run m h h
 fetchCapture = gets rsCapture
 
 -- | Run (evaluate) an expression and return its value into the Run monad
@@ -540,7 +596,8 @@ runExpression (CallE funcE argsEs) = do
 
 -- | Helper function to output a HTML value using whatever print function the
 -- context provides.
-echo :: (Monad m, Functor m, ToHtml h) => h -> Run m ()
+echo :: (Monad m, Functor m) => GVal (Run m h) -> Run m h ()
 echo src = do
-    p <- asks contextWriteHtml
-    p (toHtml src)
+    e <- asks contextEncode
+    p <- asks contextWrite
+    p . e $ src

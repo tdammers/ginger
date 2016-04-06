@@ -1,3 +1,3 @@
 all:
-	cabal install
+	stack install
 .PHONY: all

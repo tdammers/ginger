@@ -37,10 +37,10 @@ loadFileMay fn =
 decodeFile :: (JSON.FromJSON v) => FilePath -> IO (Maybe v)
 decodeFile fn = JSON.decode <$> (openFile fn ReadMode >>= LBS.hGetContents)
 
-printF :: GVal (Run IO)
+printF :: GVal (Run IO Html)
 printF = fromFunction $ go
     where
-        go :: [(Maybe Text, GVal (Run IO))] -> Run IO (GVal (Run IO))
+        go :: [(Maybe Text, GVal (Run IO Html))] -> Run IO Html (GVal (Run IO Html))
         go args = forM_ args printArg >> return def
         printArg (Nothing, v) = liftRun . putStrLn . Text.unpack . asText $ v
         printArg (Just x, _) = return ()
@@ -58,7 +58,7 @@ main = do
 
     let scopeLookup key = toGVal (scope >>= HashMap.lookup key)
         resolve = loadFileMay
-    let contextLookup :: Text -> Run IO (GVal (Run IO))
+    let contextLookup :: Text -> Run IO Html (GVal (Run IO Html))
         contextLookup key =
             case key of
                 "print" -> return printF
@@ -83,7 +83,9 @@ main = do
                                     Nothing -> return ""
                                     Just sn -> loadFile sn
             displayParserError tplSource err
-        Right t -> runGingerT (makeContextM contextLookup (putStr . Text.unpack . htmlSource)) t
+        Right t -> do
+            let context = makeContextHtmlM contextLookup (putStr . Text.unpack . htmlSource)
+            runGingerT context t
 
 printParserError :: ParserError -> IO ()
 printParserError = putStrLn . formatParserError
