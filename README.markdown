@@ -1,5 +1,11 @@
 # Ginger
 
+A note of warning: the git repository at https://bitbucket.org/tdammers/ginger
+has been deleted and restored with a rewritten commit tree on 2016-04-06 in
+order to clean up the messy history. This means that if you have a checkout
+from before that date, merging the bitbucket repo will most likely break
+things; please do a fresh clone to fix this. Sorry for the inconvenience.
+
 ## Intro
 
 A Haskell implementation of the <http://jinja.pocoo.org/ Jinja2> template
