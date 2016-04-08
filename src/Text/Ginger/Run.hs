@@ -171,6 +171,7 @@ defRunState tpl =
             , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
             , ("truncate", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.truncate)
             , ("urlencode", fromFunction $ gfnUrlEncode)
+            , ("sort", fromFunction $ gfnSort)
             ]
 
         gfnRawHtml :: Function (Run m h)
@@ -297,6 +298,45 @@ defRunState tpl =
         gfnCenter (x:y:[]) = gfnCenter [x, y, (Nothing, toGVal (" " :: Text))]
         gfnCenter ((_, s):(_, w):(_, pad):_) =
             return . toGVal $ center (asText s) (fromMaybe 80 $ Prelude.truncate <$> asNumber w) (asText pad)
+
+        gfnSort :: Function (Run m h)
+        gfnSort [] = return def
+        gfnSort ((_,sortee):args) = do
+            let sortKeyMay = asText <$> List.lookup (Just "by") args
+                sortReverse = fromMaybe False $ asBoolean <$> List.lookup (Just "reverse") args
+                baseComparer :: (GVal (Run m h)) -> (GVal (Run m h)) -> Prelude.Ordering
+                baseComparer = \a b -> Prelude.compare (asText a) (asText b)
+                extractKey :: Text -> GVal (Run m h) -> GVal (Run m h)
+                extractKey k g = fromMaybe def $ do
+                    l <- asLookup g
+                    l k
+            if isDict sortee
+                then do
+                    let comparer' :: (Text, GVal (Run m h)) -> (Text, GVal (Run m h)) -> Prelude.Ordering
+                        comparer' = case sortKeyMay of
+                            Nothing -> \(_, a) (_, b) -> baseComparer a b
+                            Just "__key" -> \(a, _) (b, _) -> Prelude.compare a b
+                            Just k -> \(_, a) (_, b) ->
+                                baseComparer
+                                    (extractKey k a) (extractKey k b)
+                        comparer =
+                            if sortReverse
+                                then \a b -> comparer' b a
+                                else comparer'
+                    return . toGVal $ List.sortBy comparer (fromMaybe [] $ asDictItems sortee)
+                else do
+                    let comparer' :: (GVal (Run m h)) -> (GVal (Run m h)) -> Prelude.Ordering
+                        comparer' = case sortKeyMay of
+                            Nothing ->
+                                baseComparer
+                            Just k -> \a b ->
+                                baseComparer
+                                    (extractKey k a) (extractKey k b)
+                    let comparer =
+                            if sortReverse
+                                then \a b -> comparer' b a
+                                else comparer'
+                    return . toGVal $ List.sortBy comparer (fromMaybe [] $ asList sortee)
 
         center :: Text -> Prelude.Int -> Text -> Text
         center str width pad =
