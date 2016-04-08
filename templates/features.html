@@ -365,6 +365,20 @@ actual: {{ -14.8|truncate }}
 expect: a%2Fb%20c
 actual: {{ "a/b c"|urlencode }}
 
+"sort"
+expect: 123
+actual: {{ [2,3,1]|sort }}
+expect: 321
+actual: {{ [2,3,1]|sort(reverse=true) }}
+expect: 41aaa30zzz
+actual: {{ [ {"age":30, "name":"zzz"}
+           , {"age":41, "name":"aaa"}
+           ]|sort(by="name") }}
+expect: 41aaa30zzz
+actual: {{ [ {"age":30, "name":"zzz"}
+           , {"age":41, "name":"aaa"}
+           ]|sort(by="age", reverse=true) }}
+
 ** Setting variables **
 
 set x = "world"; print x
