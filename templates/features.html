@@ -274,12 +274,32 @@ actual: {{ "hi"|default("nope") }}
 expect: 3
 actual: {{ difference(5,2) }}
 
+"escape"
+expect: &lt;
+actual: {{ escape('<')|raw }}
+expect: &lt;&gt;
+actual: {{ escape('<', '>')|raw }}
+
 "equals"
 expect: yes
 actual: {% if equals(1, 1, 1) %}yes{% else %}no{% endif %}
 
 expect: no
 actual: {% if equals(1, 1, 2) %}yes{% else %}no{% endif %}
+
+"filesizeformat"
+expect: 100 B
+actual: {{ 100|filesizeformat }}
+expect: 12 kB
+actual: {{ 12000|filesizeformat }}
+expect: 1.5 MB
+actual: {{ 1500000|filesizeformat }}
+expect: 100 B
+actual: {{ 100|filesizeformat(true) }}
+expect: 11.7 kiB
+actual: {{ 12000|filesizeformat(true) }}
+expect: 1.4 MiB
+actual: {{ 1500000|filesizeformat(true) }}
 
 "not-equals"
 expect: no

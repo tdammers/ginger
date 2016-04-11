@@ -36,20 +36,21 @@ where
 
 import Prelude ( (.), ($), (==), (/=)
                , (>), (<), (>=), (<=)
-               , (+), (-), (*), (/), div
+               , (+), (-), (*), (/), div, (**), (^)
                , (||), (&&)
                , (++)
                , Show, show
                , undefined, otherwise
                , Maybe (..)
                , Bool (..)
-               , Int
-               , fromIntegral, floor
+               , Int, Integer, String
+               , fromIntegral, floor, round
                , not
                , show
                , uncurry
                , seq
-               , snd
+               , fst, snd
+               , maybe
                )
 import qualified Prelude
 import Data.Maybe (fromMaybe, isJust)
@@ -57,6 +58,8 @@ import qualified Data.List as List
 import Text.Ginger.AST
 import Text.Ginger.Html
 import Text.Ginger.GVal
+import Text.Printf
+import Data.Scientific (formatScientific)
 
 import Data.Text (Text)
 import Data.String (fromString)
@@ -73,7 +76,7 @@ import Data.HashMap.Strict (HashMap)
 import Data.Scientific (Scientific)
 import Data.Scientific as Scientific
 import Data.Default (def)
-import Safe (readMay)
+import Safe (readMay, lastDef)
 import Network.HTTP.Types (urlEncode)
 import Debug.Trace (trace)
 
@@ -150,7 +153,11 @@ defRunState tpl =
             , ("concat", fromFunction . variadicStringFunc $ mconcat)
             , ("contains", fromFunction gfnContains)
             , ("default", fromFunction gfnDefault)
+            , ("d", fromFunction gfnDefault)
             , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
+            , ("escape", fromFunction gfnEscape)
+            , ("e", fromFunction gfnEscape)
+            , ("filesizeformat", fromFunction gfnFileSizeFormat)
             , ("equals", fromFunction gfnEquals)
             , ("nequals", fromFunction gfnNEquals)
             , ("greaterEquals", fromFunction gfnGreaterEquals)
@@ -196,6 +203,9 @@ defRunState tpl =
         gfnDefault ((_, x):xs)
             | asBoolean x = return x
             | otherwise = gfnDefault xs
+
+        gfnEscape :: Function (Run m h)
+        gfnEscape = return . toGVal . html . mconcat . fmap (asText . snd)
 
         gfnAny :: Function (Run m h)
         gfnAny xs = return . toGVal $ Prelude.any (asBoolean . snd) xs
@@ -390,6 +400,48 @@ defRunState tpl =
                 paddingL = Text.take charsL . Text.replicate repsL $ pad
                 repsR = Prelude.succ charsR `div` Text.length pad
                 paddingR = Text.take charsR . Text.replicate repsR $ pad
+
+        gfnFileSizeFormat :: Function (Run m h)
+        gfnFileSizeFormat [(_, sizeG)] =
+            gfnFileSizeFormat [(Nothing, sizeG), (Nothing, def)]
+        gfnFileSizeFormat [(_, sizeG), (_, binaryG)] = do
+            let sizeM = Prelude.round <$> asNumber sizeG
+                binary = asBoolean binaryG
+            Prelude.maybe
+                (return def)
+                (return . toGVal . formatFileSize binary)
+                sizeM
+        gfnFileSizeFormat _ = return def
+
+        formatFileSize :: Bool -> Integer -> String
+        formatFileSize binary size =
+            let units =
+                    if binary
+                        then
+                            [ (1, "B")
+                            , (1024, "kiB")
+                            , (1024 ^ 2, "MiB")
+                            , (1024 ^ 3, "GiB")
+                            , (1024 ^ 4, "TiB")
+                            , (1024 ^ 5, "PiB")
+                            ]
+                        else
+                            [ (1, "B")
+                            , (1000, "kB")
+                            , (1000000, "MB")
+                            , (1000000000, "GB")
+                            , (1000000000000, "TB")
+                            , (1000000000000000, "PB")
+                            ]
+                (divisor, unitName) =
+                    lastDef (1, "B") [ (d, u) | (d, u) <- units, d <= size ]
+                dividedSize :: Scientific
+                dividedSize = fromIntegral size / fromIntegral divisor
+                formattedSize =
+                    if isInteger dividedSize
+                        then formatScientific Fixed (Just 0) dividedSize
+                        else formatScientific Fixed (Just 1) dividedSize
+            in formattedSize ++ " " ++ unitName
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad
