@@ -379,6 +379,14 @@ actual: {{ [ {"age":30, "name":"zzz"}
            , {"age":41, "name":"aaa"}
            ]|sort(by="age", reverse=true) }}
 
+"slice"
+expect: 234
+actual: {{ [1, 2, 3, 4, 5]|slice(1,3) }}
+expect: 2345
+actual: {{ [1, 2, 3, 4, 5]|slice(1) }}
+expect: 234
+actual: {{ [1, 2, 3, 4, 5]|slice(length=3,start=1) }}
+
 ** Setting variables **
 
 set x = "world"; print x

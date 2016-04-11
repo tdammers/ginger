@@ -75,6 +75,7 @@ import Data.Scientific as Scientific
 import Data.Default (def)
 import Safe (readMay)
 import Network.HTTP.Types (urlEncode)
+import Debug.Trace (trace)
 
 -- | Execution context. Determines how to look up variables from the
 -- environment, and how to write out template output.
@@ -167,6 +168,7 @@ defRunState tpl =
             , ("ratio", fromFunction . variadicNumericFunc 1 $ Scientific.fromFloatDigits . ratio . Prelude.map Scientific.toRealFloat)
             , ("round", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.round)
             , ("show", fromFunction . unaryFunc $ fromString . show)
+            , ("slice", fromFunction $ gfnSlice)
             , ("str", fromFunction . unaryFunc $ toGVal . asText)
             , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
             , ("truncate", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.truncate)
@@ -298,6 +300,43 @@ defRunState tpl =
         gfnCenter (x:y:[]) = gfnCenter [x, y, (Nothing, toGVal (" " :: Text))]
         gfnCenter ((_, s):(_, w):(_, pad):_) =
             return . toGVal $ center (asText s) (fromMaybe 80 $ Prelude.truncate <$> asNumber w) (asText pad)
+
+        gfnSlice :: Function (Run m h)
+        gfnSlice [] = return def
+        gfnSlice [(Nothing, slicee)] = return slicee
+        gfnSlice [(Nothing, slicee), (Nothing, startPos)] =
+            gfnSlice [(Nothing, slicee), (Nothing, startPos), (Nothing, def)]
+        gfnSlice [(Nothing, slicee), (Nothing, startPos), (Nothing, length)] = do
+            case asDictItems slicee of
+                Just items -> do
+                    let slicedItems = slice items startInt lengthInt
+                    return $ dict slicedItems
+                Nothing -> do
+                    let items = fromMaybe [] $ asList slicee
+                        slicedItems = slice items startInt lengthInt
+                    return $ toGVal slicedItems
+            where
+                startInt :: Int
+                startInt = fromMaybe 0 . fmap Prelude.round . asNumber $ startPos
+
+                lengthInt :: Maybe Int
+                lengthInt = fmap Prelude.round . asNumber $ length
+
+                slice :: [a] -> Int -> Maybe Int -> [a]
+                slice xs start Nothing =
+                    Prelude.drop start $ xs
+                slice xs start (Just length) =
+                    Prelude.take length . Prelude.drop start $ xs
+        gfnSlice ((Nothing, slicee):(Nothing, startPos):args) =
+            let length = fromMaybe def $ List.lookup (Just "length") args
+            in gfnSlice [(Nothing, slicee), (Nothing, startPos), (Nothing, length)]
+        gfnSlice ((Nothing, slicee):args) =
+            let startPos = fromMaybe def $ List.lookup (Just "start") args
+            in gfnSlice ((Nothing, slicee):(Nothing, startPos):args)
+        gfnSlice args =
+            let slicee = fromMaybe def $ List.lookup (Just "slicee") args
+            in gfnSlice ((Nothing, slicee):args)
+
 
         gfnSort :: Function (Run m h)
         gfnSort [] = return def
