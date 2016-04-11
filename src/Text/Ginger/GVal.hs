@@ -47,6 +47,7 @@ import Data.Monoid
 import Data.Scientific ( Scientific
                        , floatingOrInteger
                        , toBoundedInteger
+                       , toRealFloat 
                        )
 import Control.Applicative
 import qualified Data.Aeson as JSON
@@ -56,6 +57,7 @@ import qualified Data.Vector as Vector
 import Control.Monad ( forM, mapM )
 import Control.Monad.Trans (MonadTrans, lift)
 import Data.Default (Default, def)
+import Text.Printf
 
 import Text.Ginger.Html
 
@@ -122,6 +124,18 @@ instance Show (GVal m) where
 instance ToHtml (GVal m) where
     toHtml = asHtml
 
+instance PrintfArg (GVal m) where
+    formatArg x fmt =
+        case fmtChar (vFmt 's' fmt) of
+            's' -> formatString
+                    (Text.unpack $ asText x)
+                    (fmt { fmtChar = 's', fmtPrecision = Nothing })
+            'c' -> formatString
+                    (Text.unpack $ asText x)
+                    fmt
+            _ -> formatRealFloat
+                    (toRealFloat . fromMaybe 0 . asNumber $ x :: Double)
+                    fmt
 
 -- * Representing functions as 'GVal's
 --

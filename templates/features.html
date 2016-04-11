@@ -342,6 +342,13 @@ actual: {{ [1,2,3]|length }}
 "num"
 TODO
 
+"printf"
+
+expect: Hello
+actual: {{ printf("%s", "Hello") }}
+expect: 1
+actual: {{ printf("%i", 1) }}
+
 "product"
 expect: 6
 actual: {{ product(1,2,3) }}

@@ -59,6 +59,7 @@ import Text.Ginger.AST
 import Text.Ginger.Html
 import Text.Ginger.GVal
 import Text.Printf
+import Text.PrintfA
 import Data.Scientific (formatScientific)
 
 import Data.Text (Text)
@@ -172,6 +173,7 @@ defRunState tpl =
             , ("modulo", fromFunction . variadicNumericFunc 1 $ fromIntegral . modulo . Prelude.map Prelude.floor)
             , ("num", fromFunction . unaryFunc $ toGVal . asNumber)
             , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
+            , ("printf", fromFunction gfnPrintf)
             , ("ratio", fromFunction . variadicNumericFunc 1 $ Scientific.fromFloatDigits . ratio . Prelude.map Scientific.toRealFloat)
             , ("round", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.round)
             , ("show", fromFunction . unaryFunc $ fromString . show)
@@ -442,6 +444,22 @@ defRunState tpl =
                         then formatScientific Fixed (Just 0) dividedSize
                         else formatScientific Fixed (Just 1) dividedSize
             in formattedSize ++ " " ++ unitName
+
+        gfnPrintf :: Function (Run m h)
+        gfnPrintf [] = return def
+        gfnPrintf [(_, fmtStrG)] = return fmtStrG
+        gfnPrintf ((_, fmtStrG):args) = do
+            return . toGVal $ printfG fmtStr (fmap snd args)
+            where
+                fmtStr = Text.unpack $ asText fmtStrG
+
+printfG :: String -> [GVal m] -> String
+printfG fmt args = printfa fmt (fmap (P . asText) args)
+
+apply :: (a -> b -> b) -> b -> [a] -> b
+apply f z [] = z
+apply f z [x] = f x z
+apply f z (x:xs) = f x (apply f z xs)
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad
