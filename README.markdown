@@ -177,7 +177,48 @@ This is equivalent to:
 *Deviation from Jinja2:* Ginger does not distinguish between filters and
 functions at the semantics level; any function can be called as a filter,
 and vv., and the filter syntax is merely a syntactic variant of a function
-call.
+call. Further, Ginger treats functions as first-class values, and their names
+are just regular variable names.
+
+#### Binary operators
+
+All binary operators have aliases that are regular functions; they are listed
+below. For example, `1 + 2` resolves to `sum(1, 2)`. The aliases are variadic,
+that is, you can pass more than two arguments, e.g. `sum(1, 2, 4, 5)`.  This
+makes them slightly more useful than the operators, at the expense of
+readability.
+
+In order of precedence:
+
+1. Boolean (logical) operators:
+   - `||` (logical OR). Alias: `any`
+   - `&&` (logical AND). Alias: `all`
+2. Comparison operators:
+   - `==` (loose equality). Alias: `equals`
+   - `!=` (loose inequality). Alias: `nequals`
+   - `<` (numeric less-than). Alias: `less`
+   - `<=` (numeric less-than-or-equal). Alias: `lessEquals`
+   - `>` (numeric greater-than). Alias: `greater`
+   - `>=` (numeric greater-than-or-equal). Alias: `greaterEquals`
+3. Additive operators:
+   - `+` (addition). Alias: `sum`
+   - `-` (subtraction). Alias: `difference`
+   - `~` (string concatenation). Alias: `concat`
+4. Multiplicative operators:
+   - `*` (multiplication). Alias: `product`
+   - `//` (integer division). Alias: `int_ratio`
+   - `/` (division). Alias: `ratio`
+   - `%` (modulo). Alias: `modulo`
+
+#### Lambda expressions
+
+Lambda expressions allow you to create functions on the fly. The syntax is:
+
+    (argName0, argName1, ... argNameN) -> expression
+
+This creates a function value which, when called, binds arguments to the
+argument names `argName0` through `argNameN`, and evaluates `expression` in
+that context.
 
 ## Haskell API
 ### General
