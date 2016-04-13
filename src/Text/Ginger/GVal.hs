@@ -111,7 +111,10 @@ instance Show (GVal m) where
     show v
         | isNull v = "null"
         | isJust (asFunction v) = "<<function>>"
-        | isJust (asDictItems v) = "{" <> (mconcat . List.intersperse ", " $ [ show k <> ": " <> show v | (k, v) <- fromMaybe [] (asDictItems v) ]) <> "}"
+        | isJust (asDictItems v) =
+            let items = [ show k <> ": " <> show v | (k, v) <- fromMaybe [] (asDictItems v) ]
+                      ++ [ show k <> ": " <> show v | (k, v) <- Prelude.zip [0..] (fromMaybe [] $ asList v) ]
+            in "{" <> (mconcat . List.intersperse ", " $ items) <> "}"
         | isJust (asList v) = "[" <> (mconcat . List.intersperse ", " . Prelude.map show $ fromMaybe [] (asList v)) <> "]"
         | isJust (asNumber v) =
             case floatingOrInteger <$> asNumber v :: Maybe (Either Double Integer) of
