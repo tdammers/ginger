@@ -344,10 +344,18 @@ TODO
 
 "printf"
 
-expect: Hello
-actual: {{ printf("%s", "Hello") }}
 expect: 1
 actual: {{ printf("%i", 1) }}
+expect: 1
+actual: {{ printf("%i", "1") }}
+expect: 1
+actual: {{ printf("%i", 1.3) }}
+expect: 1.0
+actual: {{ printf("%f", 1) }}
+expect: 1.000
+actual: {{ printf("%.3f", 1) }}
+expect: Hello
+actual: {{ printf("%s", "Hello") }}
 
 "product"
 expect: 6

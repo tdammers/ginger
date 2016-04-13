@@ -454,12 +454,7 @@ defRunState tpl =
                 fmtStr = Text.unpack $ asText fmtStrG
 
 printfG :: String -> [GVal m] -> String
-printfG fmt args = printfa fmt (fmap (P . asText) args)
-
-apply :: (a -> b -> b) -> b -> [a] -> b
-apply f z [] = z
-apply f z [x] = f x z
-apply f z (x:xs) = f x (apply f z xs)
+printfG fmt args = printfa fmt (fmap P args)
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad

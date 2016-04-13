@@ -58,6 +58,7 @@ import Control.Monad ( forM, mapM )
 import Control.Monad.Trans (MonadTrans, lift)
 import Data.Default (Default, def)
 import Text.Printf
+import Debug.Trace (trace)
 
 import Text.Ginger.Html
 
@@ -133,9 +134,9 @@ instance PrintfArg (GVal m) where
             'c' -> formatString
                     (Text.unpack $ asText x)
                     fmt
-            _ -> formatRealFloat
-                    (toRealFloat . fromMaybe 0 . asNumber $ x :: Double)
-                    fmt
+            f -> if f `Prelude.elem` ("fFgGeE" :: [Char])
+                    then formatRealFloat (toRealFloat . fromMaybe 0 . asNumber $ x) fmt
+                    else formatInteger (Prelude.round . fromMaybe 0 . asNumber $ x) fmt
 
 -- * Representing functions as 'GVal's
 --
