@@ -508,6 +508,14 @@ actual: {{ foobar() }}
 expect: blabberoo
 actual: {{ foobar2(boink="nope", baz="blabber") }}
 
+** Lambdas **
+
+expect: 4
+actual: {{ ((x) -> x * x)(2) }}
+
+expect: Hello, world!
+actual: {{ ((greeting, name) -> greeting ~ ", " ~ name ~ "!")("Hello", "world") }}
+
 ** Call syntax **
 
 {% macro foobar3(a) -%}

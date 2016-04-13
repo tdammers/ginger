@@ -748,6 +748,12 @@ runExpression (CallE funcE argsEs) = do
     case func of
         Nothing -> return def
         Just f -> f args
+runExpression (LambdaE argNames body) = do
+    let fn args = withLocalScope $ do
+            forM (Prelude.zip argNames (fmap snd args)) $ \(argName, arg) ->
+                setVar argName arg
+            runExpression body
+    return $ fromFunction fn
 
 -- | Helper function to output a HTML value using whatever print function the
 -- context provides.

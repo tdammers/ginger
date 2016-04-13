@@ -438,7 +438,21 @@ closeNWP c = ignore $ do
     optional . ignore . char $ '\n'
 
 expressionP :: Monad m => Parser m Expression
-expressionP = booleanExprP
+expressionP = lambdaExprP <|> booleanExprP
+
+lambdaExprP :: Monad m => Parser m Expression
+lambdaExprP = do
+    argNames <- try $ do
+        char '('
+        spaces
+        argNames <- sepBy (spaces >> identifierP) (try $ spaces >> char ',')
+        char ')'
+        spaces
+        string "->"
+        spaces
+        return argNames
+    body <- expressionP
+    return $ LambdaE argNames body
 
 operativeExprP :: forall m. Monad m => Parser m Expression -> [ (String, Text) ] -> Parser m Expression
 operativeExprP operandP operators = do
