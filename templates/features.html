@@ -301,6 +301,12 @@ actual: {{ 12000|filesizeformat(true) }}
 expect: 1.4 MiB
 actual: {{ 1500000|filesizeformat(true) }}
 
+"filter"
+expect: 13
+actual: {{ [1, 0, 3]|filter(int) }}
+expect: 3
+actual: {{ [1, 2, 3]|filter(greater, 2) }}
+
 "not-equals"
 expect: no
 actual: {% if nequals(1, 1, 1) %}yes{% else %}no{% endif %}

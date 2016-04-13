@@ -159,6 +159,7 @@ defRunState tpl =
             , ("escape", fromFunction gfnEscape)
             , ("e", fromFunction gfnEscape)
             , ("filesizeformat", fromFunction gfnFileSizeFormat)
+            , ("filter", fromFunction gfnFilter)
             , ("equals", fromFunction gfnEquals)
             , ("nequals", fromFunction gfnNEquals)
             , ("greaterEquals", fromFunction gfnGreaterEquals)
@@ -452,6 +453,16 @@ defRunState tpl =
             return . toGVal $ printfG fmtStr (fmap snd args)
             where
                 fmtStr = Text.unpack $ asText fmtStrG
+
+        gfnFilter :: Function (Run m h)
+        gfnFilter [] = return def
+        gfnFilter [(_, xs)] = return xs
+        gfnFilter ((_, xs):(_, p):args) = do
+            pfnG <- maybe (fail "Not a function") return (asFunction p)
+            let pfn x = asBoolean <$> pfnG ((Nothing, x):args)
+                xsl = fromMaybe [] (asList xs)
+            filtered <- filterM pfn xsl
+            return $ toGVal filtered
 
 printfG :: String -> [GVal m] -> String
 printfG fmt args = printfa fmt (fmap P args)
