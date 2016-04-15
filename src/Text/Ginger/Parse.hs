@@ -438,7 +438,7 @@ closeNWP c = ignore $ do
     optional . ignore . char $ '\n'
 
 expressionP :: Monad m => Parser m Expression
-expressionP = lambdaExprP <|> booleanExprP
+expressionP = lambdaExprP <|> ternaryExprP
 
 lambdaExprP :: Monad m => Parser m Expression
 lambdaExprP = do
@@ -472,6 +472,22 @@ operativeExprP operandP operators = do
             rhs <- operandP
             spaces
             return (\lhs -> CallE (VarE funcName) [(Nothing, lhs), (Nothing, rhs)])
+
+ternaryExprP :: Monad m => Parser m Expression
+ternaryExprP = do
+    condition <- booleanExprP
+    spaces
+    ternaryTailP condition <|> return condition
+
+ternaryTailP :: Monad m => Expression -> Parser m Expression
+ternaryTailP condition = do
+    char '?'
+    spaces
+    yesBranch <- expressionP
+    char ':'
+    spaces
+    noBranch <- expressionP
+    return $ TernaryE condition yesBranch noBranch
 
 booleanExprP :: Monad m => Parser m Expression
 booleanExprP =

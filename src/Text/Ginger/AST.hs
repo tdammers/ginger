@@ -59,4 +59,5 @@ data Expression
     | MemberLookupE Expression Expression -- ^ foo[bar] (also dot access)
     | CallE Expression [(Maybe Text, Expression)] -- ^ foo(bar=baz, quux)
     | LambdaE [Text] Expression -- ^ (foo, bar) -> expr
+    | TernaryE Expression Expression Expression -- ^ expr ? expr : expr
     deriving (Show)

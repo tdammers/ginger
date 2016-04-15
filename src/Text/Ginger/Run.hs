@@ -754,6 +754,10 @@ runExpression (LambdaE argNames body) = do
                 setVar argName arg
             runExpression body
     return $ fromFunction fn
+runExpression (TernaryE condition yes no) = do
+    condVal <- runExpression condition
+    let expr = if asBoolean condVal then yes else no
+    runExpression expr
 
 -- | Helper function to output a HTML value using whatever print function the
 -- context provides.

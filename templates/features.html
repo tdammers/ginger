@@ -516,6 +516,11 @@ actual: {{ ((x) -> x * x)(2) }}
 expect: Hello, world!
 actual: {{ ((greeting, name) -> greeting ~ ", " ~ name ~ "!")("Hello", "world") }}
 
+** Ternary operator **
+
+expect: yes
+actual: {{ 1 ? "yes" : "no" }}
+
 ** Call syntax **
 
 {% macro foobar3(a) -%}
