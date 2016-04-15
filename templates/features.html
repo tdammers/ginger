@@ -146,6 +146,14 @@ for x in [ "foo", "bar", "baz" ]: <x>
 expect: <foo><bar><baz>
 actual: {% for x in [ "foo", "bar", "baz" ] %}<{{x}}>{% endfor %}
 
+for x in []: <x> else <no>
+expect: <no>
+actual: {% for x in [] %}<{{x}}>{% else %}<no>{% endfor %}
+
+for x in [a]: <x> else <no>
+expect: <a>
+actual: {% for x in ["a"] %}<{{x}}>{% else %}<no>{% endfor %}
+
 ** Conditionals **
 
 if true then "yes" else "no"

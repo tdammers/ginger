@@ -20,7 +20,7 @@ import Text.Parsec ( ParseError
                    , try, lookAhead
                    , manyTill, oneOf, string, notFollowedBy, between, sepBy
                    , eof, spaces, anyChar, char
-                   , option
+                   , option, optionMaybe
                    , unexpected
                    , digit
                    , getState, modifyState
@@ -333,8 +333,15 @@ forStmtP :: Monad m => Parser m Statement
 forStmtP = do
     (iteree, varNameVal, varNameIndex) <- fancyTagP "for" forHeadP
     body <- statementsP
+    elseBranchMay <- optionMaybe $ do
+        try $ simpleTagP "else"
+        statementsP
     simpleTagP "endfor"
-    return $ ForS varNameIndex varNameVal iteree body
+    let forLoop = ForS varNameIndex varNameVal iteree body
+    return $ maybe
+        forLoop
+        (\elseBranch -> IfS iteree forLoop elseBranch)
+        elseBranchMay
 
 includeP :: Monad m => Parser m Statement
 includeP = do
