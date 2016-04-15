@@ -521,6 +521,15 @@ actual: {{ ((greeting, name) -> greeting ~ ", " ~ name ~ "!")("Hello", "world") 
 expect: yes
 actual: {{ 1 ? "yes" : "no" }}
 
+expect: b
+actual: {{ true ? false ? "a" : "b" : "c" }}
+
+expect: a
+actual: {{ true ? true ? "a" : "b" : "c" }}
+
+expect: c
+actual: {{ false ? true ? "a" : "b" : "c" }}
+
 ** Call syntax **
 
 {% macro foobar3(a) -%}

@@ -210,6 +210,20 @@ In order of precedence:
    - `/` (division). Alias: `ratio`
    - `%` (modulo). Alias: `modulo`
 
+#### The Ternary Operator
+
+Ginger borrows a ternary operator from the C family of languages. The syntax
+is:
+
+    condition ? yes-expression : no-expression
+
+If condition evaluates to a truthy value, then the yes-expression is returned,
+otherwise, the no-expression is returned.
+
+The ternary operator has lower precedence than any binary operator, and it
+associates such that `a ? b ? c : d : e` is equivalent to
+`a ? (b ? c : d) : e`.
+
 #### Lambda expressions
 
 Lambda expressions allow you to create functions on the fly. The syntax is:
