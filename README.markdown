@@ -224,6 +224,9 @@ The ternary operator has lower precedence than any binary operator, and it
 associates such that `a ? b ? c : d : e` is equivalent to
 `a ? (b ? c : d) : e`.
 
+As an alternative syntax flavor, Ginger also supports a Python-style ternary
+construct: `b if a else c` is equivalent to `a ? b : c`.
+
 #### Lambda expressions
 
 Lambda expressions allow you to create functions on the fly. The syntax is:

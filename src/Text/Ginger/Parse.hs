@@ -475,16 +475,28 @@ operativeExprP operandP operators = do
 
 ternaryExprP :: Monad m => Parser m Expression
 ternaryExprP = do
-    condition <- booleanExprP
+    expr1 <- booleanExprP
     spaces
-    ternaryTailP condition <|> return condition
+    cTernaryTailP expr1 <|> pyTernaryTailP expr1 <|> return expr1
 
-ternaryTailP :: Monad m => Expression -> Parser m Expression
-ternaryTailP condition = do
+cTernaryTailP :: Monad m => Expression -> Parser m Expression
+cTernaryTailP condition = do
     char '?'
     spaces
     yesBranch <- expressionP
     char ':'
+    spaces
+    noBranch <- expressionP
+    return $ TernaryE condition yesBranch noBranch
+
+pyTernaryTailP :: Monad m => Expression -> Parser m Expression
+pyTernaryTailP yesBranch = do
+    string "if"
+    notFollowedBy identCharP
+    spaces
+    condition <- booleanExprP
+    string "else"
+    notFollowedBy identCharP
     spaces
     noBranch <- expressionP
     return $ TernaryE condition yesBranch noBranch

@@ -521,8 +521,14 @@ actual: {{ ((greeting, name) -> greeting ~ ", " ~ name ~ "!")("Hello", "world") 
 expect: yes
 actual: {{ 1 ? "yes" : "no" }}
 
+expect: yes
+actual: {{ "yes" if 1 else "no" }}
+
 expect: b
 actual: {{ true ? false ? "a" : "b" : "c" }}
+
+expect: b
+actual: {{ "a" if false else "b" if true else "c" }}
 
 expect: a
 actual: {{ true ? true ? "a" : "b" : "c" }}
