@@ -154,6 +154,13 @@ for x in [a]: <x> else <no>
 expect: <a>
 actual: {% for x in ["a"] %}<{{x}}>{% else %}<no>{% endfor %}
 
+** The `loop` auto-variable
+
+expect: (red/foo)(green/bar)(red/baz)
+actual: {% for x in ["foo", "bar", "baz"] -%}
+            ({{ loop.cycle("red", "green") }}/{{ x }})
+        {%- endfor %}
+
 ** Conditionals **
 
 if true then "yes" else "no"

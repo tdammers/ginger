@@ -288,6 +288,7 @@ orderedDict xs =
 -- | Construct a pair from a key and a value.
 (~>) :: ToGVal m a => Text -> a -> Pair m
 k ~> v = (k, toGVal v)
+infixr 8 ~>
 
 -- | Silly helper function, needed to bypass the default 'Show' instance of
 -- 'Scientific' in order to make integral 'Scientific's look like integers.

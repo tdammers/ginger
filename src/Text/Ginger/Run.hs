@@ -77,7 +77,7 @@ import Data.HashMap.Strict (HashMap)
 import Data.Scientific (Scientific)
 import Data.Scientific as Scientific
 import Data.Default (def)
-import Safe (readMay, lastDef)
+import Safe (readMay, lastDef, headMay)
 import Network.HTTP.Types (urlEncode)
 import Debug.Trace (trace)
 
@@ -642,14 +642,33 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
             if isJust (asDictItems iteree)
                 then [ (toGVal k, v) | (k, v) <- fromMaybe [] (asDictItems iteree) ]
                 else Prelude.zip (Prelude.map toGVal ([0..] :: [Int])) (fromMaybe [] (asList iteree))
-    withLocalScope $ forM_ iterPairs iteration
-    where
-        iteration (index, value) = do
+        numItems :: Int
+        numItems = Prelude.length iterPairs
+        cycle :: Int -> [(Maybe Text, GVal (Run m h))] -> Run m h (GVal (Run m h))
+        cycle index args = return
+                         . fromMaybe def
+                         . headMay
+                         . Prelude.drop (index `Prelude.mod` Prelude.length args)
+                         . fmap snd
+                         $ args
+        iteration :: (Int, (GVal (Run m h), GVal (Run m h))) -> Run m h ()
+        iteration (index, (key, value)) = do
             setVar varNameValue value
+            setVar "loop" $
+                dict [ "index" ~> Prelude.succ index
+                     , "index0" ~> index
+                     , "revindex" ~> (numItems - index)
+                     , "revindex0" ~> (numItems - index - 1)
+                     , "first" ~> (index == 0)
+                     , "last" ~> (Prelude.succ index == numItems)
+                     , "length" ~> numItems
+                     , "cycle" ~> (fromFunction $ cycle index)
+                     ]
             case varNameIndex of
                 Nothing -> return ()
-                Just n -> setVar n index
+                Just n -> setVar n key
             runStatement body
+    withLocalScope $ forM_ (Prelude.zip [0..] iterPairs) iteration
 
 runStatement (PreprocessedIncludeS tpl) =
     withTemplate tpl $ runTemplate tpl
