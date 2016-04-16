@@ -637,38 +637,47 @@ runStatement (ScopedS body) = withLocalScope runInner
         runInner = runStatement body
 
 runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
-    iteree <- runExpression itereeExpr
-    let iterPairs =
-            if isJust (asDictItems iteree)
-                then [ (toGVal k, v) | (k, v) <- fromMaybe [] (asDictItems iteree) ]
-                else Prelude.zip (Prelude.map toGVal ([0..] :: [Int])) (fromMaybe [] (asList iteree))
-        numItems :: Int
-        numItems = Prelude.length iterPairs
-        cycle :: Int -> [(Maybe Text, GVal (Run m h))] -> Run m h (GVal (Run m h))
-        cycle index args = return
-                         . fromMaybe def
-                         . headMay
-                         . Prelude.drop (index `Prelude.mod` Prelude.length args)
-                         . fmap snd
-                         $ args
-        iteration :: (Int, (GVal (Run m h), GVal (Run m h))) -> Run m h ()
-        iteration (index, (key, value)) = do
-            setVar varNameValue value
-            setVar "loop" $
-                dict [ "index" ~> Prelude.succ index
-                     , "index0" ~> index
-                     , "revindex" ~> (numItems - index)
-                     , "revindex0" ~> (numItems - index - 1)
-                     , "first" ~> (index == 0)
-                     , "last" ~> (Prelude.succ index == numItems)
-                     , "length" ~> numItems
-                     , "cycle" ~> (fromFunction $ cycle index)
-                     ]
-            case varNameIndex of
-                Nothing -> return ()
-                Just n -> setVar n key
-            runStatement body
-    withLocalScope $ forM_ (Prelude.zip [0..] iterPairs) iteration
+    let go :: Int -> GVal (Run m h) -> Run m h (GVal (Run m h))
+        go recursionDepth iteree = do
+            let iterPairs =
+                    if isJust (asDictItems iteree)
+                        then [ (toGVal k, v) | (k, v) <- fromMaybe [] (asDictItems iteree) ]
+                        else Prelude.zip (Prelude.map toGVal ([0..] :: [Int])) (fromMaybe [] (asList iteree))
+                numItems :: Int
+                numItems = Prelude.length iterPairs
+                cycle :: Int -> [(Maybe Text, GVal (Run m h))] -> Run m h (GVal (Run m h))
+                cycle index args = return
+                                 . fromMaybe def
+                                 . headMay
+                                 . Prelude.drop (index `Prelude.mod` Prelude.length args)
+                                 . fmap snd
+                                 $ args
+                loop :: [(Maybe Text, GVal (Run m h))] -> Run m h (GVal (Run m h))
+                loop [] = fail "Invalid call to `loop`; at least one argument is required"
+                loop ((_, loopee):_) = go (Prelude.succ recursionDepth) loopee
+                iteration :: (Int, (GVal (Run m h), GVal (Run m h))) -> Run m h ()
+                iteration (index, (key, value)) = do
+                    setVar varNameValue value
+                    setVar "loop" $
+                        (dict [ "index" ~> Prelude.succ index
+                             , "index0" ~> index
+                             , "revindex" ~> (numItems - index)
+                             , "revindex0" ~> (numItems - index - 1)
+                             , "depth" ~> Prelude.succ recursionDepth
+                             , "depth0" ~> recursionDepth
+                             , "first" ~> (index == 0)
+                             , "last" ~> (Prelude.succ index == numItems)
+                             , "length" ~> numItems
+                             , "cycle" ~> (fromFunction $ cycle index)
+                             ])
+                             { asFunction = Just loop }
+                    case varNameIndex of
+                        Nothing -> return ()
+                        Just n -> setVar n key
+                    runStatement body
+            withLocalScope $ forM_ (Prelude.zip [0..] iterPairs) iteration
+            return def
+    runExpression itereeExpr >>= go 0 >> return ()
 
 runStatement (PreprocessedIncludeS tpl) =
     withTemplate tpl $ runTemplate tpl

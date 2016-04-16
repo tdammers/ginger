@@ -154,11 +154,18 @@ for x in [a]: <x> else <no>
 expect: <a>
 actual: {% for x in ["a"] %}<{{x}}>{% else %}<no>{% endfor %}
 
-** The `loop` auto-variable
+** The `loop` auto-variable **
 
 expect: (red/foo)(green/bar)(red/baz)
 actual: {% for x in ["foo", "bar", "baz"] -%}
             ({{ loop.cycle("red", "green") }}/{{ x }})
+        {%- endfor %}
+
+** Recursive loops **
+
+expect: a@1(b@2()c@2(d@3()))
+actual: {% for k, x in {"a":{"b":null,"c":{"d":null}}} -%}
+            {{ k }}@{{ loop.depth }}({{ loop(x) }})
         {%- endfor %}
 
 ** Conditionals **
