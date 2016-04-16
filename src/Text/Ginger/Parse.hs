@@ -349,7 +349,8 @@ includeP = do
     include sourceName
 
 forHeadP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
-forHeadP = try forHeadInP <|> forHeadAsP
+forHeadP =
+    (try forHeadInP <|> forHeadAsP) <* optional (string "recursive" >> spaces)
 
 forIteratorP :: Monad m => Parser m (VarName, Maybe VarName)
 forIteratorP = try forIndexedIteratorP <|> try forSimpleIteratorP <?> "iteration variables"

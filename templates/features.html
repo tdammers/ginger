@@ -157,7 +157,7 @@ actual: {% for x in ["a"] %}<{{x}}>{% else %}<no>{% endfor %}
 ** The `loop` auto-variable **
 
 expect: (red/foo)(green/bar)(red/baz)
-actual: {% for x in ["foo", "bar", "baz"] -%}
+actual: {% for x in ["foo", "bar", "baz"] recursive -%}
             ({{ loop.cycle("red", "green") }}/{{ x }})
         {%- endfor %}
 
