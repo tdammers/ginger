@@ -1,4 +1,5 @@
 {-#LANGUAGE OverloadedStrings #-}
+{-#LANGUAGE FlexibleContexts #-}
 module Text.Ginger.SimulationTests
 where
 
@@ -8,64 +9,67 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Data.Default (def)
 import Data.Text (Text)
+import qualified Data.Text as Text
 import Data.Maybe (fromMaybe)
 import Control.Monad.Writer (WriterT, runWriterT)
 import Control.Monad.IO.Class (liftIO)
 import Data.IORef
 import Data.Monoid
+import qualified Data.Aeson as JSON
+import qualified Data.ByteString.Lazy.UTF8 as LUTF8
 
 simulationTests :: TestTree
 simulationTests = testGroup "Simulation"
-    [ testCase "Smoke Test" $ mkTest [] [] "Hello" "Hello"
+    [ testCase "Smoke Test" $ mkTestHtml [] [] "Hello" "Hello"
     , testGroup "Comments"
         -- There is a comment between the two dashes that should not appear in
         -- the output.
-        [ testCase "Comment does not appear in output" $ mkTest
+        [ testCase "Comment does not appear in output" $ mkTestHtml
             [] [] "- {# Comments #} -" "-  -"
         -- A comment tag ending with -#} instead of #} should eat subsequent
         -- whitespace, and a comment tag starting with {#- instead of {# should
         -- eat preceding whitespace.  There is such a comment between the
         -- following dashes, so they should appear on the same line, with no
         -- space between them:
-        , testCase "Dashed comments eat whitespace" $ mkTest
+        , testCase "Dashed comments eat whitespace" $ mkTestHtml
             [] [] "- {#- Comment -#} -" "--"
         ]
     , testGroup "Literals"
-        [ testCase "String: \"foobar\"" $ mkTest
+        [ testCase "String: \"foobar\"" $ mkTestHtml
             [] [] "{{ \"foobar\" }}" "foobar"
         , testGroup "Numbers"
-            [ testCase "123" $ mkTest
+            [ testCase "123" $ mkTestHtml
                 [] [] "{{ 123 }}" "123"
-            , testCase "3.1415" $ mkTest
+            , testCase "3.1415" $ mkTestHtml
                 [] [] "{{ 3.1415 }}" "3.1415"
             ]
         , testGroup "Booleans"
-            [ testCase "true" $ mkTest
+            [ testCase "true" $ mkTestHtml
                 [] [] "{{ true }}" "1"
-            , testCase "false" $ mkTest
+            , testCase "false" $ mkTestHtml
                 [] [] "{{ false }}" ""
             ]
-        , testCase "Null" $ mkTest
+        , testCase "Null" $ mkTestHtml
             [] [] "{{ null }}" ""
         ]
     , testGroup "Simple list/object constructs"
-        [ testCase "Lists" $ mkTest
+        [ testCase "Lists" $ mkTestHtml
             [] [] "{{ [\"foo\",\"bar\",\"baz\" ] }}" "foobarbaz"
-        , testCase "Nested lists" $ mkTest
+        , testCase "Nested lists" $ mkTestHtml
             [] [] "{{ [ \"foo\", \"bar\", [ 1, 2, 3 ], \"baz\" ] }}" "foobar123baz"
-        , testCase "Objects" $ mkTest
+        , testCase "Objects" $ mkTestHtml
             [] [] "{{ { \"foo\":\"bar\" } }}" "bar"
-        , testCase "Nested object/list constructs" $ mkTest
+        , testCase "Nested object/list constructs" $ mkTestHtml
             [] [] "{{ { \"foo\":[\"foo\", {\"asdf\" : \"bar\"}, [\"baz\" ]] } }}" "foobarbaz"
         ]
     , testGroup "Accessing object/list members"
-        [ testCase "by integer index" $ mkTest
+        [ testCase "by integer index" $ mkTestHtml
             [] [] "{{ [ \"foo\", \"bar\" ][1] }}" "bar"
-        , testCase "by string key" $ mkTest
+        , testCase "by string key" $ mkTestHtml
             [] [] "{{ { \"foo\": \"bar\", \"baz\": \"quux\" }['foo'] }}" "bar"
-        , testCase "by property name" $ mkTest
+        , testCase "by property name" $ mkTestHtml
             [] [] "{{ { \"foo\": \"bar\", \"baz\": \"quux\" }.foo }}" "bar"
-        , testCase "multi-level mixed" $ mkTest
+        , testCase "multi-level mixed" $ mkTestHtml
             [] [] "{{ { \"foo\": { \"oink\": \"nope\", \"baz\": { \"boop\": [], \"quux\": \"bar\" }}}.foo.baz[\"quux\"] }}" "bar"
         ]
     , testGroup "Function calls"
@@ -79,7 +83,7 @@ simulationTests = testGroup "Simulation"
                 printF = \xs -> do
                     liftIO . writeIORef buf . mconcat . map (asText . snd) $ xs
                     return def
-            mkTest [("print", fromFunction printF)] [] "{{ print(\"Hello\") }}" ""
+            mkTestHtml [("print", fromFunction printF)] [] "{{ print(\"Hello\") }}" ""
             actual <- readIORef buf
             let expected = "Hello"
             assertEqual "" actual expected
@@ -89,63 +93,63 @@ simulationTests = testGroup "Simulation"
                 printF = \xs -> do
                     liftIO . writeIORef buf . mconcat . map (asText . snd) $ xs
                     return def
-            mkTest [("print", fromFunction printF)] [] "{{ \"Hello\"|print }}" ""
+            mkTestHtml [("print", fromFunction printF)] [] "{{ \"Hello\"|print }}" ""
             actual <- readIORef buf
             let expected = "Hello"
             assertEqual "" actual expected
         ]
     , testGroup "Addition"
         [ testCase "1 + 1 = 2" $ do
-            mkTest [] [] "{{ sum(1, 1) }}" "2"
+            mkTestHtml [] [] "{{ sum(1, 1) }}" "2"
         , testCase "1 + 1 = 2" $ do
-            mkTest [] [] "{{ 1 + 1 }}" "2"
+            mkTestHtml [] [] "{{ 1 + 1 }}" "2"
         ]
     , testGroup "Subtraction"
         [ testCase "1 - 1 = 0" $ do
-            mkTest [] [] "{{ 1 - 1 }}" "0"
+            mkTestHtml [] [] "{{ 1 - 1 }}" "0"
         ]
     , testGroup "Concatenation"
         [ testCase "1 ~ \"foo\" = 1foo" $ do
-            mkTest [] [] "{{ 1 ~ \"foo\" }}" "1foo"
+            mkTestHtml [] [] "{{ 1 ~ \"foo\" }}" "1foo"
         ]
     , testGroup "Multiplication"
         [ testCase "5 * 5 = 25" $ do
-            mkTest [] [] "{{ 5 * 5 }}" "25"
+            mkTestHtml [] [] "{{ 5 * 5 }}" "25"
         ]
     , testGroup "Division"
         [ testCase "24 / 6 = 4" $ do
-            mkTest [] [] "{{ 24 / 6 }}" "4"
+            mkTestHtml [] [] "{{ 24 / 6 }}" "4"
         , testCase "3 / 2 = 1.5" $ do
-            mkTest [] [] "{{ 3 / 2 }}" "1.5"
+            mkTestHtml [] [] "{{ 3 / 2 }}" "1.5"
         ]
     , testGroup "Integer Division"
         [ testCase "24 // 6 = 4" $ do
-            mkTest [] [] "{{ 24 // 6 }}" "4"
+            mkTestHtml [] [] "{{ 24 // 6 }}" "4"
         , testCase "3 // 2 = 1" $ do
-            mkTest [] [] "{{ 3 // 2 }}" "1"
+            mkTestHtml [] [] "{{ 3 // 2 }}" "1"
         ]
     , testGroup "Modulo"
         [ testCase "7 % 3 = 2" $ do
-            mkTest [] [] "{{ 7 % 3 }}" "1"
+            mkTestHtml [] [] "{{ 7 % 3 }}" "1"
         ]
     , testGroup "Iteration"
         [ testCase "for x in [ \"foo\", \"bar\", \"baz\" ]: <x>" $ do
-            mkTest [] [] "{% for x in [ \"foo\", \"bar\", \"baz\" ] %}<{{x}}>{% endfor %}" "<foo><bar><baz>"
+            mkTestHtml [] [] "{% for x in [ \"foo\", \"bar\", \"baz\" ] %}<{{x}}>{% endfor %}" "<foo><bar><baz>"
         , testCase "for x in []: <x> else <no>" $ do
-            mkTest [] [] "{% for x in [] %}<{{x}}>{% else %}<no>{% endfor %}" "<no>"
+            mkTestHtml [] [] "{% for x in [] %}<{{x}}>{% else %}<no>{% endfor %}" "<no>"
         , testCase "for x in [a]: <x> else <no>" $ do
-            mkTest [] [] "{% for x in [\"a\"] %}<{{x}}>{% else %}<no>{% endfor %}" "<a>"
+            mkTestHtml [] [] "{% for x in [\"a\"] %}<{{x}}>{% else %}<no>{% endfor %}" "<a>"
         ]
     , testGroup "The `loop` auto-variable"
         [ testCase "loop.cycle" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 ( "{% for x in [\"foo\", \"bar\", \"baz\"] recursive -%}" ++
                   "({{ loop.cycle(\"red\", \"green\") }}/{{ x }})" ++
                   "{%- endfor %}"
                 )
                 "(red/foo)(green/bar)(red/baz)" 
         , testCase "recursive loops" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 ( "{% for k, x in {\"a\":{\"b\":null,\"c\":{\"d\":null}}} -%}" ++
                   "{{ k }}@{{ loop.depth }}({{ loop(x) }})" ++
                   "{%- endfor %}" :: String
@@ -154,228 +158,228 @@ simulationTests = testGroup "Simulation"
         ]
     , testGroup "Conditionals"
         [ testCase "if true then \"yes\" else \"no\"" $ do
-            mkTest [] [] "{% if true %}yes{% else %}no{% endif %}" "yes"
+            mkTestHtml [] [] "{% if true %}yes{% else %}no{% endif %}" "yes"
         , testCase "if false then \"yes\" else if false then \"maybe\" else \"no\"" $ do
-            mkTest [] [] "{% if false %}yes{% elif false %}maybe{% else %}no{% endif %}" "no"
+            mkTestHtml [] [] "{% if false %}yes{% elif false %}maybe{% else %}no{% endif %}" "no"
         , testCase "if false then \"yes\" else if true then \"maybe\" else \"no\"" $ do
-            mkTest [] [] "{% if false %}yes{% elif true %}maybe{% else %}no{% endif %}" "maybe"
+            mkTestHtml [] [] "{% if false %}yes{% elif true %}maybe{% else %}no{% endif %}" "maybe"
         ]
     , testGroup "Comparisons"
         [ testCase "if 1 == 1 then \"yes\" else \"no\"" $ do
-            mkTest [] [] "{% if (1 == 1) %}yes{% else %}no{% endif %}" "yes"
+            mkTestHtml [] [] "{% if (1 == 1) %}yes{% else %}no{% endif %}" "yes"
         , testCase "if 1 > 0 then \"yes\" else \"no\"" $ do
-            mkTest [] [] "{% if (1 > 0) %}yes{% else %}no{% endif %}" "yes"
+            mkTestHtml [] [] "{% if (1 > 0) %}yes{% else %}no{% endif %}" "yes"
         , testCase "if 1 > null then \"yes\" else \"no\"" $ do
-            mkTest [] [] "{% if (1 > null) %}yes{% else %}no{% endif %}" "no"
+            mkTestHtml [] [] "{% if (1 > null) %}yes{% else %}no{% endif %}" "no"
         , testCase "if 1 < 2 then \"yes\" else \"no\"" $ do
-            mkTest [] [] "{% if (1 < 2) %}yes{% else %}no{% endif %}" "yes"
+            mkTestHtml [] [] "{% if (1 < 2) %}yes{% else %}no{% endif %}" "yes"
         , testCase "if null < 1 then \"yes\" else \"no\"" $ do
-            mkTest [] [] "{% if (null < 1) %}yes{% else %}no{% endif %}" "no"
+            mkTestHtml [] [] "{% if (null < 1) %}yes{% else %}no{% endif %}" "no"
         ]
     , testGroup "Boolean AND"
         [ testCase "AND (both)" $ do
-            mkTest [] [] "{% if 1 && 2 %}yes{% else %}no{% endif %}" "yes"
+            mkTestHtml [] [] "{% if 1 && 2 %}yes{% else %}no{% endif %}" "yes"
         , testCase "AND (only one)" $ do
-            mkTest [] [] "{% if 1 && 0 %}yes{% else %}no{% endif %}" "no"
+            mkTestHtml [] [] "{% if 1 && 0 %}yes{% else %}no{% endif %}" "no"
         , testCase "AND (neither)" $ do
-            mkTest [] [] "{% if 0 && 0 %}yes{% else %}no{% endif %}" "no"
+            mkTestHtml [] [] "{% if 0 && 0 %}yes{% else %}no{% endif %}" "no"
         ]
     , testGroup "Boolean AND"
         [ testCase "OR (both)" $ do
-            mkTest [] [] "{% if 1 || 2 %}yes{% else %}no{% endif %}" "yes"
+            mkTestHtml [] [] "{% if 1 || 2 %}yes{% else %}no{% endif %}" "yes"
         , testCase "OR (only one)" $ do
-            mkTest [] [] "{% if 1 || 0 %}yes{% else %}no{% endif %}" "yes"
+            mkTestHtml [] [] "{% if 1 || 0 %}yes{% else %}no{% endif %}" "yes"
         , testCase "OR (either)" $ do
-            mkTest [] [] "{% if 0 || 0 %}yes{% else %}no{% endif %}" "no"
+            mkTestHtml [] [] "{% if 0 || 0 %}yes{% else %}no{% endif %}" "no"
         ]
     , testGroup "Built-in filters/functions"
         [ testCase "\"abs\"" $ do
-            mkTest [] [] "{{ -2|abs }}" "2"
+            mkTestHtml [] [] "{{ -2|abs }}" "2"
         , testGroup "\"any\""
             [ testCase "\"any\" (both)" $ do
-                mkTest [] [] "{% if any(1, 1, true) %}yes{% else %}no{% endif %}" "yes"
+                mkTestHtml [] [] "{% if any(1, 1, true) %}yes{% else %}no{% endif %}" "yes"
             , testCase "\"any\" (just one)" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{% if any(0, 1, false) %}yes{% else %}no{% endif %}"
                     "yes"
             , testCase "\"any\" (neither)" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{% if any(0, 0, false) %}yes{% else %}no{% endif %}"
                     "no"
             ]
         , testGroup "\"all\""
             [ testCase "\"all\" (both)" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{% if all(1, 1, true) %}yes{% else %}no{% endif %}"
                     "yes"
             , testCase "\"all\" (just one)" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{% if all(0, 1, false) %}yes{% else %}no{% endif %}"
                     "no"
             , testCase "\"all\" (neither)" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{% if all(0, 0, false) %}yes{% else %}no{% endif %}"
                     "no"
             ]
         , testGroup "\"ceil\""
             [ testCase "14.1" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 14.1|ceil }}"
                     "15"
             , testCase "-14.1" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ -14.1|ceil }}"
                     "-14"
             , testCase "-14.8" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ -14.8|ceil }}"
                     "-14"
             ]
         , testCase "\"capitalize\"" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{{ \"this is the end of the world\"|capitalize }}"
                 "This is the end of the world"
         , testGroup "\"center\"" 
             [ testCase "extra space" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ \"asdf\"|center(12) }}"
                     "    asdf    "
             , testCase "no extra space" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ \"foobar\"|center(2) }}"
                     "foobar"
             ]
         , testCase "\"concat\"" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{{ [\"hello\", \"world\"]|concat }}"
                 "helloworld"
         , testGroup "\"contains\""
             [ testCase "single match" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{% if ['hello', 'world']|contains('hello') %}yes{% else %}no{% endif %}"
                     "yes"
             , testCase "multi match" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{% if ['hello', 'world']|contains('hello', 'world') %}yes{% else %}no{% endif %}"
                     "yes"
             , testCase "non-match" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{% if ['hello', 'world']|contains('hello', 'you', 'world') %}yes{% else %}no{% endif %}"
                     "no"
             ]
         , testGroup "\"default\"" 
             [ testCase "trigger default" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 0|default(\"hi\") }}"
                     "hi"
             , testCase "use truthy value" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ \"hi\"|default(\"nope\") }}"
                     "hi"
             ]
         , testCase "\"difference\"" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{{ difference(5,2) }}"
                 "3"
         , testGroup "\"escape\""
             [ testCase "single item" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ escape('<')|raw }}"
                     "&lt;"
             , testCase "multiple items" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ escape('<', '>')|raw }}"
                     "&lt;&gt;"
             ]
         , testGroup "\"equals\""
             [ testCase "all equal" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{% if equals(1, 1, 1) %}yes{% else %}no{% endif %}"
                     "yes"
             , testCase "some equal" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{% if equals(1, 1, 2) %}yes{% else %}no{% endif %}"
                     "no"
             ]
         , testGroup "\"filesizeformat\""
             [ testCase "bytes" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 100|filesizeformat }}"
                     "100 B"
             , testCase "kilobytes" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 12000|filesizeformat }}"
                     "12 kB"
             , testCase "megabytes" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 1500000|filesizeformat }}"
                     "1.5 MB"
             , testCase "bytes (2-based)" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 100|filesizeformat(true) }}"
                     "100 B"
             , testCase "kibibytes" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 12000|filesizeformat(true) }}"
                     "11.7 kiB"
             , testCase "mebibytes" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 1500000|filesizeformat(true) }}"
                     "1.4 MiB"
             ]
         , testGroup "\"filter\""
             [ testCase "simple case" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ [1, 0, 3]|filter(int) }}"
                     "13"
             , testCase "with extra argument" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ [1, 2, 3]|filter(greater, 2) }}"
                     "3"
             ]
         , testGroup "\"not-equals\""
             [ testCase "all equal" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{% if nequals(1, 1, 1) %}yes{% else %}no{% endif %}"
                     "no"
             , testCase "not all equal" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{% if nequals(1, 1, 2) %}yes{% else %}no{% endif %}"
                     "yes"
             ]
         , testGroup "\"floor\""
             [ testCase "14.1" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 14.1|floor }}"
                     "14"
             , testCase "14.8" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 14.8|floor }}"
                     "14"
             , testCase "-14.1" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ -14.1|floor }}"
                     "-15"
             , testCase "-14.8" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ -14.8|floor }}"
                     "-15"
             ]
         , testGroup "\"int\""
             [ testCase "14.1" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 14.1|int }}"
                     "14"
             , testCase "14.8" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 14.8|int }}"
                     "14"
             , testCase "-14.1" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ -14.1|int }}"
                     "-14"
             , testCase "-14.8" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ -14.8|int }}"
                     "-14"
             ]
@@ -384,7 +388,7 @@ simulationTests = testGroup "Simulation"
         -- \"iterable\"
         -- TODO
         , testCase "\"length\"" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{{ [1,2,3]|length }}"
                 "3"
         -- \"modulo\"
@@ -393,204 +397,204 @@ simulationTests = testGroup "Simulation"
         -- \"printf\"
         , testGroup "\"printf\""
             [ testCase "%s, passed as int" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ printf(\"%i\", 1) }}"
                     "1"
             , testCase "%s, passed as string" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ printf(\"%i\", \"1\") }}"
                     "1"
             , testCase "%i, passed as float" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ printf(\"%i\", 1.3) }}"
                     "1"
             , testCase "%f, passed as int" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ printf(\"%f\", 1) }}"
                     "1.0"
             , testCase "%.3f, passed as int" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ printf(\"%.3f\", 1) }}"
                     "1.000"
             , testCase "%s, string" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ printf(\"%s\", \"Hello\") }}"
                     "Hello"
             ]
         , testCase "\"product\"" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{{ product(1,2,3) }}"
                 "6"
         , testCase "\"ratio\"" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{{ ratio(6, 1.5, 2) }}"
                 "2"
         , testGroup "\"round\""
             [ testCase "14.1" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 14.1|round }}"
                     "14"
             , testCase "14.8" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 14.8|round }}"
                     "15"
             , testCase "-14.1" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ -14.1|round }}"
                     "-14"
             , testCase "-14.8" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ -14.8|round }}"
                     "-15"
             ]
         -- \"show\"
         -- TODO
         , testCase "\"str\"" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{{ str(123) }}"
                 "123"
         , testCase "\"sum\"" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{{sum(1, 2, 3)}}"
                 "6"
         , testGroup "\"truncate\""
             [ testCase "14.1" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 14.1|truncate }}"
                     "14"
             , testCase "14.8" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ 14.8|truncate }}"
                     "14"
             , testCase "-14.1" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ -14.1|truncate }}"
                     "-14"
             , testCase "-14.8" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ -14.8|truncate }}"
                     "-14"
             ]
         , testCase "\"urlencode\"" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{{ \"a/b c\"|urlencode }}"
                 "a%2Fb%20c"
         , testGroup "\"sort\""
             [ testCase "simple" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ [2,3,1]|sort }}"
                     "123"
             , testCase "reverse" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ [2,3,1]|sort(reverse=true) }}"
                     "321"
             , testCase "sort by key" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ [ {\"age\":30, \"name\":\"zzz\"}, {\"age\":41, \"name\":\"aaa\"} ]|sort(by=\"name\") }}"
                     "41aaa30zzz"
             , testCase "sort by key, reverse" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ [ {\"age\":30, \"name\":\"zzz\"}, {\"age\":41, \"name\":\"aaa\"} ]|sort(by=\"age\", reverse=true) }}"
                     "41aaa30zzz"
             ]
         , testGroup "\"slice\""
             [ testCase "full positional args" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ [1, 2, 3, 4, 5]|slice(1,3) }}"
                     "234"
             , testCase "implicit 'to end'" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ [1, 2, 3, 4, 5]|slice(1) }}"
                     "2345"
             , testCase "full named args" $ do
-                mkTest [] []
+                mkTestHtml [] []
                     "{{ [1, 2, 3, 4, 5]|slice(length=3,start=1) }}"
                     "234"
             ]
         ]
     , testGroup "Setting variables"
         [ testCase "plain" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{% set x = \"world\" %}Hello, {{ x }}!"
                 "Hello, world!"
         , testCase "self-referential" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{% set x = { \"foo\":\"bar\" } %}{% set x = x[\"foo\"] %}Hello, {{ x }}!"
                 "Hello, bar!"
         ]
     , testGroup "HTML encoding"
         [ testCase "no encoding outside of constructs" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "<foo bar=\"baz\"/>Ampersand is '&'</foo>."
                 "<foo bar=\"baz\"/>Ampersand is '&'</foo>."
         , testCase "auto-encode inside interpolations" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{{ \"<foo bar=\\\"baz\\\"/>amp is '&'</foo>.\" }}"
                 "&lt;foo bar=&quot;baz&quot;/&gt;amp is &apos;&amp;&apos;&lt;/foo&gt;."
         , testCase "raw filter bypasses encoding" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{{ \"<a>&amp;\"|raw }}"
                 "<a>&amp;"
         ]
     , testGroup "Includes"
         [ testCase "include plain" $ do
-            mkTest [] [("./features-included.html", "This is an included template")]
+            mkTestHtml [] [("./features-included.html", "This is an included template")]
                 "{% include 'features-included.html' %}"
                 "This is an included template"
         , testCase "include with a variable" $ do
-            mkTest [] [("./features-included.html", "Hello, {{ user }}!")]
+            mkTestHtml [] [("./features-included.html", "Hello, {{ user }}!")]
                 "{% set user='world' %}{% include 'features-included.html' %}"
                 "Hello, world!"
         , testCase "include referencing an included variable" $ do
-            mkTest [] [("./features-included.html", "{% set user = 'foobar' %}")]
+            mkTestHtml [] [("./features-included.html", "{% set user = 'foobar' %}")]
                 "{% include 'features-included.html' %}Hello, {{ user }}!"
                 "Hello, foobar!"
         ]
     , testGroup "Explicit Local Scopes"
         [ testCase "baseline" $ do
-            mkTest [] [] "{% set bedazzle = \"no\" %}{{ bedazzle }}" "no"
+            mkTestHtml [] [] "{% set bedazzle = \"no\" %}{{ bedazzle }}" "no"
         , testCase "inside local scope" $ do
-            mkTest [] [] "{% set bedazzle = \"no\" %}{% scope %}{% set bedazzle = \"ya\" %}{{ bedazzle }}{% endscope %}" "ya"
+            mkTestHtml [] [] "{% set bedazzle = \"no\" %}{% scope %}{% set bedazzle = \"ya\" %}{{ bedazzle }}{% endscope %}" "ya"
         , testCase "after exiting local scope" $ do
-            mkTest [] [] "{% set bedazzle = \"no\" %}{% scope %}{% set bedazzle = \"ya\" %}{% endscope %}{{ bedazzle }}" "no"
+            mkTestHtml [] [] "{% set bedazzle = \"no\" %}{% scope %}{% set bedazzle = \"ya\" %}{% endscope %}{{ bedazzle }}" "no"
         ]
     , testGroup "Macros"
         [ testCase "simple" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{% macro foobar -%}baz{%- endmacro %}{{ foobar() }}"
                 "baz"
         , testCase "with args" $ do
-            mkTest [] []
+            mkTestHtml [] []
                 "{% macro foobar2(baz) -%}{{ baz }}oo{%- endmacro %}{{ foobar2(boink=\"nope\", baz=\"blabber\") }}"
                 "blabberoo"
         ]
     , testGroup "Lambdas"
         [ testCase "single arg" $ do
-            mkTest [] [] "{{ ((x) -> x * x)(2) }}" "4"
+            mkTestHtml [] [] "{{ ((x) -> x * x)(2) }}" "4"
         , testCase "two args" $ do
-            mkTest [] [] "{{ ((greeting, name) -> greeting ~ \", \" ~ name ~ \"!\")(\"Hello\", \"world\") }}" "Hello, world!"
+            mkTestHtml [] [] "{{ ((greeting, name) -> greeting ~ \", \" ~ name ~ \"!\")(\"Hello\", \"world\") }}" "Hello, world!"
         ]
     , testGroup "Ternary operator"
         [ testCase "C syntax" $ do
-            mkTest [] [] "{{ 1 ? \"yes\" : \"no\" }}" "yes"
+            mkTestHtml [] [] "{{ 1 ? \"yes\" : \"no\" }}" "yes"
         , testCase "python syntax" $ do
-            mkTest [] [] "{{ \"yes\" if 1 else \"no\" }}" "yes"
+            mkTestHtml [] [] "{{ \"yes\" if 1 else \"no\" }}" "yes"
         , testCase "C syntax, nested, true/false" $ do
-            mkTest [] [] "{{ true ? false ? \"a\" : \"b\" : \"c\" }}" "b"
+            mkTestHtml [] [] "{{ true ? false ? \"a\" : \"b\" : \"c\" }}" "b"
         , testCase "Python syntax, nested, true/false" $ do
-            mkTest [] [] "{{ \"a\" if false else \"b\" if true else \"c\" }}" "b"
+            mkTestHtml [] [] "{{ \"a\" if false else \"b\" if true else \"c\" }}" "b"
         , testCase "C syntax, nested, true/true" $ do
-            mkTest [] [] "{{ true ? true ? \"a\" : \"b\" : \"c\" }}" "a"
+            mkTestHtml [] [] "{{ true ? true ? \"a\" : \"b\" : \"c\" }}" "a"
         , testCase "Python syntax, nested, true/true" $ do
-            mkTest [] [] "{{ false ? true ? \"a\" : \"b\" : \"c\" }}" "c"
+            mkTestHtml [] [] "{{ false ? true ? \"a\" : \"b\" : \"c\" }}" "c"
         ]
     , testGroup "Call syntax"
         [ testCase "\"caller\"" $ do
-            mkTest [] [] "{% macro foobar3(a) -%}{{ a }}({{ caller(\"asdf\") }}){%- endmacro %}{% call (a) foobar3(\"hey\") %}<{{a}}>{% endcall %}" "hey(<asdf>)"
+            mkTestHtml [] [] "{% macro foobar3(a) -%}{{ a }}({{ caller(\"asdf\") }}){%- endmacro %}{% call (a) foobar3(\"hey\") %}<{{a}}>{% endcall %}" "hey(<asdf>)"
         ]
     , testGroup "Inheritance"
         [ testCase "inheritance" $ do
-            mkTest
+            mkTestHtml
                 []
                 [ ("./inherit-child.html", "{% extends \"inherit-parent.html\" %}{% block test -%}This is right.{% endblock %}")
                 , ("./inherit-parent.html", "{%- block test -%}This is wrong.{% endblock -%}")
@@ -598,17 +602,65 @@ simulationTests = testGroup "Simulation"
                 "{% include \"inherit-child.html\" %}"
                 "This is right."
         ]
+    , testGroup "Non-HTML Output"
+        [ testCase "text" $ do
+            mkTestText
+                []
+                []
+                "<>{{ '<>' }}<>"
+                "<><><>"
+        , testCase "json" $ do
+            mkTestJSON
+                []
+                []
+                "{{ '<>' }}{{ 1 }}{{ {'foo': true} }}"
+                "[\"<>\",1,{\"foo\":true}]"
+        ]
     ]
 
-mkTest :: [(VarName, GVal (Run IO Html))] -> [(FilePath, String)] -> String -> Text -> Assertion
-mkTest contextDict includeLookup src expected = do
+mkTestHtml :: [(VarName, GVal (Run IO Html))]
+           -> [(FilePath, String)]
+           -> String
+           -> Text
+           -> Assertion
+mkTestHtml = mkTest makeContextHtmlM htmlSource
+
+mkTestText :: [(VarName, GVal (Run IO Text))]
+           -> [(FilePath, String)]
+           -> String
+           -> Text
+           -> Assertion
+mkTestText = mkTest makeContextTextM id
+
+mkTestJSON :: [(VarName, GVal (Run IO [JSON.Value]))]
+           -> [(FilePath, String)]
+           -> String
+           -> Text
+           -> Assertion
+mkTestJSON = mkTest
+    (\l w -> makeContextM' l w toJSONSingleton) encodeText
+    where
+        toJSONSingleton = (:[]) . JSON.toJSON
+
+encodeText :: JSON.ToJSON a => a -> Text
+encodeText = Text.pack . LUTF8.toString . JSON.encode
+
+mkTest :: (Monoid a, ToGVal (Run IO a) a)
+       => ((VarName -> Run IO a (GVal (Run IO a))) -> (a -> IO ()) -> GingerContext IO a) -- ^ mkContextM flavor
+       -> (a -> Text) -- ^ Convert a to Text for output
+       -> [(VarName, GVal (Run IO a))] -- ^ Context dictionary
+       -> [(FilePath, String)] -- ^ Lookup table for includes
+       -> String -- ^ Template source
+       -> Text -- ^ Expected output
+       -> Assertion
+mkTest mContext valToText contextDict includeLookup src expected = do
     let resolver srcName = return $ lookup srcName includeLookup
     template <- either (fail . show) return =<< parseGinger resolver Nothing src
     output <- newIORef mempty
     let write h = modifyIORef output (<> h)
-    let context = makeContextHtmlM
+    let context = mContext
                     (\key -> return $ fromMaybe def (lookup key contextDict))
                     write
     runGingerT context template
-    actual <- htmlSource <$> readIORef output
+    actual <- valToText <$> readIORef output
     assertEqual "" expected actual

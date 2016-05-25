@@ -69,7 +69,8 @@ import Text.Ginger.Html
 -- in a template context, will be a 'GVal'.
 -- @m@, in most cases, should be a 'Monad'.
 --
--- | Some laws apply here, most notably:
+-- Some laws apply here, most notably:
+--
 -- - when 'isNull' is 'True', then all of 'asFunction', 'asText', 'asNumber',
 --   'asHtml', 'asList', 'asDictItems', and 'length' should produce 'Nothing'
 -- - when 'isNull' is 'True', then 'asBoolean' should produce 'False'
@@ -88,7 +89,13 @@ data GVal m =
         , asFunction :: Maybe (Function m) -- ^ Access value as a callable function, if it is one
         , length :: Maybe Int -- ^ Get length of value, if it is a collection (list/dict)
         , isNull :: Bool -- ^ Check if the value is null
+        , asJSON :: Maybe JSON.Value -- ^ Provide a custom JSON representation of the value
         }
+
+-- | Convenience wrapper around 'asDictItems' to represent a 'GVal' as a
+-- 'HashMap'.
+asHashMap :: GVal m -> Maybe (HashMap Text (GVal m))
+asHashMap g = HashMap.fromList <$> asDictItems g
 
 -- | The default 'GVal' is equivalent to NULL.
 instance Default (GVal m) where
@@ -103,7 +110,30 @@ instance Default (GVal m) where
             , asFunction = Nothing
             , isNull = True
             , length = Nothing
+            , asJSON = Nothing
             }
+
+-- | Conversion to JSON values attempts the following conversions, in order:
+--
+-- - check the 'isNull' property; if it is 'True', always return 'Null',
+--   even if the GVal implements 'asJSON'
+-- - 'asJSON'
+-- - 'asList'
+-- - 'asDictItems' (through 'asHashMap')
+-- - 'asNumber'
+-- - 'asText'
+--
+-- Note that the default conversions will never return booleans unless 'asJSON'
+-- explicitly does this, because 'asText' will always return *something*.
+instance JSON.ToJSON (GVal m) where
+    toJSON g = 
+        if isNull g
+            then JSON.Null
+            else (fromMaybe (JSON.toJSON $ asText g) $
+                    asJSON g <|>
+                    (JSON.toJSON <$> asList g) <|>
+                    (JSON.toJSON <$> asHashMap g) <|>
+                    (JSON.toJSON <$> asNumber g))
 
 -- | For convenience, 'Show' is implemented in a way that looks similar to
 -- JavaScript / JSON
@@ -181,7 +211,7 @@ instance ToGVal m (GVal m) where
 
 -- | 'Nothing' becomes NULL, 'Just' unwraps.
 instance ToGVal m v => ToGVal m (Maybe v) where
-    toGVal Nothing = def
+    toGVal Nothing = def { asJSON = Just JSON.Null }
     toGVal (Just x) = toGVal x
 
 -- | Haskell lists become list-like 'GVal's
@@ -307,6 +337,7 @@ instance ToGVal m Bool where
             , asBoolean = x
             , asNumber = Just $ if x then 1 else 0
             , isNull = False
+            , asJSON = Just (JSON.Bool x)
             }
 
 -- | 'String' -> 'GVal' conversion uses the 'IsString' class; because 'String'
@@ -373,14 +404,18 @@ instance ToGVal m Html where
 
 -- | Convert Aeson 'Value's to 'GVal's over an arbitrary host monad. Because
 -- JSON cannot represent functions, this conversion will never produce a
--- 'Function'.
+-- 'Function'. Further, the 'ToJSON' instance for such a 'GVal' will always
+-- produce the exact 'Value' that was use to construct the it.
 instance ToGVal m JSON.Value where
-    toGVal (JSON.Number n) = toGVal n
-    toGVal (JSON.String s) = toGVal s
-    toGVal (JSON.Bool b) = toGVal b
-    toGVal (JSON.Null) = def
-    toGVal (JSON.Array a) = toGVal $ Vector.toList a
-    toGVal (JSON.Object o) = toGVal o
+    toGVal j = (rawJSONToGVal j) { asJSON = Just j }
+
+rawJSONToGVal :: JSON.Value -> GVal m
+rawJSONToGVal (JSON.Number n) = toGVal n
+rawJSONToGVal (JSON.String s) = toGVal s
+rawJSONToGVal (JSON.Bool b) = toGVal b
+rawJSONToGVal (JSON.Null) = def
+rawJSONToGVal (JSON.Array a) = toGVal $ Vector.toList a
+rawJSONToGVal (JSON.Object o) = toGVal o
 
 -- | Turn a 'Function' into a 'GVal'
 fromFunction :: Function m -> GVal m
@@ -391,6 +426,7 @@ fromFunction f =
         , asBoolean = True
         , isNull = False
         , asFunction = Just f
+        , asJSON = Just "<<function>>"
         }
 
 
