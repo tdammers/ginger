@@ -26,13 +26,14 @@ simulationTests = testGroup "Simulation"
         -- the output.
         [ testCase "Comment does not appear in output" $ mkTestHtml
             [] [] "- {# Comments #} -" "-  -"
-        -- A comment tag ending with -#} instead of #} should eat subsequent
-        -- whitespace, and a comment tag starting with {#- instead of {# should
-        -- eat preceding whitespace.  There is such a comment between the
-        -- following dashes, so they should appear on the same line, with no
-        -- space between them:
-        , testCase "Dashed comments eat whitespace" $ mkTestHtml
+        ]
+    , testGroup "Dashed limiters eat whitespace"
+        [ testCase "comments" $ mkTestHtml
             [] [] "- {#- Comment -#} -" "--"
+        , testCase "interpolations" $ mkTestHtml
+            [] [] "- {{- '' -}} -" "--"
+        , testCase "flow" $ mkTestHtml
+            [] [] "- {%- set x=1 -%} -" "--"
         ]
     , testGroup "Literals"
         [ testCase "String: \"foobar\"" $ mkTestHtml

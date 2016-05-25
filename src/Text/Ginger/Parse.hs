@@ -199,11 +199,11 @@ statementP = interpolationStmtP
 
 interpolationStmtP :: Monad m => Parser m Statement
 interpolationStmtP = do
-    try $ string "{{"
+    try $ openInterpolationP
     spaces
     expr <- expressionP
     spaces
-    string "}}"
+    closeInterpolationP
     return $ InterpolationS expr
 
 literalStmtP :: Monad m => Parser m Statement
@@ -216,7 +216,7 @@ literalStmtP = do
 
 endOfLiteralP :: Monad m => Parser m ()
 endOfLiteralP =
-    (ignore . lookAhead . try . string $ "{{") <|>
+    (ignore . lookAhead . try $ openInterpolationP) <|>
     (ignore . lookAhead $ openTagP) <|>
     (ignore . lookAhead $ openCommentP) <|>
     eof
@@ -403,6 +403,12 @@ fancyTagP tagName inner =
 
 simpleTagP :: Monad m => String -> Parser m ()
 simpleTagP tagName = openTagP >> string tagName >> closeTagP
+
+openInterpolationP :: Monad m => Parser m ()
+openInterpolationP = openP '{'
+
+closeInterpolationP :: Monad m => Parser m ()
+closeInterpolationP = closeP '}'
 
 openCommentP :: Monad m => Parser m ()
 openCommentP = openP '#'
