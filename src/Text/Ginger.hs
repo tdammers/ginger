@@ -277,11 +277,14 @@ module Text.Ginger
 -- | The data structures used to represent templates, statements and
 -- expressions internally.
 , module Text.Ginger.AST
+
+-- *** Optimizer
+-- | An optimizing AST rewriter
+, module Text.Ginger.Optimizer
 )
 where
 import Text.Ginger.Parse
+import Text.Ginger.Optimizer
 import Text.Ginger.AST
 import Text.Ginger.Run
 import Text.Ginger.GVal
-
-

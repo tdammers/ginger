@@ -126,7 +126,7 @@ instance Default (GVal m) where
 -- Note that the default conversions will never return booleans unless 'asJSON'
 -- explicitly does this, because 'asText' will always return *something*.
 instance JSON.ToJSON (GVal m) where
-    toJSON g = 
+    toJSON g =
         if isNull g
             then JSON.Null
             else (fromMaybe (JSON.toJSON $ asText g) $
