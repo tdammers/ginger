@@ -31,6 +31,7 @@ module Text.Ginger.Run
 , makeContextText
 , makeContextTextM
 , Run, liftRun, liftRun2
+, extractArgs, extractArgsT, extractArgsL, extractArgsDefL
 )
 where
 
@@ -51,6 +52,8 @@ import Prelude ( (.), ($), (==), (/=)
                , seq
                , fst, snd
                , maybe
+               , Either (..)
+               , id
                )
 import qualified Prelude
 import Data.Maybe (fromMaybe, isJust)
@@ -80,6 +83,8 @@ import Data.Default (def)
 import Safe (readMay, lastDef, headMay)
 import Network.HTTP.Types (urlEncode)
 import Debug.Trace (trace)
+import Data.Maybe (isNothing)
+import Data.List (lookup, zipWith, unzip)
 
 -- | Execution context. Determines how to look up variables from the
 -- environment, and how to write out template output.
@@ -132,6 +137,68 @@ variadicStringFunc f args =
         args' :: [Text]
         args' = Prelude.map (asText . snd) args
 
+-- | Match args according to a given arg spec, Python style.
+-- The return value is a triple of @(matched, args, kwargs, unmatchedNames)@,
+-- where @matches@ is a hash map of named captured arguments, args is a list of
+-- remaining unmatched positional arguments, kwargs is a list of remaining
+-- unmatched named arguments, and @unmatchedNames@ contains the argument names
+-- that haven't been matched.
+extractArgs :: [Text] -> [(Maybe Text, a)] -> (HashMap Text a, [a], HashMap Text a, [Text])
+extractArgs argNames args =
+    let (matchedPositional, argNames', args') = matchPositionalArgs argNames args
+        (matchedKeyword, argNames'', args'') = matchKeywordArgs argNames' args'
+        unmatchedPositional = [ a | (Nothing, a) <- args'' ]
+        unmatchedKeyword = HashMap.fromList [ (k, v) | (Just k, v) <- args'' ]
+    in ( HashMap.fromList (matchedPositional ++ matchedKeyword)
+       , unmatchedPositional
+       , unmatchedKeyword
+       , argNames''
+       )
+    where
+        matchPositionalArgs :: [Text] -> [(Maybe Text, a)] -> ([(Text, a)], [Text], [(Maybe Text, a)])
+        matchPositionalArgs [] args = ([], [], args)
+        matchPositionalArgs names [] = ([], names, [])
+        matchPositionalArgs names@(n:ns) allArgs@((anm, arg):args)
+            | Just n == anm || isNothing anm =
+                let (matched, ns', args') = matchPositionalArgs ns args
+                in ((n, arg):matched, ns', args')
+            | otherwise = ([], names, allArgs)
+
+        matchKeywordArgs :: [Text] -> [(Maybe Text, a)] -> ([(Text, a)], [Text], [(Maybe Text, a)])
+        matchKeywordArgs [] args = ([], [], args)
+        matchKeywordArgs names allArgs@((Nothing, arg):args) =
+            let (matched, ns', args') = matchKeywordArgs names args
+            in (matched, ns', (Nothing, arg):args')
+        matchKeywordArgs names@(n:ns) args =
+            case (lookup (Just n) args) of
+                Nothing ->
+                    let (matched, ns', args') = matchKeywordArgs ns args
+                    in (matched, n:ns', args')
+                Just v ->
+                    let args' = [ (k,v) | (k,v) <- args, k /= Just n ]
+                        (matched, ns', args'') = matchKeywordArgs ns args'
+                    in ((n,v):matched, ns', args'')
+
+-- | Parse argument list into type-safe argument structure.
+extractArgsT :: ([Maybe a] -> b) -> [Text] -> [(Maybe Text, a)] -> Either ([a], HashMap Text a, [Text]) b
+extractArgsT f argNames args =
+    let (matchedMap, freeArgs, freeKwargs, unmatched) = extractArgs argNames args
+    in if List.null freeArgs && HashMap.null freeKwargs
+        then Right (f $ fmap (\name -> HashMap.lookup name matchedMap) argNames)
+        else Left (freeArgs, freeKwargs, unmatched)
+
+-- | Parse argument list into flat list of matched arguments.
+extractArgsL :: [Text] -> [(Maybe Text, a)] -> Either ([a], HashMap Text a, [Text]) [Maybe a]
+extractArgsL = extractArgsT id
+
+extractArgsDefL :: [(Text, a)] -> [(Maybe Text, a)] -> Either ([a], HashMap Text a, [Text]) [a]
+extractArgsDefL argSpec args =
+    let (names, defs) = unzip argSpec
+    in injectDefaults defs <$> extractArgsL names args
+
+injectDefaults :: [a] -> [Maybe a] -> [a]
+injectDefaults = zipWith fromMaybe
+
 defRunState :: forall m h. (Monoid h, Monad m) => Template -> RunState m h
 defRunState tpl =
     RunState
@@ -148,42 +215,42 @@ defRunState tpl =
             , ("any", fromFunction gfnAny)
             , ("all", fromFunction gfnAll)
             -- TODO: batch
-            , ("ceil", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.ceiling)
             , ("capitalize", fromFunction . variadicStringFunc $ mconcat . Prelude.map capitalize)
+            , ("ceil", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.ceiling)
             , ("center", fromFunction gfnCenter)
             , ("concat", fromFunction . variadicStringFunc $ mconcat)
             , ("contains", fromFunction gfnContains)
-            , ("default", fromFunction gfnDefault)
             , ("d", fromFunction gfnDefault)
+            , ("default", fromFunction gfnDefault)
             , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
-            , ("escape", fromFunction gfnEscape)
             , ("e", fromFunction gfnEscape)
+            , ("equals", fromFunction gfnEquals)
+            , ("escape", fromFunction gfnEscape)
             , ("filesizeformat", fromFunction gfnFileSizeFormat)
             , ("filter", fromFunction gfnFilter)
-            , ("equals", fromFunction gfnEquals)
-            , ("nequals", fromFunction gfnNEquals)
-            , ("greaterEquals", fromFunction gfnGreaterEquals)
-            , ("lessEquals", fromFunction gfnLessEquals)
-            , ("greater", fromFunction gfnGreater)
-            , ("less", fromFunction gfnLess)
             , ("floor", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.floor)
+            , ("greater", fromFunction gfnGreater)
+            , ("greaterEquals", fromFunction gfnGreaterEquals)
             , ("int", fromFunction . unaryFunc $ toGVal . (fmap (Prelude.truncate :: Scientific -> Int)) . asNumber)
             , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
             , ("iterable", fromFunction . unaryFunc $ toGVal . (\x -> isList x || isDict x))
             , ("length", fromFunction . unaryFunc $ toGVal . length)
+            , ("less", fromFunction gfnLess)
+            , ("lessEquals", fromFunction gfnLessEquals)
             , ("modulo", fromFunction . variadicNumericFunc 1 $ fromIntegral . modulo . Prelude.map Prelude.floor)
+            , ("nequals", fromFunction gfnNEquals)
             , ("num", fromFunction . unaryFunc $ toGVal . asNumber)
-            , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
             , ("printf", fromFunction gfnPrintf)
+            , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
             , ("ratio", fromFunction . variadicNumericFunc 1 $ Scientific.fromFloatDigits . ratio . Prelude.map Scientific.toRealFloat)
             , ("round", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.round)
             , ("show", fromFunction . unaryFunc $ fromString . show)
             , ("slice", fromFunction $ gfnSlice)
+            , ("sort", fromFunction $ gfnSort)
             , ("str", fromFunction . unaryFunc $ toGVal . asText)
             , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
             , ("truncate", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.truncate)
             , ("urlencode", fromFunction $ gfnUrlEncode)
-            , ("sort", fromFunction $ gfnSort)
             ]
 
         gfnRawHtml :: Function (Run m h)
@@ -315,41 +382,36 @@ defRunState tpl =
             return . toGVal $ center (asText s) (fromMaybe 80 $ Prelude.truncate <$> asNumber w) (asText pad)
 
         gfnSlice :: Function (Run m h)
-        gfnSlice [] = return def
-        gfnSlice [(Nothing, slicee)] = return slicee
-        gfnSlice [(Nothing, slicee), (Nothing, startPos)] =
-            gfnSlice [(Nothing, slicee), (Nothing, startPos), (Nothing, def)]
-        gfnSlice [(Nothing, slicee), (Nothing, startPos), (Nothing, length)] = do
-            case asDictItems slicee of
-                Just items -> do
-                    let slicedItems = slice items startInt lengthInt
-                    return $ dict slicedItems
-                Nothing -> do
-                    let items = fromMaybe [] $ asList slicee
-                        slicedItems = slice items startInt lengthInt
-                    return $ toGVal slicedItems
-            where
-                startInt :: Int
-                startInt = fromMaybe 0 . fmap Prelude.round . asNumber $ startPos
-
-                lengthInt :: Maybe Int
-                lengthInt = fmap Prelude.round . asNumber $ length
-
-                slice :: [a] -> Int -> Maybe Int -> [a]
-                slice xs start Nothing =
-                    Prelude.drop start $ xs
-                slice xs start (Just length) =
-                    Prelude.take length . Prelude.drop start $ xs
-        gfnSlice ((Nothing, slicee):(Nothing, startPos):args) =
-            let length = fromMaybe def $ List.lookup (Just "length") args
-            in gfnSlice [(Nothing, slicee), (Nothing, startPos), (Nothing, length)]
-        gfnSlice ((Nothing, slicee):args) =
-            let startPos = fromMaybe def $ List.lookup (Just "start") args
-            in gfnSlice ((Nothing, slicee):(Nothing, startPos):args)
         gfnSlice args =
-            let slicee = fromMaybe def $ List.lookup (Just "slicee") args
-            in gfnSlice ((Nothing, slicee):args)
+            let argValues =
+                    extractArgsDefL
+                        [ ("slicee", def)
+                        , ("start", def)
+                        , ("length", def)
+                        ]
+                        args
+            in case argValues of
+                Right (slicee:startPos:length:[]) -> do
+                    let startInt :: Int
+                        startInt = fromMaybe 0 . fmap Prelude.round . asNumber $ startPos
 
+                        lengthInt :: Maybe Int
+                        lengthInt = fmap Prelude.round . asNumber $ length
+
+                        slice :: [a] -> Int -> Maybe Int -> [a]
+                        slice xs start Nothing =
+                            Prelude.drop start $ xs
+                        slice xs start (Just length) =
+                            Prelude.take length . Prelude.drop start $ xs
+                    case asDictItems slicee of
+                        Just items -> do
+                            let slicedItems = slice items startInt lengthInt
+                            return $ dict slicedItems
+                        Nothing -> do
+                            let items = fromMaybe [] $ asList slicee
+                                slicedItems = slice items startInt lengthInt
+                            return $ toGVal slicedItems
+                _ -> fail "Invalid arguments to 'slice'"
 
         gfnSort :: Function (Run m h)
         gfnSort [] = return def
