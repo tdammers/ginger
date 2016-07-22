@@ -243,6 +243,7 @@ defRunState tpl =
             , ("printf", fromFunction gfnPrintf)
             , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
             , ("ratio", fromFunction . variadicNumericFunc 1 $ Scientific.fromFloatDigits . ratio . Prelude.map Scientific.toRealFloat)
+            , ("replace", fromFunction $ gfnReplace)
             , ("round", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.round)
             , ("show", fromFunction . unaryFunc $ fromString . show)
             , ("slice", fromFunction $ gfnSlice)
@@ -412,6 +413,23 @@ defRunState tpl =
                                 slicedItems = slice items startInt lengthInt
                             return $ toGVal slicedItems
                 _ -> fail "Invalid arguments to 'slice'"
+
+        gfnReplace :: Function (Run m h)
+        gfnReplace args =
+            let argValues =
+                    extractArgsDefL
+                        [ ("str", def)
+                        , ("search", def)
+                        , ("replace", def)
+                        ]
+                        args
+            in case argValues of
+                Right (strG:searchG:replaceG:[]) -> do
+                    let str = asText strG
+                        search = asText searchG
+                        replace = asText replaceG
+                    return . toGVal $ Text.replace search replace str
+                _ -> fail "Invalid arguments to 'replace'"
 
         gfnSort :: Function (Run m h)
         gfnSort [] = return def

@@ -512,6 +512,24 @@ simulationTests = testGroup "Simulation"
                     "{{ [1, 2, 3, 4, 5]|slice(length=3,start=1) }}"
                     "234"
             ]
+        , testGroup "\"replace\""
+            [ testCase "simple case" $ do
+                mkTestHtml [] []
+                    "{{ replace('foobar', 'a', 'e') }}"
+                    "foober"
+            , testCase "multiple replacements" $ do
+                mkTestHtml [] []
+                    "{{ replace('foobar', 'o', 'e') }}"
+                    "feebar"
+            , testCase "longer replacements" $ do
+                mkTestHtml [] []
+                    "{{ replace('foobar', 'oo', 'e') }}"
+                    "febar"
+            , testCase "deletion" $ do
+                mkTestHtml [] []
+                    "{{ replace('foobar', 'o') }}"
+                    "fbar"
+            ]
         ]
     , testGroup "Setting variables"
         [ testCase "plain" $ do
