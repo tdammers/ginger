@@ -26,7 +26,9 @@ library
                  , Text.Ginger.Parse
                  , Text.Ginger.Run
                  , Text.PrintfA
-  -- other-modules:
+  other-modules: Text.Ginger.Run.Type
+               , Text.Ginger.Run.FuncUtils
+               , Text.Ginger.Run.Builtins
   -- other-extensions:
   build-depends: base >=4.5 && <5
                , aeson
