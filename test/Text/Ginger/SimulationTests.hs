@@ -491,12 +491,12 @@ simulationTests = testGroup "Simulation"
                     "321"
             , testCase "sort by key" $ do
                 mkTestHtml [] []
-                    "{{ [ {\"age\":30, \"name\":\"zzz\"}, {\"age\":41, \"name\":\"aaa\"} ]|sort(by=\"name\") }}"
-                    "41aaa30zzz"
+                    "{{ ([ {\"age\":30, \"name\":\"zzz\"}, {\"age\":41, \"name\":\"aaa\"} ]|sort(by=\"name\"))[0]['name'] }}"
+                    "aaa"
             , testCase "sort by key, reverse" $ do
                 mkTestHtml [] []
-                    "{{ [ {\"age\":30, \"name\":\"zzz\"}, {\"age\":41, \"name\":\"aaa\"} ]|sort(by=\"age\", reverse=true) }}"
-                    "41aaa30zzz"
+                    "{{ ([ {\"age\":30, \"name\":\"zzz\"}, {\"age\":41, \"name\":\"aaa\"} ]|sort(by=\"age\", reverse=true))[0]['name'] }}"
+                    "aaa"
             ]
         , testGroup "\"slice\""
             [ testCase "full positional args" $ do

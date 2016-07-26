@@ -432,11 +432,22 @@ defRunState tpl =
                 _ -> fail "Invalid arguments to 'replace'"
 
         gfnSort :: Function (Run m h)
-        gfnSort [] = return def
-        gfnSort ((_,sortee):args) = do
-            let sortKeyMay = asText <$> List.lookup (Just "by") args
-                sortReverse = fromMaybe False $ asBoolean <$> List.lookup (Just "reverse") args
-                baseComparer :: (GVal (Run m h)) -> (GVal (Run m h)) -> Prelude.Ordering
+        gfnSort args = do
+            let parsedArgs = extractArgsDefL
+                    [ ("sortee", def)
+                    , ("by", def)
+                    , ("reverse", toGVal False)
+                    ]
+                    args
+            (sortee, sortKey, sortReverse) <- case parsedArgs of
+                Right [sortee, sortKeyG, reverseG] ->
+                    return ( sortee
+                           , asText sortKeyG
+                           , asBoolean reverseG
+                           )
+                _ ->
+                    fail "Invalid args to sort()"
+            let baseComparer :: (GVal (Run m h)) -> (GVal (Run m h)) -> Prelude.Ordering
                 baseComparer = \a b -> Prelude.compare (asText a) (asText b)
                 extractKey :: Text -> GVal (Run m h) -> GVal (Run m h)
                 extractKey k g = fromMaybe def $ do
@@ -445,10 +456,10 @@ defRunState tpl =
             if isDict sortee
                 then do
                     let comparer' :: (Text, GVal (Run m h)) -> (Text, GVal (Run m h)) -> Prelude.Ordering
-                        comparer' = case sortKeyMay of
-                            Nothing -> \(_, a) (_, b) -> baseComparer a b
-                            Just "__key" -> \(a, _) (b, _) -> Prelude.compare a b
-                            Just k -> \(_, a) (_, b) ->
+                        comparer' = case sortKey of
+                            "" -> \(_, a) (_, b) -> baseComparer a b
+                            "__key" -> \(a, _) (b, _) -> Prelude.compare a b
+                            k -> \(_, a) (_, b) ->
                                 baseComparer
                                     (extractKey k a) (extractKey k b)
                         comparer =
@@ -458,10 +469,10 @@ defRunState tpl =
                     return . toGVal $ List.sortBy comparer (fromMaybe [] $ asDictItems sortee)
                 else do
                     let comparer' :: (GVal (Run m h)) -> (GVal (Run m h)) -> Prelude.Ordering
-                        comparer' = case sortKeyMay of
-                            Nothing ->
+                        comparer' = case sortKey of
+                            "" ->
                                 baseComparer
-                            Just k -> \a b ->
+                            k -> \a b ->
                                 baseComparer
                                     (extractKey k a) (extractKey k b)
                     let comparer =
