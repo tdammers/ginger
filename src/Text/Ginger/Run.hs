@@ -56,7 +56,7 @@ import Prelude ( (.), ($), (==), (/=)
                , id
                )
 import qualified Prelude
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe, isJust, isNothing)
 import qualified Data.List as List
 import Text.Ginger.AST
 import Text.Ginger.Html
@@ -66,7 +66,6 @@ import Text.Ginger.Run.Builtins
 import Text.Ginger.Run.FuncUtils
 import Text.Printf
 import Text.PrintfA
-import Data.Scientific (formatScientific)
 
 import Data.Text (Text)
 import Data.String (fromString)
@@ -80,13 +79,12 @@ import Control.Monad.State
 import Control.Applicative
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
-import Data.Scientific (Scientific)
-import Data.Scientific as Scientific
+import Data.Scientific (Scientific, formatScientific)
+import qualified Data.Scientific as Scientific
 import Data.Default (def)
 import Safe (readMay, lastDef, headMay)
 import Network.HTTP.Types (urlEncode)
 import Debug.Trace (trace)
-import Data.Maybe (isNothing)
 import Data.List (lookup, zipWith, unzip)
 
 defaultScope :: forall m h. Monad m => [(Text, GVal (Run m h))]
@@ -112,7 +110,7 @@ defaultScope =
     , ("floor", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.floor)
     , ("greater", fromFunction gfnGreater)
     , ("greaterEquals", fromFunction gfnGreaterEquals)
-    , ("int", fromFunction . unaryFunc $ toGVal . (fmap (Prelude.truncate :: Scientific -> Int)) . asNumber)
+    , ("int", fromFunction . unaryFunc $ toGVal . fmap (Prelude.truncate :: Scientific -> Int) . asNumber)
     , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
     , ("iterable", fromFunction . unaryFunc $ toGVal . (\x -> isList x || isDict x))
     , ("length", fromFunction . unaryFunc $ toGVal . length)
@@ -124,15 +122,15 @@ defaultScope =
     , ("printf", fromFunction gfnPrintf)
     , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
     , ("ratio", fromFunction . variadicNumericFunc 1 $ Scientific.fromFloatDigits . ratio . Prelude.map Scientific.toRealFloat)
-    , ("replace", fromFunction $ gfnReplace)
+    , ("replace", fromFunction gfnReplace)
     , ("round", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.round)
     , ("show", fromFunction . unaryFunc $ fromString . show)
-    , ("slice", fromFunction $ gfnSlice)
-    , ("sort", fromFunction $ gfnSort)
+    , ("slice", fromFunction gfnSlice)
+    , ("sort", fromFunction gfnSort)
     , ("str", fromFunction . unaryFunc $ toGVal . asText)
     , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
     , ("truncate", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.truncate)
-    , ("urlencode", fromFunction $ gfnUrlEncode)
+    , ("urlencode", fromFunction gfnUrlEncode)
     ]
 
 -- | Purely expand a Ginger template. The underlying carrier monad is 'Writer'
@@ -180,7 +178,7 @@ lookupBlock blockName = do
     tpl <- gets rsCurrentTemplate
     let blockMay = resolveBlock blockName tpl
     case blockMay of
-        Nothing -> fail $ "Block " <> (Text.unpack blockName) <> " not defined"
+        Nothing -> fail $ "Block " <> Text.unpack blockName <> " not defined"
         Just block -> return block
     where
         resolveBlock :: VarName -> Template -> Maybe Block
@@ -251,7 +249,7 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
                              , "first" ~> (index == 0)
                              , "last" ~> (Prelude.succ index == numItems)
                              , "length" ~> numItems
-                             , "cycle" ~> (fromFunction $ cycle index)
+                             , "cycle" ~> fromFunction (cycle index)
                              ])
                              { asFunction = Just loop }
                     case varNameIndex of
@@ -278,7 +276,7 @@ macroToGVal (Macro argNames body) =
         f args =
             withLocalState . local (\c -> c { contextWrite = appendCapture }) $ do
                 clearCapture
-                forM (HashMap.toList matchedArgs) (uncurry setVar)
+                forM_ (HashMap.toList matchedArgs) (uncurry setVar)
                 setVar "varargs" . toGVal $ positionalArgs
                 setVar "kwargs" . toGVal $ namedArgs
                 runStatement body
@@ -339,7 +337,7 @@ fetchCapture = gets rsCapture
 runExpression (StringLiteralE str) = return . toGVal $ str
 runExpression (NumberLiteralE n) = return . toGVal $ n
 runExpression (BoolLiteralE b) = return . toGVal $ b
-runExpression (NullLiteralE) = return def
+runExpression NullLiteralE = return def
 runExpression (VarE key) = getVar key
 runExpression (ListE xs) = toGVal <$> forM xs runExpression
 runExpression (ObjectE xs) = do
@@ -361,8 +359,7 @@ runExpression (CallE funcE argsEs) = do
         Just f -> f args
 runExpression (LambdaE argNames body) = do
     let fn args = withLocalScope $ do
-            forM (Prelude.zip argNames (fmap snd args)) $ \(argName, arg) ->
-                setVar argName arg
+            forM_ (Prelude.zip argNames (fmap snd args)) $ uncurry setVar
             runExpression body
     return $ fromFunction fn
 runExpression (TernaryE condition yes no) = do

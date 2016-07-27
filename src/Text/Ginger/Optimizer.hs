@@ -29,8 +29,8 @@ instance Optimizable Expression where
 
 optimizeTemplate t =
     t { templateBody = optimize $ templateBody t
-      , templateBlocks = fmap optimize $ templateBlocks t
-      , templateParent = fmap optimize $ templateParent t
+      , templateBlocks = optimize <$> templateBlocks t
+      , templateParent = optimize <$> templateParent t
       }
 
 {-

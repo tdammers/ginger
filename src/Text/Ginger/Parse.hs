@@ -158,7 +158,7 @@ includeTemplate sourceName = do
 
 reduceStatements :: [Statement] -> Statement
 reduceStatements [] = NullS
-reduceStatements (x:[]) = x
+reduceStatements [x] = x
 reduceStatements xs = MultiS xs
 
 templateP :: Monad m => Parser m Template
@@ -169,16 +169,16 @@ derivedTemplateP = do
     parentName <- try (spaces >> fancyTagP "extends" stringLiteralP)
     parentTemplate <- includeTemplate parentName
     blocks <- HashMap.fromList <$> many blockP
-    return $ Template { templateBody = NullS, templateParent = Just parentTemplate, templateBlocks = blocks }
+    return Template { templateBody = NullS, templateParent = Just parentTemplate, templateBlocks = blocks }
 
 baseTemplateP :: Monad m => Parser m Template
 baseTemplateP = do
     body <- statementsP
     blocks <- psBlocks <$> getState
-    return $ Template { templateBody = body, templateParent = Nothing, templateBlocks = blocks }
+    return Template { templateBody = body, templateParent = Nothing, templateBlocks = blocks }
 
 statementsP :: Monad m => Parser m Statement
-statementsP = do
+statementsP =
     reduceStatements . filter (not . isNullS) <$> many (try statementP)
     where
         isNullS NullS = True
@@ -199,7 +199,7 @@ statementP = interpolationStmtP
 
 interpolationStmtP :: Monad m => Parser m Statement
 interpolationStmtP = do
-    try $ openInterpolationP
+    try openInterpolationP
     spaces
     expr <- expressionP
     spaces
@@ -223,8 +223,8 @@ endOfLiteralP =
 
 commentStmtP :: Monad m => Parser m Statement
 commentStmtP = do
-    try $ openCommentP
-    manyTill anyChar (try $ closeCommentP)
+    try openCommentP
+    manyTill anyChar (try closeCommentP)
     return NullS
 
 ifStmtP :: Monad m => Parser m Statement
@@ -340,7 +340,7 @@ forStmtP = do
     let forLoop = ForS varNameIndex varNameVal iteree body
     return $ maybe
         forLoop
-        (\elseBranch -> IfS iteree forLoop elseBranch)
+        (IfS iteree forLoop)
         elseBranchMay
 
 includeP :: Monad m => Parser m Statement
@@ -392,14 +392,13 @@ forHeadAsP = do
     return (iteree, varIdent, indexIdent)
 
 fancyTagP :: Monad m => String -> Parser m a -> Parser m a
-fancyTagP tagName inner =
+fancyTagP tagName =
     between
         (try $ do
             openTagP
             string tagName
             spaces)
         closeTagP
-        inner
 
 simpleTagP :: Monad m => String -> Parser m ()
 simpleTagP tagName = openTagP >> string tagName >> closeTagP
@@ -476,12 +475,12 @@ operativeExprP operandP operators = do
     return $ foldl (flip ($)) lhs tails
     where
         opChars :: [Char]
-        opChars = nub . sort . concat . map fst $ operators
+        opChars = nub . sort . concatMap fst $ operators
         operativeTail :: Parser m (Expression -> Expression)
         operativeTail = do
             funcName <-
-                foldl (<|>) (fail "operator") $
-                [ try (string op >> notFollowedBy (oneOf opChars)) >> return fn | (op, fn) <- operators ]
+                foldl (<|>) (fail "operator")
+                    [ try (string op >> notFollowedBy (oneOf opChars)) >> return fn | (op, fn) <- operators ]
             spaces
             rhs <- operandP
             spaces
@@ -589,7 +588,7 @@ funcArgP = namedFuncArgP <|> positionalFuncArgP
 
 namedFuncArgP :: Monad m => Parser m (Maybe Text, Expression)
 namedFuncArgP = do
-    name <- try $ identifierP `before` (between spaces spaces $ string "=")
+    name <- try $ identifierP `before` between spaces spaces (string "=")
     expr <- expressionP
     return (Just name, expr)
 
@@ -667,7 +666,7 @@ identCharP :: Monad m => Parser m Char
 identCharP = oneOf (['a'..'z'] ++ ['A'..'Z'] ++ ['_'] ++ ['0'..'9'])
 
 stringLiteralExprP :: Monad m => Parser m Expression
-stringLiteralExprP = do
+stringLiteralExprP =
     StringLiteralE . Text.pack <$> stringLiteralP
 
 stringLiteralP :: Monad m => Parser m String
@@ -707,7 +706,7 @@ numberLiteralP = do
     return $ sign ++ integral ++ fractional
 
 followedBy :: Monad m => m b -> m a -> m a
-followedBy b a = a >>= \x -> (b >> return x)
+followedBy b a = a >>= \x -> b >> return x
 
 before :: Monad m => m a -> m b -> m a
 before = flip followedBy

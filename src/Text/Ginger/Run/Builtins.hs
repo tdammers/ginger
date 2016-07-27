@@ -27,9 +27,10 @@ import Prelude ( (.), ($), (==), (/=)
                , maybe
                , Either (..)
                , id
+               , flip
                )
 import qualified Prelude
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe, isJust, isNothing)
 import qualified Data.List as List
 import Text.Ginger.AST
 import Text.Ginger.Html
@@ -38,7 +39,6 @@ import Text.Ginger.Run.Type
 import Text.Ginger.Run.FuncUtils
 import Text.Printf
 import Text.PrintfA
-import Data.Scientific (formatScientific)
 
 import Data.Text (Text)
 import Data.String (fromString)
@@ -52,13 +52,12 @@ import Control.Monad.State
 import Control.Applicative
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
-import Data.Scientific (Scientific)
-import Data.Scientific as Scientific
+import Data.Scientific (Scientific, formatScientific, FPFormat (Fixed) )
+import qualified Data.Scientific as Scientific
 import Data.Default (def)
 import Safe (readMay, lastDef, headMay)
 import Network.HTTP.Types (urlEncode)
 import Debug.Trace (trace)
-import Data.Maybe (isNothing)
 import Data.List (lookup, zipWith, unzip)
 
 gfnRawHtml :: Monad m => Function (Run m h)
@@ -93,13 +92,13 @@ gfnAll xs = return . toGVal $ Prelude.all (asBoolean . snd) xs
 
 gfnEquals :: Monad m => Function (Run m h)
 gfnEquals [] = return $ toGVal True
-gfnEquals (x:[]) = return $ toGVal True
+gfnEquals [x] = return $ toGVal True
 gfnEquals (x:xs) =
     return . toGVal $ Prelude.all ((snd x `looseEquals`) . snd) xs
 
 gfnNEquals :: Monad m => Function (Run m h)
 gfnNEquals [] = return $ toGVal True
-gfnNEquals (x:[]) = return $ toGVal True
+gfnNEquals [x] = return $ toGVal True
 gfnNEquals (x:xs) =
     return . toGVal $ Prelude.any (not . (snd x `looseEquals`) . snd) xs
 
@@ -184,8 +183,8 @@ capitalize txt = Text.toUpper (Text.take 1 txt) <> Text.drop 1 txt
 
 gfnCenter :: Monad m => Function (Run m h)
 gfnCenter [] = gfnCenter [(Nothing, toGVal ("" :: Text))]
-gfnCenter (x:[]) = gfnCenter [x, (Nothing, toGVal (80 :: Int))]
-gfnCenter (x:y:[]) = gfnCenter [x, y, (Nothing, toGVal (" " :: Text))]
+gfnCenter [x] = gfnCenter [x, (Nothing, toGVal (80 :: Int))]
+gfnCenter [x,y] = gfnCenter [x, y, (Nothing, toGVal (" " :: Text))]
 gfnCenter ((_, s):(_, w):(_, pad):_) =
     return . toGVal $ center (asText s) (fromMaybe 80 $ Prelude.truncate <$> asNumber w) (asText pad)
 
@@ -199,16 +198,16 @@ gfnSlice args =
                 ]
                 args
     in case argValues of
-        Right (slicee:startPos:length:[]) -> do
+        Right [slicee, startPos, length] -> do
             let startInt :: Int
-                startInt = fromMaybe 0 . fmap Prelude.round . asNumber $ startPos
+                startInt = maybe 0 Prelude.round . asNumber $ startPos
 
                 lengthInt :: Maybe Int
                 lengthInt = fmap Prelude.round . asNumber $ length
 
                 slice :: [a] -> Int -> Maybe Int -> [a]
                 slice xs start Nothing =
-                    Prelude.drop start $ xs
+                    Prelude.drop start xs
                 slice xs start (Just length) =
                     Prelude.take length . Prelude.drop start $ xs
             case asDictItems slicee of
@@ -231,7 +230,7 @@ gfnReplace args =
                 ]
                 args
     in case argValues of
-        Right (strG:searchG:replaceG:[]) -> do
+        Right [strG, searchG, replaceG] -> do
             let str = asText strG
                 search = asText searchG
                 replace = asText replaceG
@@ -254,8 +253,8 @@ gfnSort args = do
                    )
         _ ->
             fail "Invalid args to sort()"
-    let baseComparer :: (GVal (Run m h)) -> (GVal (Run m h)) -> Prelude.Ordering
-        baseComparer = \a b -> Prelude.compare (asText a) (asText b)
+    let baseComparer :: GVal (Run m h) -> GVal (Run m h) -> Prelude.Ordering
+        baseComparer a b = Prelude.compare (asText a) (asText b)
         extractKey :: Text -> GVal (Run m h) -> GVal (Run m h)
         extractKey k g = fromMaybe def $ do
             l <- asLookup g
@@ -271,11 +270,11 @@ gfnSort args = do
                             (extractKey k a) (extractKey k b)
                 comparer =
                     if sortReverse
-                        then \a b -> comparer' b a
+                        then flip comparer'
                         else comparer'
             return . toGVal $ List.sortBy comparer (fromMaybe [] $ asDictItems sortee)
         else do
-            let comparer' :: (GVal (Run m h)) -> (GVal (Run m h)) -> Prelude.Ordering
+            let comparer' :: GVal (Run m h) -> GVal (Run m h) -> Prelude.Ordering
                 comparer' = case sortKey of
                     "" ->
                         baseComparer
@@ -284,7 +283,7 @@ gfnSort args = do
                             (extractKey k a) (extractKey k b)
             let comparer =
                     if sortReverse
-                        then \a b -> comparer' b a
+                        then flip comparer'
                         else comparer'
             return . toGVal $ List.sortBy comparer (fromMaybe [] $ asList sortee)
 
@@ -339,7 +338,7 @@ formatFileSize binary size =
         dividedSize :: Scientific
         dividedSize = fromIntegral size / fromIntegral divisor
         formattedSize =
-            if isInteger dividedSize
+            if Scientific.isInteger dividedSize
                 then formatScientific Fixed (Just 0) dividedSize
                 else formatScientific Fixed (Just 1) dividedSize
     in formattedSize ++ " " ++ unitName

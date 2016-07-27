@@ -35,8 +35,7 @@ import Prelude ( (.), ($), (==), (/=)
                , Monad
                )
 import qualified Prelude
-import qualified Data.List as List
-import Data.Maybe ( fromMaybe, catMaybes, isJust )
+import Data.Maybe ( fromMaybe, catMaybes, isJust, mapMaybe )
 import Data.Text (Text)
 import Data.String (IsString, fromString)
 import qualified Data.Text as Text
@@ -129,11 +128,11 @@ instance JSON.ToJSON (GVal m) where
     toJSON g =
         if isNull g
             then JSON.Null
-            else (fromMaybe (JSON.toJSON $ asText g) $
+            else fromMaybe (JSON.toJSON $ asText g) $
                     asJSON g <|>
                     (JSON.toJSON <$> asList g) <|>
                     (JSON.toJSON <$> asHashMap g) <|>
-                    (JSON.toJSON <$> asNumber g))
+                    (JSON.toJSON <$> asNumber g)
 
 -- | For convenience, 'Show' is implemented in a way that looks similar to
 -- JavaScript / JSON
@@ -167,7 +166,7 @@ instance PrintfArg (GVal m) where
             'c' -> formatString
                     (Text.unpack $ asText x)
                     fmt
-            f -> if f `Prelude.elem` ("fFgGeE" :: [Char])
+            f -> if f `Prelude.elem` ['f', 'F', 'g', 'G', 'e', 'E']
                     then formatRealFloat (toRealFloat . fromMaybe 0 . asNumber $ x) fmt
                     else formatInteger (Prelude.round . fromMaybe 0 . asNumber $ x) fmt
 
@@ -192,7 +191,7 @@ matchFuncArgs names args =
         numPositional = Prelude.length fromPositional
         namesRemaining = Prelude.drop numPositional names
         positional = Prelude.drop numPositional positionalRaw
-        fromNamed = catMaybes $ (List.map lookupName namesRemaining)
+        fromNamed = mapMaybe lookupName namesRemaining
         lookupName n = do
             v <- HashMap.lookup n namedRaw
             return (n, v)
@@ -240,7 +239,7 @@ instance ToGVal m v => ToGVal m (HashMap Text v) where
                     , asText = mconcat . Prelude.map asText . HashMap.elems $ xs
                     , asBoolean = not . HashMap.null $ xs
                     , isNull = False
-                    , asLookup = Just (\v -> HashMap.lookup v xs)
+                    , asLookup = Just (`HashMap.lookup` xs)
                     , asDictItems = Just $ HashMap.toList xs
                     }
 
@@ -305,11 +304,11 @@ dict = toGVal . HashMap.fromList
 orderedDict :: [Pair m] -> GVal m
 orderedDict xs =
     def
-        { asHtml = mconcat . Prelude.map asHtml . Prelude.map snd $ xs
-        , asText = mconcat . Prelude.map asText . Prelude.map snd $ xs
+        { asHtml = mconcat . Prelude.map (asHtml . snd) $ xs
+        , asText = mconcat . Prelude.map (asText . snd) $ xs
         , asBoolean = not . Prelude.null $ xs
         , isNull = False
-        , asLookup = Just (\v -> HashMap.lookup v hm)
+        , asLookup = Just (`HashMap.lookup` hm)
         , asDictItems = Just xs
         }
     where
@@ -413,7 +412,7 @@ rawJSONToGVal :: JSON.Value -> GVal m
 rawJSONToGVal (JSON.Number n) = toGVal n
 rawJSONToGVal (JSON.String s) = toGVal s
 rawJSONToGVal (JSON.Bool b) = toGVal b
-rawJSONToGVal (JSON.Null) = def
+rawJSONToGVal JSON.Null = def
 rawJSONToGVal (JSON.Array a) = toGVal $ Vector.toList a
 rawJSONToGVal (JSON.Object o) = toGVal o
 
