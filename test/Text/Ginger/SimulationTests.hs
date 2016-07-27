@@ -680,6 +680,6 @@ mkTest mContext valToText contextDict includeLookup src expected = do
     let context = mContext
                     (\key -> return $ fromMaybe def (lookup key contextDict))
                     write
-    runGingerT context template
+    runGingerT context (optimize template)
     actual <- valToText <$> readIORef output
     assertEqual "" expected actual
