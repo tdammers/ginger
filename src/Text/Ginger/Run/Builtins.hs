@@ -206,10 +206,13 @@ gfnSlice args =
                 lengthInt = fmap Prelude.round . asNumber $ length
 
                 slice :: [a] -> Int -> Maybe Int -> [a]
-                slice xs start Nothing =
-                    Prelude.drop start xs
+                slice xs start Nothing
+                    | start < 0 =
+                        Prelude.drop (Prelude.length xs + start) xs
+                    | otherwise =
+                        Prelude.drop start xs
                 slice xs start (Just length) =
-                    Prelude.take length . Prelude.drop start $ xs
+                    Prelude.take length $ slice xs start Nothing
             case asDictItems slicee of
                 Just items -> do
                     let slicedItems = slice items startInt lengthInt

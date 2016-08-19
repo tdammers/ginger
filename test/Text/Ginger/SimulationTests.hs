@@ -511,6 +511,10 @@ simulationTests = testGroup "Simulation"
                 mkTestHtml [] []
                     "{{ [1, 2, 3, 4, 5]|slice(length=3,start=1) }}"
                     "234"
+            , testCase "negative offset" $ do
+                mkTestHtml [] []
+                    "{{ [1, 2, 3, 4, 5]|slice(start=-1) }}"
+                    "5"
             ]
         , testGroup "\"replace\""
             [ testCase "simple case" $ do
