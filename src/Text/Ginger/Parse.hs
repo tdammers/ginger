@@ -48,6 +48,7 @@ import qualified Data.Text as Text
 import Data.List ( foldr, nub, sort )
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
+import Data.Default ( Default (..) )
 
 import System.FilePath ( takeDirectory, (</>) )
 
@@ -575,8 +576,23 @@ dotPostfixP = do
 
 arrayAccessP :: Monad m => Parser m (Expression -> Expression)
 arrayAccessP = do
-    i <- bracedP "[" "]" expressionP
-    return $ \e -> MemberLookupE e i
+    bracedP "[" "]" inner
+    where
+        inner = try sliceInner <|> indexInner
+        sliceInner = do
+            offset <- option NullLiteralE (try expressionP)
+            char ':'
+            length <- option NullLiteralE (try expressionP)
+            return $ \e ->
+                CallE
+                    (VarE "slice")
+                    [ (Nothing, e)
+                    , (Nothing, offset)
+                    , (Nothing, length)
+                    ]
+        indexInner = do
+            i <- expressionP
+            return $ \e -> MemberLookupE e i
 
 funcCallP :: Monad m => Parser m (Expression -> Expression)
 funcCallP = do

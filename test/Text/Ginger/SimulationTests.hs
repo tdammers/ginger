@@ -193,6 +193,24 @@ simulationTests = testGroup "Simulation"
         , testCase "OR (either)" $ do
             mkTestHtml [] [] "{% if 0 || 0 %}yes{% else %}no{% endif %}" "no"
         ]
+    , testGroup "Slicing brackets"
+        [ testCase "from/to, both positive" $ do
+            mkTestHtml [] []
+                "{{ 'abcdef'[1:2] }}"
+                "bc"
+        , testCase "from/to, from negative" $ do
+            mkTestHtml [] []
+                "{{ 'abcdef'[-3:2] }}"
+                "de"
+        , testCase "from/to, to implicit" $ do
+            mkTestHtml [] []
+                "{{ 'abcdef'[1:] }}"
+                "bcdef"
+        , testCase "from/to, from implicit" $ do
+            mkTestHtml [] []
+                "{{ 'abcdef'[:2] }}"
+                "ab"
+        ]
     , testGroup "Built-in filters/functions"
         [ testCase "\"abs\"" $ do
             mkTestHtml [] [] "{{ -2|abs }}" "2"
