@@ -515,6 +515,10 @@ simulationTests = testGroup "Simulation"
                 mkTestHtml [] []
                     "{{ [1, 2, 3, 4, 5]|slice(start=-1) }}"
                     "5"
+            , testCase "call on string subject" $ do
+                mkTestHtml [] []
+                    "{{ \"12345\"|slice(1,3) }}"
+                    "234"
             ]
         , testGroup "\"replace\""
             [ testCase "simple case" $ do

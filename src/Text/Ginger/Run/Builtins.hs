@@ -217,10 +217,13 @@ gfnSlice args =
                 Just items -> do
                     let slicedItems = slice items startInt lengthInt
                     return $ dict slicedItems
-                Nothing -> do
-                    let items = fromMaybe [] $ asList slicee
-                        slicedItems = slice items startInt lengthInt
-                    return $ toGVal slicedItems
+                Nothing ->
+                    case asList slicee of
+                    Just items ->
+                        return . toGVal $ slice items startInt lengthInt
+                    Nothing ->
+                        return . toGVal . Text.pack $
+                            slice (Text.unpack $ asText slicee) startInt lengthInt
         _ -> fail "Invalid arguments to 'slice'"
 
 gfnReplace :: Monad m => Function (Run m h)
