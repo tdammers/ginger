@@ -70,6 +70,8 @@ import Data.Time ( Day (..)
                  , fromGregorian
                  , LocalTime (..)
                  , TimeOfDay (..)
+                 , TimeZone (..)
+                 , TimeLocale (..)
                  )
 
 import Text.Ginger.Html
@@ -699,3 +701,31 @@ instance FromGVal m LocalTime where
         date <- fromGVal g <|> g ~: "date"
         time <- fromGVal g <|> g ~: "time"
         return $ LocalTime date time
+
+instance FromGVal m TimeZone where
+    fromGVal g =
+        TimeZone
+            <$> g ~: "minutes"
+            <*> g ~: "summerOnly"
+            <*> (Text.unpack <$> g ~: "name")
+
+instance FromGVal m TimeLocale where
+    fromGVal g =
+        TimeLocale
+            <$> (List.map unpackPair <$> g ~: "dayNames")
+            <*> (List.map unpackPair <$> g ~: "monthNames")
+            <*> (unpackPair <$> g ~: "amPm")
+            <*> (Text.unpack <$> g ~: "dateTimeFmt")
+            <*> (Text.unpack <$> g ~: "dateFmt")
+            <*> (Text.unpack <$> g ~: "timeFmt")
+            <*> (Text.unpack <$> g ~: "time12Fmt")
+            <*> (g ~: "knownTimeZones")
+
+pairwise :: (a -> b) -> (a, a) -> (b, b)
+pairwise f (a, b) = (f a, f b)
+
+packPair :: ([Char], [Char]) -> (Text, Text)
+packPair = pairwise Text.pack
+
+unpackPair :: (Text, Text) -> ([Char], [Char])
+unpackPair = pairwise Text.unpack
