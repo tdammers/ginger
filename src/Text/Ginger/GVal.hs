@@ -18,7 +18,7 @@ where
 
 import Prelude ( (.), ($), (==), (/=)
                , (++), (+), (-), (*), (/), div
-               , (>>=), return
+               , (=<<), (>>=), return
                , undefined, otherwise, id, const
                , Maybe (..)
                , Bool (..)

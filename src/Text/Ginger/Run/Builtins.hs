@@ -374,14 +374,14 @@ gvalToDate g = gvalDictToDate g
 gvalDictToDate :: GVal m -> Maybe LocalTime
 gvalDictToDate g = do
     let datePartMay = do
-            year <- fmap fromIntegral $ toInt =<< lookupLoose "year" g
-            month <- toInt =<< lookupLoose "month" g
-            day <- toInt =<< lookupLoose "day" g
+            year <- fmap (fromIntegral :: Int -> Integer) $ g ~: "year"
+            month <- g ~: "month"
+            day <- g ~: "day"
             return $ fromGregorian year month day
         timePartMay = do
-            hours <- toInt =<< lookupLoose "hours" g
-            minutes <- toInt =<< lookupLoose "minutes" g
-            seconds <- fmap fromIntegral $ toInt =<< lookupLoose "seconds" g
+            hours <- g ~: "hours"
+            minutes <- g ~: "minutes"
+            seconds <- fmap scientificToPico $ g ~: "seconds"
             return $ TimeOfDay hours minutes seconds
     when (isNothing datePartMay && isNothing timePartMay) Nothing
     let datePart = fromMaybe (fromGregorian 1970 1 1) datePartMay
