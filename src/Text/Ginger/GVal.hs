@@ -362,43 +362,6 @@ instance (ToGVal m a, ToGVal m b, ToGVal m c) => ToGVal m (a, b, c) where
 instance (ToGVal m a, ToGVal m b, ToGVal m c, ToGVal m d) => ToGVal m (a, b, c, d) where
     toGVal (a, b, c, d) = toGVal ([ toGVal a, toGVal b, toGVal c, toGVal d ] :: [GVal m])
 
--- * Convenience API for constructing heterogenous dictionaries.
---
--- Example usage:
---
--- > context :: GVal m
--- > context = dict [ "number" ~> (15 :: Int), "name" ~> ("Joe" :: String) ]
-
--- | A key/value pair, used for constructing dictionary GVals using a
--- compact syntax.
-type Pair m = (Text, GVal m)
-
--- | Construct a dictionary GVal from a list of pairs. Internally, this uses
--- a hashmap, so element order will not be preserved.
-dict :: [Pair m] -> GVal m
-dict = toGVal . HashMap.fromList
-
--- | Construct an ordered dictionary GVal from a list of pairs. Internally,
--- this conversion uses both a hashmap (for O(1) lookup) and the original list,
--- so element order is preserved, but there is a bit of a memory overhead.
-orderedDict :: [Pair m] -> GVal m
-orderedDict xs =
-    def
-        { asHtml = mconcat . Prelude.map (asHtml . snd) $ xs
-        , asText = mconcat . Prelude.map (asText . snd) $ xs
-        , asBoolean = not . Prelude.null $ xs
-        , isNull = False
-        , asLookup = Just (`HashMap.lookup` hm)
-        , asDictItems = Just xs
-        }
-    where
-        hm = HashMap.fromList xs
-
--- | Construct a pair from a key and a value.
-(~>) :: ToGVal m a => Text -> a -> Pair m
-k ~> v = (k, toGVal v)
-infixr 8 ~>
-
 -- | Silly helper function, needed to bypass the default 'Show' instance of
 -- 'Scientific' in order to make integral 'Scientific's look like integers.
 scientificToText :: Scientific -> Text
@@ -509,6 +472,43 @@ fromFunction f =
         }
 
 
+-- * Convenience API for constructing heterogenous dictionaries.
+--
+-- Example usage:
+--
+-- > context :: GVal m
+-- > context = dict [ "number" ~> (15 :: Int), "name" ~> ("Joe" :: String) ]
+
+-- | A key/value pair, used for constructing dictionary GVals using a
+-- compact syntax.
+type Pair m = (Text, GVal m)
+
+-- | Construct a dictionary GVal from a list of pairs. Internally, this uses
+-- a hashmap, so element order will not be preserved.
+dict :: [Pair m] -> GVal m
+dict = toGVal . HashMap.fromList
+
+-- | Construct an ordered dictionary GVal from a list of pairs. Internally,
+-- this conversion uses both a hashmap (for O(1) lookup) and the original list,
+-- so element order is preserved, but there is a bit of a memory overhead.
+orderedDict :: [Pair m] -> GVal m
+orderedDict xs =
+    def
+        { asHtml = mconcat . Prelude.map (asHtml . snd) $ xs
+        , asText = mconcat . Prelude.map (asText . snd) $ xs
+        , asBoolean = not . Prelude.null $ xs
+        , isNull = False
+        , asLookup = Just (`HashMap.lookup` hm)
+        , asDictItems = Just xs
+        }
+    where
+        hm = HashMap.fromList xs
+
+-- | Construct a pair from a key and a value.
+(~>) :: ToGVal m a => Text -> a -> Pair m
+k ~> v = (k, toGVal v)
+infixr 8 ~>
+
 -- * Inspecting 'GVal's / Marshalling 'GVal' to Haskell
 
 -- | Check if the given GVal is a list-like object
@@ -595,3 +595,38 @@ toFunction = asFunction
 
 picoToScientific :: Pico -> Scientific
 picoToScientific (MkFixed x) = scientific x (-12)
+
+class FromGVal m a where
+    fromGValEither :: GVal m -> Either Prelude.String a
+    fromGValEither = Prelude.maybe (Left "Conversion from GVal failed") Right . fromGVal
+    fromGVal :: GVal m -> Maybe a
+    fromGVal = Prelude.either (const Nothing) Just . fromGValEither
+
+fromGValM :: (Monad m, FromGVal m a) => GVal m -> m a
+fromGValM = Prelude.either Prelude.fail return . fromGValEither
+
+instance FromGVal m Int where
+    fromGVal = toInt
+
+instance FromGVal m Scientific where
+    fromGVal = asNumber
+
+instance FromGVal m Text where
+    fromGVal = Just . asText
+
+instance FromGVal m (GVal m) where
+    fromGVal = Just
+
+instance FromGVal m a => FromGVal m (Maybe a) where
+    fromGVal = \g ->
+        if isNull g
+            then
+                Just Nothing
+            else
+                Just <$> fromGVal g
+            
+instance FromGVal m a => FromGVal m [a] where
+    fromGVal g = asList g >>= mapM fromGVal
+
+instance FromGVal m Bool where
+    fromGVal = Just . asBoolean

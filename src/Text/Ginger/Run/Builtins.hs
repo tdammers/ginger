@@ -424,11 +424,12 @@ gvalAutoParseDate = go . Text.unpack . asText
 
 gfnDateFormat :: Monad m => Function (Run m h)
 gfnDateFormat args =
-    let Right [gDate, gFormat, gTimeZone] =
+    let Right [gDate, gFormat, gTimeZone, gLocale] =
             extractArgsDefL
                 [ ("date", def)
                 , ("format", def)
                 , ("tz", def)
+                , ("locale", def)
                 ]
                 args
         dateMay = gvalToDate gDate
