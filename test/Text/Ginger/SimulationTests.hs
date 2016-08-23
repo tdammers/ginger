@@ -291,6 +291,30 @@ simulationTests = testGroup "Simulation"
                 mkTestHtml [] []
                     "{{ {'year':2015, 'month':6, 'day':13}|date('%Y-%m-%d') }}"
                     "2015-06-13"
+            , testCase "format a list as a date" $ do
+                mkTestHtml [] []
+                    "{{ [2015, 6, 13, 12, 45, 21]|date('%Y-%m-%d') }}"
+                    "2015-06-13"
+            , testCase "format a 5-element list as a date" $ do
+                mkTestHtml [] []
+                    "{{ [2015, 6, 13, 12, 45]|date('%Y-%m-%d') }}"
+                    "2015-06-13"
+            , testCase "format a 3-element list as a date" $ do
+                mkTestHtml [] []
+                    "{{ [2015, 6, 13]|date('%Y-%m-%d') }}"
+                    "2015-06-13"
+            , testCase "use correct default time (noon) with 3-element list" $ do
+                mkTestHtml [] []
+                    "{{ [2015, 6, 13]|date('%H:%M:%S') }}"
+                    "12:00:00"
+            , testCase "format a string as a date" $ do
+                mkTestHtml [] []
+                    "{{ '2015-06-13 12:05:43'|date('%Y-%m-%d') }}"
+                    "2015-06-13"
+            , testCase "format a string as a time-of-day" $ do
+                mkTestHtml [] []
+                    "{{ '2015-06-13 12:05:43'|date('%H-%M-%S') }}"
+                    "12-05-43"
             ]
         , testGroup "\"default\"" 
             [ testCase "trigger default" $ do

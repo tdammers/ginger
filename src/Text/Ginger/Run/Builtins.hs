@@ -59,7 +59,15 @@ import Safe (readMay, lastDef, headMay)
 import Network.HTTP.Types (urlEncode)
 import Debug.Trace (trace)
 import Data.List (lookup, zipWith, unzip)
-import Data.Time (defaultTimeLocale, formatTime, LocalTime (..), TimeOfDay (..), fromGregorian, Day (..))
+import Data.Time ( defaultTimeLocale
+                 , formatTime
+                 , LocalTime (..)
+                 , TimeOfDay (..)
+                 , fromGregorian
+                 , Day (..)
+                 , parseTimeM
+                 )
+import Data.Foldable (asum)
 
 gfnRawHtml :: Monad m => Function (Run m h)
 gfnRawHtml = unaryFunc (toGVal . unsafeRawHtml . asText)
@@ -358,6 +366,62 @@ gfnPrintf ((_, fmtStrG):args) = do
     where
         fmtStr = Text.unpack $ asText fmtStrG
 
+gvalToDate :: GVal m -> Maybe LocalTime
+gvalToDate g = gvalDictToDate g
+             <|> gvalListToDate g
+             <|> gvalAutoParseDate g
+
+gvalDictToDate :: GVal m -> Maybe LocalTime
+gvalDictToDate g = do
+    let datePartMay = do
+            year <- fmap fromIntegral $ toInt =<< lookupLoose "year" g
+            month <- toInt =<< lookupLoose "month" g
+            day <- toInt =<< lookupLoose "day" g
+            return $ fromGregorian year month day
+        timePartMay = do
+            hours <- toInt =<< lookupLoose "hours" g
+            minutes <- toInt =<< lookupLoose "minutes" g
+            seconds <- fmap fromIntegral $ toInt =<< lookupLoose "seconds" g
+            return $ TimeOfDay hours minutes seconds
+    when (isNothing datePartMay && isNothing timePartMay) Nothing
+    let datePart = fromMaybe (fromGregorian 1970 1 1) datePartMay
+        timePart = fromMaybe (TimeOfDay 12 0 0) timePartMay
+    return $ LocalTime datePart timePart
+
+gvalListToDate :: GVal m -> Maybe LocalTime
+gvalListToDate g = go =<< asList g
+    where
+        go :: [GVal m] -> Maybe LocalTime
+        go parts = case parts of
+            [yearG, monthG, dayG, hoursG, minutesG, secondsG] -> do
+                datePart <-
+                    fromGregorian
+                        <$> (fromIntegral <$> toInt yearG)
+                        <*> toInt monthG
+                        <*> toInt dayG
+                timePart <-
+                    TimeOfDay
+                        <$> toInt hoursG
+                        <*> toInt minutesG
+                        <*> (fromIntegral <$> toInt secondsG)
+                return $ LocalTime datePart timePart
+            [yearG, monthG, dayG, hoursG, minutesG] ->
+                go [yearG, monthG, dayG, hoursG, minutesG, toGVal (0 :: Int)]
+            [yearG, monthG, dayG] ->
+                go [yearG, monthG, dayG, toGVal (12 :: Int), toGVal (0 :: Int)]
+            _ -> Nothing
+
+gvalAutoParseDate :: GVal m -> Maybe LocalTime
+gvalAutoParseDate = go . Text.unpack . asText
+    where
+        go input =
+            asum
+                . fmap (\fmt -> parseTimeM True defaultTimeLocale fmt input)
+                $ formats
+        formats =
+            [ "%Y-%m-%d %H:%M:%S"
+            ]
+
 gfnDateFormat :: Monad m => Function (Run m h)
 gfnDateFormat args =
     let Right [gDate, gFormat, gTimeZone] =
@@ -367,23 +431,9 @@ gfnDateFormat args =
                 , ("tz", def)
                 ]
                 args
-        d = if isDict gDate
-                then
-                    let year = fromIntegral . toIntDef 1 . lookupLooseDef def "year" $ gDate
-                        month = toIntDef 1 . lookupLooseDef def "month" $ gDate
-                        day = toIntDef 1 . lookupLooseDef def "day" $ gDate
-                        hours = toIntDef 1 . lookupLooseDef def "hours" $ gDate
-                        minutes = toIntDef 1 . lookupLooseDef def "minutes" $ gDate
-                        seconds = fromIntegral . toIntDef 1 . lookupLooseDef def "seconds" $ gDate
-                        lday = fromGregorian year month day
-                        ltime = TimeOfDay hours minutes seconds
-                    in LocalTime lday ltime
-                else
-                    let lday = fromGregorian 2000 1 1
-                        ltime = TimeOfDay 0 0 0
-                    in LocalTime lday ltime
+        dateMay = gvalToDate gDate
         fmt = Text.unpack . asText $ gFormat
-    in return . toGVal $ formatTime defaultTimeLocale fmt d
+    in return . toGVal $ formatTime defaultTimeLocale fmt <$> dateMay
 
 gfnFilter :: Monad m => Function (Run m h)
 gfnFilter [] = return def
