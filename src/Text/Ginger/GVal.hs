@@ -48,6 +48,8 @@ import Data.Scientific ( Scientific
                        , toBoundedInteger
                        , toRealFloat
                        , scientific
+                       , coefficient
+                       , base10Exponent
                        )
 import Data.Fixed (Fixed (..), Pico)
 import Control.Applicative
@@ -65,6 +67,7 @@ import Data.Time ( Day (..)
                  , toModifiedJulianDay
                  , formatTime
                  , toGregorian
+                 , fromGregorian
                  , LocalTime (..)
                  , TimeOfDay (..)
                  )
@@ -554,6 +557,9 @@ lookupLoose k v =
 lookupLooseDef :: GVal m -> GVal m -> GVal m -> GVal m
 lookupLooseDef d k = fromMaybe d . lookupLoose k
 
+(~:) :: (FromGVal m v) => GVal m -> GVal m -> Maybe v
+g ~: k = lookupLoose k g >>= fromGVal
+
 -- | Treat a 'GVal' as a dictionary and list all the keys, with no particular
 -- ordering.
 keys :: GVal m -> Maybe [Text]
@@ -596,6 +602,10 @@ toFunction = asFunction
 picoToScientific :: Pico -> Scientific
 picoToScientific (MkFixed x) = scientific x (-12)
 
+scientificToPico :: Scientific -> Pico
+scientificToPico s =
+    MkFixed (Prelude.floor $ scientific (coefficient s) (base10Exponent s + 12))
+
 class FromGVal m a where
     fromGValEither :: GVal m -> Either Prelude.String a
     fromGValEither = Prelude.maybe (Left "Conversion from GVal failed") Right . fromGVal
@@ -624,9 +634,113 @@ instance FromGVal m a => FromGVal m (Maybe a) where
                 Just Nothing
             else
                 Just <$> fromGVal g
-            
-instance FromGVal m a => FromGVal m [a] where
-    fromGVal g = asList g >>= mapM fromGVal
 
 instance FromGVal m Bool where
     fromGVal = Just . asBoolean
+
+instance FromGVal m JSON.Value where
+    fromGVal = asJSON
+
+instance FromGVal m () where
+    fromGVal g = if isNull g then Just () else Nothing
+
+instance FromGVal m a => FromGVal m [a] where
+    fromGVal g = asList g >>= mapM fromGVal
+
+instance ( FromGVal m a
+         , FromGVal m b
+         ) => FromGVal m (a, b) where
+    fromGVal g = case asList g of
+        Just [a, b] ->
+            (,) <$> fromGVal a
+                <*> fromGVal b
+        _ -> Nothing
+
+instance ( FromGVal m a
+         , FromGVal m b
+         , FromGVal m c
+         ) => FromGVal m (a, b, c) where
+    fromGVal g = case asList g of
+        Just [a, b, c] ->
+            (,,) <$> fromGVal a
+                 <*> fromGVal b
+                 <*> fromGVal c
+        _ -> Nothing
+
+instance ( FromGVal m a
+         , FromGVal m b
+         , FromGVal m c
+         , FromGVal m d
+         ) => FromGVal m (a, b, c, d) where
+    fromGVal g = case asList g of
+        Just [a, b, c, d] ->
+            (,,,) <$> fromGVal a
+                  <*> fromGVal b
+                  <*> fromGVal c
+                  <*> fromGVal d
+        _ -> Nothing
+
+instance FromGVal m Day where
+    fromGVal g = do
+        year <- fromIntegral <$> (g ~: "year" :: Maybe Int)
+        month <- g ~: "month"
+        day <- g ~: "day"
+        return $ fromGregorian year month day
+
+instance FromGVal m TimeOfDay where
+    fromGVal g = do
+        hours <- g ~: "hours"
+        minutes <- g ~: "minutes"
+        seconds <- scientificToPico <$> g ~: "seconds"
+        return $ TimeOfDay hours minutes seconds
+
+{-
+instance ToGVal m TimeOfDay where
+    toGVal x =
+        let TimeOfDay hours minutes seconds = x
+            formatted = Text.pack $ formatTime defaultTimeLocale "%H:%M:%S" x
+        in (orderedDict
+            [ "hours" ~> hours
+            , "minutes" ~> minutes
+            , "seconds" ~> picoToScientific seconds
+            ])
+            { asHtml = html $ formatted
+            , asText = formatted
+            , asBoolean = True
+            , asNumber = Nothing
+            , asList = Just
+                [ toGVal hours
+                , toGVal minutes
+                , toGVal (picoToScientific seconds)
+                ]
+            }
+
+instance ToGVal m LocalTime where
+    toGVal x =
+        let (year, month, day) = toGregorian $ localDay x
+            TimeOfDay hours minutes seconds = localTimeOfDay x
+            formatted = Text.pack $ formatTime defaultTimeLocale "%0Y-%m-%d %H:%M:%S" x
+        in (orderedDict
+            [ "year" ~> year
+            , "month" ~> month
+            , "day" ~> day
+            , "hours" ~> hours
+            , "minutes" ~> minutes
+            , "seconds" ~> picoToScientific seconds
+            , "date" ~> localDay x
+            , "time" ~> localTimeOfDay x
+            ])
+            { asHtml = html $ formatted
+            , asText = formatted
+            , asBoolean = True
+            , asNumber = Nothing
+            , asList = Just
+                [ toGVal year
+                , toGVal month
+                , toGVal day
+                , toGVal hours
+                , toGVal minutes
+                , toGVal (picoToScientific seconds)
+                ]
+            }
+-}

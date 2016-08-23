@@ -1,4 +1,6 @@
-{-#LANGUAGE OverloadedStrings #-} module Text.Ginger.PropertyTests
+{-#LANGUAGE OverloadedStrings #-}
+{-#LANGUAGE FlexibleContexts #-}
+module Text.Ginger.PropertyTests
 where
 
 import Test.Tasty
@@ -9,6 +11,7 @@ import Data.Default (def)
 import qualified Data.HashMap.Strict as HashMap
 import Control.Exception
 import System.IO.Unsafe (unsafePerformIO)
+import Control.Monad.Identity (Identity)
 
 import Text.Ginger
 import Text.Ginger.Html
@@ -64,9 +67,26 @@ instance Arbitrary Template where
 
 propertyTests :: TestTree
 propertyTests = testGroup "Properties"
-    [ testProperty "optimizer doesn't change behavior" $
-        \ast -> unsafePerformIO $ (==) <$> expand ast <*> expand (optimize ast)
+    [ testGroup "Optimizer" $
+        [ testProperty "optimizer doesn't change behavior" $
+            \ast -> unsafePerformIO $ (==) <$> expand ast <*> expand (optimize ast)
+        ]
+    , testGroup "ToGVal / FromGVal round tripping"
+        [ testProperty "Int" (roundTripGValP :: Int -> Bool)
+        , testProperty "Bool" (roundTripGValP :: Bool -> Bool)
+        , testProperty "[Text]" (roundTripGValP :: [Text] -> Bool)
+        , testProperty "Maybe Text" (roundTripGValP :: Maybe Text -> Bool)
+        , testProperty "Text" (roundTripGValP :: Text -> Bool)
+        ]
     ]
+
+roundTripGValP :: (Eq a, ToGVal Identity a, FromGVal Identity a)
+               => a -> Bool
+roundTripGValP i =
+    let g :: GVal Identity
+        g = toGVal i
+        j = fromGVal g
+    in j == Just i
 
 expand :: Template -> IO (Either String Text)
 expand tpl =
