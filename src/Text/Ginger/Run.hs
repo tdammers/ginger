@@ -101,6 +101,7 @@ defaultScope =
     , ("contains", fromFunction gfnContains)
     , ("d", fromFunction gfnDefault)
     , ("date", fromFunction gfnDateFormat)
+    , ("dateformat", fromFunction gfnDateFormat)
     , ("default", fromFunction gfnDefault)
     , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
     , ("e", fromFunction gfnEscape)
