@@ -59,6 +59,7 @@ import Safe (readMay, lastDef, headMay)
 import Network.HTTP.Types (urlEncode)
 import Debug.Trace (trace)
 import Data.List (lookup, zipWith, unzip)
+import Data.Time (defaultTimeLocale, formatTime, LocalTime (..), TimeOfDay (..), fromGregorian, Day (..))
 
 gfnRawHtml :: Monad m => Function (Run m h)
 gfnRawHtml = unaryFunc (toGVal . unsafeRawHtml . asText)
@@ -356,6 +357,33 @@ gfnPrintf ((_, fmtStrG):args) = do
     return . toGVal $ printfG fmtStr (fmap snd args)
     where
         fmtStr = Text.unpack $ asText fmtStrG
+
+gfnDateFormat :: Monad m => Function (Run m h)
+gfnDateFormat args =
+    let Right [gDate, gFormat, gTimeZone] =
+            extractArgsDefL
+                [ ("date", def)
+                , ("format", def)
+                , ("tz", def)
+                ]
+                args
+        d = if isDict gDate
+                then
+                    let year = fromIntegral . toIntDef 1 . lookupLooseDef def "year" $ gDate
+                        month = toIntDef 1 . lookupLooseDef def "month" $ gDate
+                        day = toIntDef 1 . lookupLooseDef def "day" $ gDate
+                        hours = toIntDef 1 . lookupLooseDef def "hours" $ gDate
+                        minutes = toIntDef 1 . lookupLooseDef def "minutes" $ gDate
+                        seconds = fromIntegral . toIntDef 1 . lookupLooseDef def "seconds" $ gDate
+                        lday = fromGregorian year month day
+                        ltime = TimeOfDay hours minutes seconds
+                    in LocalTime lday ltime
+                else
+                    let lday = fromGregorian 2000 1 1
+                        ltime = TimeOfDay 0 0 0
+                    in LocalTime lday ltime
+        fmt = Text.unpack . asText $ gFormat
+    in return . toGVal $ formatTime defaultTimeLocale fmt d
 
 gfnFilter :: Monad m => Function (Run m h)
 gfnFilter [] = return def

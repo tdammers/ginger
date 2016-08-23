@@ -100,6 +100,7 @@ defaultScope =
     , ("concat", fromFunction . variadicStringFunc $ mconcat)
     , ("contains", fromFunction gfnContains)
     , ("d", fromFunction gfnDefault)
+    , ("date", fromFunction gfnDateFormat)
     , ("default", fromFunction gfnDefault)
     , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
     , ("e", fromFunction gfnEscape)

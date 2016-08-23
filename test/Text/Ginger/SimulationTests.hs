@@ -286,6 +286,12 @@ simulationTests = testGroup "Simulation"
                     "{% if ['hello', 'world']|contains('hello', 'you', 'world') %}yes{% else %}no{% endif %}"
                     "no"
             ]
+        , testGroup "\"date\"" 
+            [ testCase "format a date" $ do
+                mkTestHtml [] []
+                    "{{ {'year':2015, 'month':6, 'day':13}|date('%Y-%m-%d') }}"
+                    "2015-06-13"
+            ]
         , testGroup "\"default\"" 
             [ testCase "trigger default" $ do
                 mkTestHtml [] []

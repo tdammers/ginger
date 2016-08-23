@@ -46,8 +46,10 @@ import Data.Monoid
 import Data.Scientific ( Scientific
                        , floatingOrInteger
                        , toBoundedInteger
-                       , toRealFloat 
+                       , toRealFloat
+                       , scientific
                        )
+import Data.Fixed (Fixed (..), Pico)
 import Control.Applicative
 import qualified Data.Aeson as JSON
 import qualified Data.HashMap.Strict as HashMap
@@ -58,6 +60,14 @@ import Control.Monad.Trans (MonadTrans, lift)
 import Data.Default (Default, def)
 import Text.Printf
 import Debug.Trace (trace)
+import Data.Time ( Day (..)
+                 , defaultTimeLocale
+                 , toModifiedJulianDay
+                 , formatTime
+                 , toGregorian
+                 , LocalTime (..)
+                 , TimeOfDay (..)
+                 )
 
 import Text.Ginger.Html
 
@@ -273,6 +283,76 @@ instance ToGVal m Scientific where
             , isNull = False
             }
 
+instance ToGVal m Day where
+    toGVal x =
+        let (year, month, day) = toGregorian x
+            julian = toModifiedJulianDay x
+            formatted = Text.pack $ formatTime defaultTimeLocale "%0Y-%m-%d" x
+        in (orderedDict
+            [ "year" ~> year
+            , "month" ~> month
+            , "day" ~> day
+            ])
+            { asHtml = html $ formatted
+            , asText = formatted
+            , asBoolean = True
+            , asNumber = Just . fromIntegral $ julian
+            , asList = Just
+                [ toGVal year
+                , toGVal month
+                , toGVal day
+                ]
+            }
+
+instance ToGVal m TimeOfDay where
+    toGVal x =
+        let TimeOfDay hours minutes seconds = x
+            formatted = Text.pack $ formatTime defaultTimeLocale "%H:%M:%S" x
+        in (orderedDict
+            [ "hours" ~> hours
+            , "minutes" ~> minutes
+            , "seconds" ~> picoToScientific seconds
+            ])
+            { asHtml = html $ formatted
+            , asText = formatted
+            , asBoolean = True
+            , asNumber = Nothing
+            , asList = Just
+                [ toGVal hours
+                , toGVal minutes
+                , toGVal (picoToScientific seconds)
+                ]
+            }
+
+instance ToGVal m LocalTime where
+    toGVal x =
+        let (year, month, day) = toGregorian $ localDay x
+            TimeOfDay hours minutes seconds = localTimeOfDay x
+            formatted = Text.pack $ formatTime defaultTimeLocale "%0Y-%m-%d %H:%M:%S" x
+        in (orderedDict
+            [ "year" ~> year
+            , "month" ~> month
+            , "day" ~> day
+            , "hours" ~> hours
+            , "minutes" ~> minutes
+            , "seconds" ~> picoToScientific seconds
+            , "date" ~> localDay x
+            , "time" ~> localTimeOfDay x
+            ])
+            { asHtml = html $ formatted
+            , asText = formatted
+            , asBoolean = True
+            , asNumber = Nothing
+            , asList = Just
+                [ toGVal year
+                , toGVal month
+                , toGVal day
+                , toGVal hours
+                , toGVal minutes
+                , toGVal (picoToScientific seconds)
+                ]
+            }
+
 instance (ToGVal m a, ToGVal m b) => ToGVal m (a, b) where
     toGVal (a, b) = toGVal ([ toGVal a, toGVal b ] :: [GVal m])
 
@@ -468,6 +548,12 @@ lookupLoose :: GVal m -> GVal m -> Maybe (GVal m)
 lookupLoose k v =
     lookupKey (asText k) v <|> lookupIndexMay (floor <$> asNumber k) v
 
+-- | Like 'lookupLoose', but fall back to the given default value if
+-- the key is not in the dictionary, or if the indexee is not a
+-- dictionary-like object.
+lookupLooseDef :: GVal m -> GVal m -> GVal m -> GVal m
+lookupLooseDef d k = fromMaybe d . lookupLoose k
+
 -- | Treat a 'GVal' as a dictionary and list all the keys, with no particular
 -- ordering.
 keys :: GVal m -> Maybe [Text]
@@ -483,6 +569,16 @@ toNumber = asNumber
 toInt :: GVal m -> Maybe Int
 toInt x = toNumber x >>= toBoundedInteger
 
+-- | Convert a 'GVal' to an 'Int', falling back to the given
+-- default if the conversion fails.
+toIntDef :: Int -> GVal m -> Int
+toIntDef d = fromMaybe d . toInt
+
+-- | Convert a 'GVal' to an 'Int', falling back to zero (0)
+-- if the conversion fails.
+toInt0 :: GVal m -> Int
+toInt0 = toIntDef 0
+
 -- | Loose cast to boolean.
 --
 -- Numeric zero, empty strings, empty lists, empty objects, 'Null', and boolean
@@ -496,3 +592,6 @@ toBoolean = asBoolean
 -- it's not.
 toFunction :: GVal m -> Maybe (Function m)
 toFunction = asFunction
+
+picoToScientific :: Pico -> Scientific
+picoToScientific (MkFixed x) = scientific x (-12)
