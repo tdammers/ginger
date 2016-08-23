@@ -694,53 +694,8 @@ instance FromGVal m TimeOfDay where
         seconds <- scientificToPico <$> g ~: "seconds"
         return $ TimeOfDay hours minutes seconds
 
-{-
-instance ToGVal m TimeOfDay where
-    toGVal x =
-        let TimeOfDay hours minutes seconds = x
-            formatted = Text.pack $ formatTime defaultTimeLocale "%H:%M:%S" x
-        in (orderedDict
-            [ "hours" ~> hours
-            , "minutes" ~> minutes
-            , "seconds" ~> picoToScientific seconds
-            ])
-            { asHtml = html $ formatted
-            , asText = formatted
-            , asBoolean = True
-            , asNumber = Nothing
-            , asList = Just
-                [ toGVal hours
-                , toGVal minutes
-                , toGVal (picoToScientific seconds)
-                ]
-            }
-
-instance ToGVal m LocalTime where
-    toGVal x =
-        let (year, month, day) = toGregorian $ localDay x
-            TimeOfDay hours minutes seconds = localTimeOfDay x
-            formatted = Text.pack $ formatTime defaultTimeLocale "%0Y-%m-%d %H:%M:%S" x
-        in (orderedDict
-            [ "year" ~> year
-            , "month" ~> month
-            , "day" ~> day
-            , "hours" ~> hours
-            , "minutes" ~> minutes
-            , "seconds" ~> picoToScientific seconds
-            , "date" ~> localDay x
-            , "time" ~> localTimeOfDay x
-            ])
-            { asHtml = html $ formatted
-            , asText = formatted
-            , asBoolean = True
-            , asNumber = Nothing
-            , asList = Just
-                [ toGVal year
-                , toGVal month
-                , toGVal day
-                , toGVal hours
-                , toGVal minutes
-                , toGVal (picoToScientific seconds)
-                ]
-            }
--}
+instance FromGVal m LocalTime where
+    fromGVal g = do
+        date <- fromGVal g <|> g ~: "date"
+        time <- fromGVal g <|> g ~: "time"
+        return $ LocalTime date time

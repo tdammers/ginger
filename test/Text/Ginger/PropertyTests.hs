@@ -12,6 +12,7 @@ import qualified Data.HashMap.Strict as HashMap
 import Control.Exception
 import System.IO.Unsafe (unsafePerformIO)
 import Control.Monad.Identity (Identity)
+import Data.Time
 
 import Text.Ginger
 import Text.Ginger.Html
@@ -37,6 +38,20 @@ arbitraryTag = do
         , tagName
         , unsafeRawHtml ">"
         ]
+
+instance Arbitrary Day where
+    arbitrary = ModifiedJulianDay <$> arbitrary
+
+instance Arbitrary TimeOfDay where
+    arbitrary =
+        TimeOfDay
+            <$> resize 24 arbitrarySizedNatural
+            <*> resize 60 arbitrarySizedNatural
+            <*> (fromIntegral <$> resize 61 arbitrarySizedNatural)
+
+instance Arbitrary LocalTime where
+    arbitrary =
+        LocalTime <$> arbitrary <*> arbitrary
 
 instance Arbitrary Statement where
     arbitrary = arbitraryStatement 2
@@ -77,6 +92,7 @@ propertyTests = testGroup "Properties"
         , testProperty "[Text]" (roundTripGValP :: [Text] -> Bool)
         , testProperty "Maybe Text" (roundTripGValP :: Maybe Text -> Bool)
         , testProperty "Text" (roundTripGValP :: Text -> Bool)
+        , testProperty "LocalTime" (roundTripGValP :: LocalTime -> Bool)
         ]
     ]
 
