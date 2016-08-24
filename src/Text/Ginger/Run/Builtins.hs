@@ -5,6 +5,7 @@
 {-#LANGUAGE TypeSynonymInstances #-}
 {-#LANGUAGE MultiParamTypeClasses #-}
 {-#LANGUAGE ScopedTypeVariables #-}
+{-#LANGUAGE LambdaCase #-}
 module Text.Ginger.Run.Builtins
 where
 
@@ -37,6 +38,7 @@ import Text.Ginger.Html
 import Text.Ginger.GVal
 import Text.Ginger.Run.Type
 import Text.Ginger.Run.FuncUtils
+import Text.Ginger.Run.VM
 import Text.Printf
 import Text.PrintfA
 
@@ -66,6 +68,7 @@ import Data.Time ( defaultTimeLocale
                  , fromGregorian
                  , Day (..)
                  , parseTimeM
+                 , TimeLocale (..)
                  )
 import Data.Foldable (asum)
 
@@ -436,11 +439,25 @@ gfnDateFormat args =
         fmtMay = Text.unpack <$> fromGVal gFormat
     in case fmtMay of
         Just fmt -> do
-            let locale = fromMaybe defaultTimeLocale $
-                    fromGVal gLocale
+            locale <- maybe
+                (getTimeLocale gLocale)
+                return
+                (fromGVal gLocale)
             return . toGVal $ formatTime locale fmt <$> dateMay
         Nothing -> do
             return . toGVal $ dateMay
+
+getTimeLocale :: Monad m => GVal (Run m h) -> Run m h TimeLocale
+getTimeLocale localeName = do
+    toFunction <$> getVar "getlocale" >>= \case
+        Nothing ->
+            return defaultTimeLocale
+        Just getlocale -> do
+            let args = [ (Just "category", "LC_TIME")
+                       , (Just "locale", localeName)
+                       ]
+            fromMaybe defaultTimeLocale . fromGVal <$> getlocale args
+
 
 gfnFilter :: Monad m => Function (Run m h)
 gfnFilter [] = return def

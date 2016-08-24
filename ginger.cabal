@@ -29,6 +29,7 @@ library
   other-modules: Text.Ginger.Run.Type
                , Text.Ginger.Run.FuncUtils
                , Text.Ginger.Run.Builtins
+               , Text.Ginger.Run.VM
   -- other-extensions:
   build-depends: base >=4.5 && <5
                , aeson
