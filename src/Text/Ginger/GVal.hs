@@ -536,6 +536,29 @@ orderedDict xs =
 k ~> v = (k, toGVal v)
 infixr 8 ~>
 
+-- * Convenience API for constructing heterogenous lists
+
+type Cons m = [GVal m]
+
+-- | Alias for '(~:)'.
+gcons :: ToGVal m a => a -> Cons m -> Cons m
+gcons = (:) . toGVal
+
+-- | This operator allows constructing heterogenous lists using cons-style
+-- syntax, e.g.:
+--
+-- >>> asText $ list ("Found " ~: (6 :: Int) ~: " items" ~: [] :: [GVal IO])
+-- "Found 6 items"
+(~:) :: ToGVal m a => a -> Cons m -> Cons m
+(~:) = gcons
+infixr 5 ~:
+
+-- | Construct a GVal from a list of GVals. This is equivalent to the 'toGVal'
+-- implementation of @[GVal m]@, but typed more narrowly for clarity and
+-- disambiguation.
+list :: Cons m -> GVal m
+list = toGVal
+
 -- * Inspecting 'GVal's / Marshalling 'GVal' to Haskell
 
 -- | Check if the given GVal is a list-like object
@@ -581,8 +604,8 @@ lookupLoose k v =
 lookupLooseDef :: GVal m -> GVal m -> GVal m -> GVal m
 lookupLooseDef d k = fromMaybe d . lookupLoose k
 
-(~:) :: (FromGVal m v) => GVal m -> GVal m -> Maybe v
-g ~: k = lookupLoose k g >>= fromGVal
+(~!) :: (FromGVal m v) => GVal m -> GVal m -> Maybe v
+g ~! k = lookupLoose k g >>= fromGVal
 
 -- | Treat a 'GVal' as a dictionary and list all the keys, with no particular
 -- ordering.
@@ -706,42 +729,42 @@ instance ( FromGVal m a
 
 instance FromGVal m Day where
     fromGVal g = do
-        year <- fromIntegral <$> (g ~: "year" :: Maybe Int)
-        month <- g ~: "month"
-        day <- g ~: "day"
+        year <- fromIntegral <$> (g ~! "year" :: Maybe Int)
+        month <- g ~! "month"
+        day <- g ~! "day"
         return $ fromGregorian year month day
 
 instance FromGVal m TimeOfDay where
     fromGVal g = do
-        hours <- g ~: "hours"
-        minutes <- g ~: "minutes"
-        seconds <- scientificToPico <$> g ~: "seconds"
+        hours <- g ~! "hours"
+        minutes <- g ~! "minutes"
+        seconds <- scientificToPico <$> g ~! "seconds"
         return $ TimeOfDay hours minutes seconds
 
 instance FromGVal m LocalTime where
     fromGVal g = do
-        date <- fromGVal g <|> g ~: "date"
-        time <- fromGVal g <|> g ~: "time"
+        date <- fromGVal g <|> g ~! "date"
+        time <- fromGVal g <|> g ~! "time"
         return $ LocalTime date time
 
 instance FromGVal m TimeZone where
     fromGVal g =
         TimeZone
-            <$> g ~: "minutes"
-            <*> g ~: "summerOnly"
-            <*> (Text.unpack <$> g ~: "name")
+            <$> g ~! "minutes"
+            <*> g ~! "summerOnly"
+            <*> (Text.unpack <$> g ~! "name")
 
 instance FromGVal m TimeLocale where
     fromGVal g =
         TimeLocale
-            <$> (List.map unpackPair <$> g ~: "dayNames")
-            <*> (List.map unpackPair <$> g ~: "monthNames")
-            <*> (unpackPair <$> g ~: "amPm")
-            <*> (Text.unpack <$> g ~: "dateTimeFmt")
-            <*> (Text.unpack <$> g ~: "dateFmt")
-            <*> (Text.unpack <$> g ~: "timeFmt")
-            <*> (Text.unpack <$> g ~: "time12Fmt")
-            <*> (g ~: "knownTimeZones")
+            <$> (List.map unpackPair <$> g ~! "dayNames")
+            <*> (List.map unpackPair <$> g ~! "monthNames")
+            <*> (unpackPair <$> g ~! "amPm")
+            <*> (Text.unpack <$> g ~! "dateTimeFmt")
+            <*> (Text.unpack <$> g ~! "dateFmt")
+            <*> (Text.unpack <$> g ~! "timeFmt")
+            <*> (Text.unpack <$> g ~! "time12Fmt")
+            <*> (g ~! "knownTimeZones")
 
 pairwise :: (a -> b) -> (a, a) -> (b, b)
 pairwise f (a, b) = (f a, f b)
