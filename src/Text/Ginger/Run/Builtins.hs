@@ -433,8 +433,14 @@ gfnDateFormat args =
                 ]
                 args
         dateMay = gvalToDate gDate
-        fmt = Text.unpack . asText $ gFormat
-    in return . toGVal $ formatTime defaultTimeLocale fmt <$> dateMay
+        fmtMay = Text.unpack <$> fromGVal gFormat
+    in case fmtMay of
+        Just fmt -> do
+            let locale = fromMaybe defaultTimeLocale $
+                    fromGVal gLocale
+            return . toGVal $ formatTime locale fmt <$> dateMay
+        Nothing -> do
+            return . toGVal $ dateMay
 
 gfnFilter :: Monad m => Function (Run m h)
 gfnFilter [] = return def

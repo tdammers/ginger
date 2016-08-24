@@ -358,6 +358,28 @@ instance ToGVal m LocalTime where
                 ]
             }
 
+instance ToGVal m TimeLocale where
+    toGVal t =
+        let formattedExample =
+                Text.pack . formatTime t "%c" $
+                    LocalTime (fromGregorian 2000 1 1) (TimeOfDay 13 15 00)
+        in (dict
+            [ "dayNames" ~> wDays t
+            , "monthNames" ~> months t
+            , "amPm" ~> amPm t
+            , "dateTimeFmt" ~> dateTimeFmt t
+            , "dateFmt" ~> dateFmt t
+            , "timeFmt" ~> timeFmt t
+            , "time12Fmt" ~> time12Fmt t
+            -- TODO
+            -- , "knownTimeZones" ~> knownTimeZones t
+            ])
+            { asHtml = html $ formattedExample
+            , asText = formattedExample
+            , asBoolean = True
+            , asNumber = Nothing
+            }
+
 instance (ToGVal m a, ToGVal m b) => ToGVal m (a, b) where
     toGVal (a, b) = toGVal ([ toGVal a, toGVal b ] :: [GVal m])
 
