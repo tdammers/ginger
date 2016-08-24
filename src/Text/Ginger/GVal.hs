@@ -757,15 +757,19 @@ instance FromGVal m TimeZone where
 
 instance FromGVal m TimeLocale where
     fromGVal g =
-        TimeLocale
-            <$> (List.map unpackPair <$> g ~! "dayNames")
-            <*> (List.map unpackPair <$> g ~! "monthNames")
-            <*> (unpackPair <$> g ~! "amPm")
-            <*> (Text.unpack <$> g ~! "dateTimeFmt")
-            <*> (Text.unpack <$> g ~! "dateFmt")
-            <*> (Text.unpack <$> g ~! "timeFmt")
-            <*> (Text.unpack <$> g ~! "time12Fmt")
-            <*> (g ~! "knownTimeZones")
+        if isDict g
+            then
+                Just $ TimeLocale
+                    (fromMaybe (wDays defaultTimeLocale) $ List.map unpackPair <$> g ~! "dayNames")
+                    (fromMaybe (months defaultTimeLocale) $ List.map unpackPair <$> g ~! "monthNames")
+                    (fromMaybe (amPm defaultTimeLocale) $ unpackPair <$> g ~! "amPm")
+                    (fromMaybe (dateTimeFmt defaultTimeLocale) $ Text.unpack <$> g ~! "dateTimeFmt")
+                    (fromMaybe (dateFmt defaultTimeLocale) $ Text.unpack <$> g ~! "dateFmt")
+                    (fromMaybe (timeFmt defaultTimeLocale) $ Text.unpack <$> g ~! "timeFmt")
+                    (fromMaybe (time12Fmt defaultTimeLocale) $ Text.unpack <$> g ~! "time12Fmt")
+                    (fromMaybe (knownTimeZones defaultTimeLocale) $ g ~! "knownTimeZones")
+            else
+                Nothing
 
 pairwise :: (a -> b) -> (a, a) -> (b, b)
 pairwise f (a, b) = (f a, f b)

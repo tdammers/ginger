@@ -322,8 +322,8 @@ simulationTests = testGroup "Simulation"
                 mkTestHtml
                     [("silly", toGVal (sillyLocale :: Maybe JSON.Value))]
                     []
-                    "{{ '2015-06-13 12:05:43'|date('%A', locale=silly) }}"
-                    "The Day Of Saturn"
+                    "{{ '2015-06-13 12:05:43'|date('%c', locale=silly) }}"
+                    "It be The Day Of Saturn, in the year 15, the clock striketh 12"
             ]
         , testGroup "\"default\""
             [ testCase "trigger default" $ do

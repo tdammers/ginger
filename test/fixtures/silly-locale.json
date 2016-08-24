@@ -1,5 +1,5 @@
 {
-   "dateTimeFmt" : "The date be %Y %m %d, the clock striketh %H",
+   "dateTimeFmt" : "It be %A, in the year %y, the clock striketh %H",
    "dayNames" : [
       [
          "The Day Of Sunshine",
@@ -86,6 +86,5 @@
       ]
    ],
    "time12Fmt" : "%I:%M:%S %p",
-   "dateFmt" : "%d-%m, %y",
-   "knownTimeZones": []
+   "dateFmt" : "%d-%m, %y"
 }
