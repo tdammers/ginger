@@ -318,12 +318,7 @@ simulationTests = testGroup "Simulation"
                     "{{ '2015-06-13 12:05:43'|date('%H-%M-%S') }}"
                     "12-05-43"
             , testCase "use a custom locale" $ do
-                sillyLocale <- JSON.decode <$> LBS.readFile "test/fixtures/silly-locale.json"
-                let sillyLocaleG :: GVal IO
-                    sillyLocaleG = toGVal sillyLocale
-                    sillyLocaleT :: Maybe TimeLocale
-                    sillyLocaleT = fromGVal sillyLocaleG
-                print sillyLocaleT
+                sillyLocale <- loadSillyLocale
                 mkTestHtml
                     [("silly", toGVal (sillyLocale :: Maybe JSON.Value))]
                     []
@@ -753,3 +748,7 @@ mkTest mContext valToText contextDict includeLookup src expected = do
     runGingerT context (optimize template)
     actual <- valToText <$> readIORef output
     assertEqual "" expected actual
+
+loadSillyLocale :: IO (Maybe JSON.Value)
+loadSillyLocale = do
+    JSON.decode <$> LBS.readFile "test/fixtures/silly-locale.json"
