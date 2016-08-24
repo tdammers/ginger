@@ -364,15 +364,16 @@ instance ToGVal m TimeLocale where
                 Text.pack . formatTime t "%c" $
                     LocalTime (fromGregorian 2000 1 1) (TimeOfDay 13 15 00)
         in (dict
-            [ "dayNames" ~> wDays t
-            , "monthNames" ~> months t
-            , "amPm" ~> amPm t
-            , "dateTimeFmt" ~> dateTimeFmt t
-            , "dateFmt" ~> dateFmt t
-            , "timeFmt" ~> timeFmt t
-            , "time12Fmt" ~> time12Fmt t
+            [ "dayNames" ~> List.map packPair (wDays t)
+            , "monthNames" ~> List.map packPair (months t)
+            , "amPm" ~> packPair (amPm t)
+            , "dateTimeFmt" ~> Text.pack (dateTimeFmt t)
+            , "dateFmt" ~> Text.pack (dateFmt t)
+            , "timeFmt" ~> Text.pack (timeFmt t)
+            , "time12Fmt" ~> Text.pack (time12Fmt t)
             -- TODO
             -- , "knownTimeZones" ~> knownTimeZones t
+            , "knownTimeZones" ~> ([] :: [Text])
             ])
             { asHtml = html $ formattedExample
             , asText = formattedExample

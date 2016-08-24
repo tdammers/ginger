@@ -1,0 +1,91 @@
+{
+   "dateTimeFmt" : "The date be %Y %m %d, the clock striketh %H",
+   "dayNames" : [
+      [
+         "The Day Of Sunshine",
+         "Sun"
+      ],
+      [
+         "The Day Of Monning",
+         "Mon"
+      ],
+      [
+         "The Day Of Two",
+         "Tue"
+      ],
+      [
+         "The Midst Of The Week",
+         "Wed"
+      ],
+      [
+         "The Day Of Thor",
+         "Thu"
+      ],
+      [
+         "The Day Of Freya",
+         "Fri"
+      ],
+      [
+         "The Day Of Saturn",
+         "Sat"
+      ]
+   ],
+   "amPm" : [
+      "Morning",
+      "Evening"
+   ],
+   "timeFmt" : "%H o'clock",
+   "monthNames" : [
+      [
+         "January",
+         "Jan"
+      ],
+      [
+         "February",
+         "Feb"
+      ],
+      [
+         "March",
+         "Mar"
+      ],
+      [
+         "April",
+         "Apr"
+      ],
+      [
+         "May",
+         "May"
+      ],
+      [
+         "June",
+         "Jun"
+      ],
+      [
+         "July",
+         "Jul"
+      ],
+      [
+         "August",
+         "Aug"
+      ],
+      [
+         "September",
+         "Sep"
+      ],
+      [
+         "October",
+         "Oct"
+      ],
+      [
+         "November",
+         "Nov"
+      ],
+      [
+         "December",
+         "Dec"
+      ]
+   ],
+   "time12Fmt" : "%I:%M:%S %p",
+   "dateFmt" : "%d-%m, %y",
+   "knownTimeZones": []
+}

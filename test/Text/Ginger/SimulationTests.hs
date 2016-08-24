@@ -17,6 +17,8 @@ import Data.IORef
 import Data.Monoid
 import qualified Data.Aeson as JSON
 import qualified Data.ByteString.Lazy.UTF8 as LUTF8
+import qualified Data.ByteString.Lazy as LBS
+import Data.Time (TimeLocale)
 
 simulationTests :: TestTree
 simulationTests = testGroup "Simulation"
@@ -315,6 +317,18 @@ simulationTests = testGroup "Simulation"
                 mkTestHtml [] []
                     "{{ '2015-06-13 12:05:43'|date('%H-%M-%S') }}"
                     "12-05-43"
+            , testCase "use a custom locale" $ do
+                sillyLocale <- JSON.decode <$> LBS.readFile "test/fixtures/silly-locale.json"
+                let sillyLocaleG :: GVal IO
+                    sillyLocaleG = toGVal sillyLocale
+                    sillyLocaleT :: Maybe TimeLocale
+                    sillyLocaleT = fromGVal sillyLocaleG
+                print sillyLocaleT
+                mkTestHtml
+                    [("silly", toGVal (sillyLocale :: Maybe JSON.Value))]
+                    []
+                    "{{ '2015-06-13 12:05:43'|date('%A', locale=silly) }}"
+                    "The Day Of Saturn"
             ]
         , testGroup "\"default\"" 
             [ testCase "trigger default" $ do
