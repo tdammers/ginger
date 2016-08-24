@@ -150,7 +150,7 @@ simulationTests = testGroup "Simulation"
                   "({{ loop.cycle(\"red\", \"green\") }}/{{ x }})" ++
                   "{%- endfor %}"
                 )
-                "(red/foo)(green/bar)(red/baz)" 
+                "(red/foo)(green/bar)(red/baz)"
         , testCase "recursive loops" $ do
             mkTestHtml [] []
                 ( "{% for k, x in {\"a\":{\"b\":null,\"c\":{\"d\":null}}} -%}" ++
@@ -260,7 +260,7 @@ simulationTests = testGroup "Simulation"
             mkTestHtml [] []
                 "{{ \"this is the end of the world\"|capitalize }}"
                 "This is the end of the world"
-        , testGroup "\"center\"" 
+        , testGroup "\"center\""
             [ testCase "extra space" $ do
                 mkTestHtml [] []
                     "{{ \"asdf\"|center(12) }}"
@@ -288,7 +288,7 @@ simulationTests = testGroup "Simulation"
                     "{% if ['hello', 'world']|contains('hello', 'you', 'world') %}yes{% else %}no{% endif %}"
                     "no"
             ]
-        , testGroup "\"date\"" 
+        , testGroup "\"date\""
             [ testCase "format a date" $ do
                 mkTestHtml [] []
                     "{{ {'year':2015, 'month':6, 'day':13}|date('%Y-%m-%d') }}"
@@ -325,7 +325,7 @@ simulationTests = testGroup "Simulation"
                     "{{ '2015-06-13 12:05:43'|date('%A', locale=silly) }}"
                     "The Day Of Saturn"
             ]
-        , testGroup "\"default\"" 
+        , testGroup "\"default\""
             [ testCase "trigger default" $ do
                 mkTestHtml [] []
                     "{{ 0|default(\"hi\") }}"
