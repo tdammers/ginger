@@ -321,6 +321,10 @@ simulationTests = testGroup "Simulation"
                 mkTestHtml [] []
                     "{{ '2015-06-13 12:05:43-05:00'|date('%Y-%m-%d %z') }}"
                     "2015-06-13 -0500"
+            , testCase "format a string as a date, with explicit timezone" $ do
+                mkTestHtml [] []
+                    "{{ '2015-06-13 12:05:43-05:00'|date('%Y-%m-%d %z', tz='+0200') }}"
+                    "2015-06-13 +0200"
             , testCase "use a custom locale" $ do
                 sillyLocale <- loadSillyLocale
                 mkTestHtml

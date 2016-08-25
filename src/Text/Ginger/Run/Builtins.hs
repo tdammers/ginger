@@ -71,6 +71,7 @@ import Data.Time ( defaultTimeLocale
                  , Day (..)
                  , parseTimeM
                  , TimeLocale (..)
+                 , TimeZone (..)
                  )
 import Data.Foldable (asum)
 
@@ -438,6 +439,13 @@ gvalAutoParseDate = go . Text.unpack . asText
             , (utcparse, "%Y-%m-%d")
             ]
 
+gvalToTZ :: GVal m -> Maybe TimeZone
+gvalToTZ g =
+    fromGVal g <|> (parseTZ . Text.unpack . asText $ g)
+
+parseTZ :: String -> Maybe TimeZone
+parseTZ = parseTimeM True defaultTimeLocale "%z"
+
 gfnDateFormat :: Monad m => Function (Run m h)
 gfnDateFormat args =
     let Right [gDate, gFormat, gTimeZone, gLocale] =
@@ -450,15 +458,20 @@ gfnDateFormat args =
                 args
         dateMay = gvalToDate gDate
         fmtMay = Text.unpack <$> fromGVal gFormat
+        tzMay = gvalToTZ gTimeZone
     in case fmtMay of
         Just fmt -> do
             locale <- maybe
                 (getTimeLocale gLocale)
                 return
                 (fromGVal gLocale)
-            return . toGVal $ formatTime locale fmt <$> dateMay
+            return . toGVal $ formatTime locale fmt . overrideTZ tzMay <$> dateMay
         Nothing -> do
             return . toGVal $ dateMay
+    where
+        overrideTZ :: Maybe TimeZone -> ZonedTime -> ZonedTime
+        overrideTZ Nothing zt = zt
+        overrideTZ (Just tz) (ZonedTime lt _) = ZonedTime lt tz
 
 getTimeLocale :: Monad m => GVal (Run m h) -> Run m h TimeLocale
 getTimeLocale localeName = do
