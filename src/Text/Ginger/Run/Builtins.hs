@@ -64,6 +64,8 @@ import Data.List (lookup, zipWith, unzip)
 import Data.Time ( defaultTimeLocale
                  , formatTime
                  , LocalTime (..)
+                 , ZonedTime (..)
+                 , utc
                  , TimeOfDay (..)
                  , fromGregorian
                  , Day (..)
@@ -369,12 +371,12 @@ gfnPrintf ((_, fmtStrG):args) = do
     where
         fmtStr = Text.unpack $ asText fmtStrG
 
-gvalToDate :: GVal m -> Maybe LocalTime
+gvalToDate :: GVal m -> Maybe ZonedTime
 gvalToDate g = gvalDictToDate g
              <|> gvalListToDate g
              <|> gvalAutoParseDate g
 
-gvalDictToDate :: GVal m -> Maybe LocalTime
+gvalDictToDate :: GVal m -> Maybe ZonedTime
 gvalDictToDate g = do
     let datePartMay = do
             year <- fmap (fromIntegral :: Int -> Integer) $ g ~! "year"
@@ -386,17 +388,19 @@ gvalDictToDate g = do
             minutes <- g ~! "minutes"
             seconds <- fmap scientificToPico $ g ~! "seconds"
             return $ TimeOfDay hours minutes seconds
+        tzPartMay = g ~! "tz"
     when (isNothing datePartMay && isNothing timePartMay) Nothing
     let datePart = fromMaybe (fromGregorian 1970 1 1) datePartMay
         timePart = fromMaybe (TimeOfDay 12 0 0) timePartMay
-    return $ LocalTime datePart timePart
+        tz = fromMaybe utc tzPartMay
+    return $ ZonedTime (LocalTime datePart timePart) tz
 
-gvalListToDate :: GVal m -> Maybe LocalTime
+gvalListToDate :: GVal m -> Maybe ZonedTime
 gvalListToDate g = go =<< asList g
     where
-        go :: [GVal m] -> Maybe LocalTime
+        go :: [GVal m] -> Maybe ZonedTime
         go parts = case parts of
-            [yearG, monthG, dayG, hoursG, minutesG, secondsG] -> do
+            [yearG, monthG, dayG, hoursG, minutesG, secondsG, tzG] -> do
                 datePart <-
                     fromGregorian
                         <$> (fromIntegral <$> toInt yearG)
@@ -407,22 +411,31 @@ gvalListToDate g = go =<< asList g
                         <$> toInt hoursG
                         <*> toInt minutesG
                         <*> (fromIntegral <$> toInt secondsG)
-                return $ LocalTime datePart timePart
+                tzPart <- fromGVal tzG
+                return $ ZonedTime (LocalTime datePart timePart) tzPart
+            [yearG, monthG, dayG, hoursG, minutesG, secondsG] ->
+                go [yearG, monthG, dayG, hoursG, minutesG, secondsG, toGVal utc]
             [yearG, monthG, dayG, hoursG, minutesG] ->
                 go [yearG, monthG, dayG, hoursG, minutesG, toGVal (0 :: Int)]
             [yearG, monthG, dayG] ->
                 go [yearG, monthG, dayG, toGVal (12 :: Int), toGVal (0 :: Int)]
             _ -> Nothing
 
-gvalAutoParseDate :: GVal m -> Maybe LocalTime
+gvalAutoParseDate :: GVal m -> Maybe ZonedTime
 gvalAutoParseDate = go . Text.unpack . asText
     where
-        go input =
-            asum
-                . fmap (\fmt -> parseTimeM True defaultTimeLocale fmt input)
-                $ formats
+        go input = asum [ parse t input | (parse, t) <- formats ]
+        ztparse :: String -> String -> Maybe ZonedTime
+        ztparse fmt = parseTimeM True defaultTimeLocale fmt
+        utcparse :: String -> String -> Maybe ZonedTime
+        utcparse fmt input = do
+            lt <- parseTimeM True defaultTimeLocale fmt input
+            return $ ZonedTime lt utc
         formats =
-            [ "%Y-%m-%d %H:%M:%S"
+            [ (utcparse, "%Y-%m-%d %H:%M:%S")
+            , (ztparse, "%Y-%m-%d %H:%M:%S%z")
+            , (ztparse, "%Y-%m-%d %H:%M:%S%Z")
+            , (utcparse, "%Y-%m-%d")
             ]
 
 gfnDateFormat :: Monad m => Function (Run m h)
