@@ -290,96 +290,98 @@ instance ToGVal m Scientific where
 
 instance ToGVal m Day where
     toGVal x =
-        let (year, month, day) = toGregorian x
+        let dayDict = dayToDict x
             julian = toModifiedJulianDay x
             formatted = Text.pack $ formatTime defaultTimeLocale "%0Y-%m-%d" x
-        in (orderedDict
-            [ "year" ~> year
-            , "month" ~> month
-            , "day" ~> day
-            ])
+        in (orderedDict dayDict)
             { asHtml = html $ formatted
             , asText = formatted
             , asBoolean = True
             , asNumber = Just . fromIntegral $ julian
-            , asList = Just
-                [ toGVal year
-                , toGVal month
-                , toGVal day
-                ]
+            , asList = Just (List.map snd dayDict)
             }
+
+dayToDict :: Day -> [(Text, GVal m)]
+dayToDict x =
+    let (year, month, day) = toGregorian x
+    in [ "year" ~> year
+        , "month" ~> month
+        , "day" ~> day
+        ]
 
 instance ToGVal m TimeOfDay where
     toGVal x =
-        let TimeOfDay hours minutes seconds = x
+        let timeDict = timeToDict x
             formatted = Text.pack $ formatTime defaultTimeLocale "%H:%M:%S" x
-        in (orderedDict
-            [ "hours" ~> hours
-            , "minutes" ~> minutes
-            , "seconds" ~> picoToScientific seconds
-            ])
+        in (orderedDict timeDict)
             { asHtml = html $ formatted
             , asText = formatted
             , asBoolean = True
             , asNumber = Nothing
-            , asList = Just
-                [ toGVal hours
-                , toGVal minutes
-                , toGVal (picoToScientific seconds)
-                ]
+            , asList = Just (List.map snd timeDict)
             }
+
+timeToDict :: TimeOfDay -> [(Text, GVal m)]
+timeToDict (TimeOfDay hours minutes seconds) =
+    [ "hours" ~> hours
+    , "minutes" ~> minutes
+    , "seconds" ~> picoToScientific seconds
+    ]
 
 instance ToGVal m LocalTime where
     toGVal x =
-        let (year, month, day) = toGregorian $ localDay x
-            TimeOfDay hours minutes seconds = localTimeOfDay x
+        let dayDict = dayToDict $ localDay x
+            timeDict = timeToDict $ localTimeOfDay x
+            dtDict = dayDict ++ timeDict
             formatted = Text.pack $ formatTime defaultTimeLocale "%0Y-%m-%d %H:%M:%S" x
-        in (orderedDict
-            [ "year" ~> year
-            , "month" ~> month
-            , "day" ~> day
-            , "hours" ~> hours
-            , "minutes" ~> minutes
-            , "seconds" ~> picoToScientific seconds
-            , "date" ~> localDay x
-            , "time" ~> localTimeOfDay x
-            ])
+        in (orderedDict $
+                dtDict ++
+                [ "date" ~> localDay x
+                , "time" ~> localTimeOfDay x
+                ])
             { asHtml = html $ formatted
             , asText = formatted
             , asBoolean = True
             , asNumber = Nothing
-            , asList = Just
-                [ toGVal year
-                , toGVal month
-                , toGVal day
-                , toGVal hours
-                , toGVal minutes
-                , toGVal (picoToScientific seconds)
-                ]
+            , asList = Just (List.map snd dtDict)
             }
+
+instance ToGVal m TimeZone where
+    toGVal (TimeZone minutes summerOnly name) =
+        dict
+            [ "minutes" ~> minutes
+            , "summerOnly" ~> summerOnly
+            , "name" ~> name
+            ]
 
 instance ToGVal m TimeLocale where
     toGVal t =
         let formattedExample =
                 Text.pack . formatTime t "%c" $
                     LocalTime (fromGregorian 2000 1 1) (TimeOfDay 13 15 00)
-        in (dict
-            [ "wDays" ~> List.map packPair (wDays t)
-            , "months" ~> List.map packPair (months t)
-            , "amPm" ~> packPair (amPm t)
-            , "dateTimeFmt" ~> Text.pack (dateTimeFmt t)
-            , "dateFmt" ~> Text.pack (dateFmt t)
-            , "timeFmt" ~> Text.pack (timeFmt t)
-            , "time12Fmt" ~> Text.pack (time12Fmt t)
-            -- TODO
-            -- , "knownTimeZones" ~> knownTimeZones t
-            , "knownTimeZones" ~> ([] :: [Text])
-            ])
+            timeLocaleDict = timeLocaleToDict t
+        in (dict timeLocaleDict)
             { asHtml = html $ formattedExample
             , asText = formattedExample
             , asBoolean = True
             , asNumber = Nothing
             }
+
+timeLocaleToDict :: TimeLocale -> [(Text, GVal m)]
+timeLocaleToDict t =
+    [ "wDays" ~> List.map packPair (wDays t)
+    , "months" ~> List.map packPair (months t)
+    , "amPm" ~> packPair (amPm t)
+    , "dateTimeFmt" ~> Text.pack (dateTimeFmt t)
+    , "dateFmt" ~> Text.pack (dateFmt t)
+    , "timeFmt" ~> Text.pack (timeFmt t)
+    , "time12Fmt" ~> Text.pack (time12Fmt t)
+    -- TODO
+    -- , "knownTimeZones" ~> knownTimeZones t
+    , "knownTimeZones" ~> ([] :: [Text])
+    ]
+
+-- TODO: ToGVal instance for ZonedTime
 
 instance (ToGVal m a, ToGVal m b) => ToGVal m (a, b) where
     toGVal (a, b) = toGVal ([ toGVal a, toGVal b ] :: [GVal m])
