@@ -364,8 +364,8 @@ instance ToGVal m TimeLocale where
                 Text.pack . formatTime t "%c" $
                     LocalTime (fromGregorian 2000 1 1) (TimeOfDay 13 15 00)
         in (dict
-            [ "dayNames" ~> List.map packPair (wDays t)
-            , "monthNames" ~> List.map packPair (months t)
+            [ "wDays" ~> List.map packPair (wDays t)
+            , "months" ~> List.map packPair (months t)
             , "amPm" ~> packPair (amPm t)
             , "dateTimeFmt" ~> Text.pack (dateTimeFmt t)
             , "dateFmt" ~> Text.pack (dateFmt t)
@@ -760,8 +760,8 @@ instance FromGVal m TimeLocale where
         if isDict g
             then
                 Just $ TimeLocale
-                    (fromMaybe (wDays defaultTimeLocale) $ List.map unpackPair <$> g ~! "dayNames")
-                    (fromMaybe (months defaultTimeLocale) $ List.map unpackPair <$> g ~! "monthNames")
+                    (fromMaybe (wDays defaultTimeLocale) $ List.map unpackPair <$> g ~! "wDays")
+                    (fromMaybe (months defaultTimeLocale) $ List.map unpackPair <$> g ~! "months")
                     (fromMaybe (amPm defaultTimeLocale) $ unpackPair <$> g ~! "amPm")
                     (fromMaybe (dateTimeFmt defaultTimeLocale) $ Text.unpack <$> g ~! "dateTimeFmt")
                     (fromMaybe (dateFmt defaultTimeLocale) $ Text.unpack <$> g ~! "dateFmt")

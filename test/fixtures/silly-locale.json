@@ -1,6 +1,6 @@
 {
    "dateTimeFmt" : "It be %A, in the year %y, the clock striketh %H",
-   "dayNames" : [
+   "wDays" : [
       [
          "The Day Of Sunshine",
          "Sun"
@@ -35,7 +35,7 @@
       "Evening"
    ],
    "timeFmt" : "%H o'clock",
-   "monthNames" : [
+   "months" : [
       [
          "January",
          "Jan"
