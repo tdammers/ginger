@@ -66,6 +66,8 @@ import Data.Time ( defaultTimeLocale
                  , LocalTime (..)
                  , ZonedTime (..)
                  , utc
+                 , utcToZonedTime
+                 , zonedTimeToUTC
                  , TimeOfDay (..)
                  , fromGregorian
                  , Day (..)
@@ -448,30 +450,40 @@ parseTZ = parseTimeM True defaultTimeLocale "%z"
 
 gfnDateFormat :: Monad m => Function (Run m h)
 gfnDateFormat args =
-    let Right [gDate, gFormat, gTimeZone, gLocale] =
+    let Right [gDate, gFormat, gTimeZone, gLocale, gConvert] =
             extractArgsDefL
                 [ ("date", def)
                 , ("format", def)
                 , ("tz", def)
                 , ("locale", def)
+                , ("convert", def)
                 ]
                 args
         dateMay = gvalToDate gDate
         fmtMay = Text.unpack <$> fromGVal gFormat
         tzMay = gvalToTZ gTimeZone
+        tzConvert = asBoolean gConvert
     in case fmtMay of
         Just fmt -> do
             locale <- maybe
                 (getTimeLocale gLocale)
                 return
                 (fromGVal gLocale)
-            return . toGVal $ formatTime locale fmt . overrideTZ tzMay <$> dateMay
+            return . toGVal $ formatTime locale fmt . adjustTZ tzConvert tzMay <$> dateMay
         Nothing -> do
             return . toGVal $ dateMay
     where
         overrideTZ :: Maybe TimeZone -> ZonedTime -> ZonedTime
         overrideTZ Nothing zt = zt
         overrideTZ (Just tz) (ZonedTime lt _) = ZonedTime lt tz
+
+        convertTZ :: Maybe TimeZone -> ZonedTime -> ZonedTime
+        convertTZ Nothing = id
+        convertTZ (Just tz) = utcToZonedTime tz . zonedTimeToUTC
+
+        adjustTZ :: Bool -> Maybe TimeZone -> ZonedTime -> ZonedTime
+        adjustTZ False = overrideTZ
+        adjustTZ True = convertTZ
 
 getTimeLocale :: Monad m => GVal (Run m h) -> Run m h TimeLocale
 getTimeLocale localeName = do
