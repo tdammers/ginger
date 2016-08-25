@@ -313,6 +313,10 @@ simulationTests = testGroup "Simulation"
                 mkTestHtml [] []
                     "{{ '2015-06-13 12:05:43'|date('%Y-%m-%d') }}"
                     "2015-06-13"
+            , testCase "format a string as a date (JSON-style formatting)" $ do
+                mkTestHtml [] []
+                    "{{ '2015-06-13T12:05:43Z'|date('%Y-%m-%d %H:%M:%S') }}"
+                    "2015-06-13 12:05:43"
             , testCase "format a string as a time-of-day" $ do
                 mkTestHtml [] []
                     "{{ '2015-06-13 12:05:43'|date('%H-%M-%S') }}"
