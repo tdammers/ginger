@@ -374,13 +374,13 @@ gfnPrintf ((_, fmtStrG):args) = do
     where
         fmtStr = Text.unpack $ asText fmtStrG
 
-gvalToDate :: GVal m -> Maybe ZonedTime
-gvalToDate g = gvalDictToDate g
-             <|> gvalListToDate g
-             <|> gvalAutoParseDate g
+gvalToDate :: TimeZone -> GVal m -> Maybe ZonedTime
+gvalToDate tz g = gvalDictToDate tz g
+             <|> gvalListToDate tz g
+             <|> gvalAutoParseDate tz g
 
-gvalDictToDate :: GVal m -> Maybe ZonedTime
-gvalDictToDate g = do
+gvalDictToDate :: TimeZone -> GVal m -> Maybe ZonedTime
+gvalDictToDate defTZ g = do
     let datePartMay = do
             year <- fmap (fromIntegral :: Int -> Integer) $ g ~! "year"
             month <- g ~! "month"
@@ -395,11 +395,11 @@ gvalDictToDate g = do
     when (isNothing datePartMay && isNothing timePartMay) Nothing
     let datePart = fromMaybe (fromGregorian 1970 1 1) datePartMay
         timePart = fromMaybe (TimeOfDay 12 0 0) timePartMay
-        tz = fromMaybe utc tzPartMay
+        tz = fromMaybe defTZ tzPartMay
     return $ ZonedTime (LocalTime datePart timePart) tz
 
-gvalListToDate :: GVal m -> Maybe ZonedTime
-gvalListToDate g = go =<< asList g
+gvalListToDate :: TimeZone -> GVal m -> Maybe ZonedTime
+gvalListToDate defTZ g = go =<< asList g
     where
         go :: [GVal m] -> Maybe ZonedTime
         go parts = case parts of
@@ -417,15 +417,15 @@ gvalListToDate g = go =<< asList g
                 tzPart <- fromGVal tzG
                 return $ ZonedTime (LocalTime datePart timePart) tzPart
             [yearG, monthG, dayG, hoursG, minutesG, secondsG] ->
-                go [yearG, monthG, dayG, hoursG, minutesG, secondsG, toGVal utc]
+                go [yearG, monthG, dayG, hoursG, minutesG, secondsG, toGVal defTZ]
             [yearG, monthG, dayG, hoursG, minutesG] ->
                 go [yearG, monthG, dayG, hoursG, minutesG, toGVal (0 :: Int)]
             [yearG, monthG, dayG] ->
                 go [yearG, monthG, dayG, toGVal (12 :: Int), toGVal (0 :: Int)]
             _ -> Nothing
 
-gvalAutoParseDate :: GVal m -> Maybe ZonedTime
-gvalAutoParseDate = go . Text.unpack . asText
+gvalAutoParseDate :: TimeZone -> GVal m -> Maybe ZonedTime
+gvalAutoParseDate defTZ = go . Text.unpack . asText
     where
         go input = asum [ parse t input | (parse, t) <- formats ]
         ztparse :: String -> String -> Maybe ZonedTime
@@ -433,7 +433,7 @@ gvalAutoParseDate = go . Text.unpack . asText
         utcparse :: String -> String -> Maybe ZonedTime
         utcparse fmt input = do
             lt <- parseTimeM True defaultTimeLocale fmt input
-            return $ ZonedTime lt utc
+            return $ ZonedTime lt defTZ
         formats =
             [ (utcparse, "%Y-%m-%d %H:%M:%S")
             , (ztparse, "%Y-%m-%d %H:%M:%S%z")
@@ -450,40 +450,57 @@ parseTZ = parseTimeM True defaultTimeLocale "%z"
 
 gfnDateFormat :: Monad m => Function (Run m h)
 gfnDateFormat args =
-    let Right [gDate, gFormat, gTimeZone, gLocale, gConvert] =
+    let extracted =
             extractArgsDefL
                 [ ("date", def)
                 , ("format", def)
                 , ("tz", def)
                 , ("locale", def)
-                , ("convert", def)
                 ]
                 args
-        dateMay = gvalToDate gDate
-        fmtMay = Text.unpack <$> fromGVal gFormat
-        tzMay = gvalToTZ gTimeZone
-        tzConvert = asBoolean gConvert
-    in case fmtMay of
-        Just fmt -> do
-            locale <- maybe
-                (getTimeLocale gLocale)
-                return
-                (fromGVal gLocale)
-            return . toGVal $ formatTime locale fmt . adjustTZ tzConvert tzMay <$> dateMay
-        Nothing -> do
-            return . toGVal $ dateMay
+    in case extracted of
+        Right [gDate, gFormat, gTimeZone, gLocale] ->
+                -- The desired target timezone; Nothing means keep original timezone
+            let tzMay = gvalToTZ gTimeZone
+                -- The default timezone used when the input doesn't include timezone
+                -- information; if a target timezone is given, then it is also used as
+                -- the default, otherwise, UTC is assumed. The underlying assumptions
+                -- are:
+                --
+                -- * If the input does not include timezone information, then it is a
+                --   local time; hence, if the user explicitly passes a time zone for
+                --   formatting, it is assumed that this means the original local time
+                --   is in that time zone.
+                -- * If the input does not include timezone information, and no
+                --   explicit timezone is given, the only sane time zone to pick is
+                --   UTC. In this situation, the incoming dates either originate from
+                --   a system that doesn't track timezone information but implicitly
+                --   stores everything in UTC (which is fine), or the formatting
+                --   doesn't use timezone information anyway (in which case it doesn't
+                --   matter), or the originator of the data uses another timezone but
+                --   fails to report it (in which case it is impossible to do the right
+                --   thing)
+                -- * If the input *does* include timezone information, it should be
+                --   respected; explicitly passing timezone information in the date()
+                --   call means the user wants to represent the same zoned time in a
+                --   different time zone, which means time zone conversion is required.
+                defTZ = fromMaybe utc tzMay
+                dateMay = gvalToDate defTZ gDate
+                fmtMay = Text.unpack <$> fromGVal gFormat
+            in case fmtMay of
+                Just fmt -> do
+                    locale <- maybe
+                        (getTimeLocale gLocale)
+                        return
+                        (fromGVal gLocale)
+                    return . toGVal $ formatTime locale fmt . convertTZ tzMay <$> dateMay
+                Nothing -> do
+                    return . toGVal $ convertTZ tzMay <$> dateMay
+        _ -> fail "Invalid arguments to 'date'"
     where
-        overrideTZ :: Maybe TimeZone -> ZonedTime -> ZonedTime
-        overrideTZ Nothing zt = zt
-        overrideTZ (Just tz) (ZonedTime lt _) = ZonedTime lt tz
-
         convertTZ :: Maybe TimeZone -> ZonedTime -> ZonedTime
         convertTZ Nothing = id
         convertTZ (Just tz) = utcToZonedTime tz . zonedTimeToUTC
-
-        adjustTZ :: Bool -> Maybe TimeZone -> ZonedTime -> ZonedTime
-        adjustTZ False = overrideTZ
-        adjustTZ True = convertTZ
 
 getTimeLocale :: Monad m => GVal (Run m h) -> Run m h TimeLocale
 getTimeLocale localeName = do
