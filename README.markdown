@@ -8,7 +8,7 @@ things; please do a fresh clone to fix this. Sorry for the inconvenience.
 
 ## Intro
 
-A Haskell implementation of the <http://jinja.pocoo.org/ Jinja2> template
+A Haskell implementation of the [Jinja2](http://jinja.pocoo.org/) template
 language.
 
 Ginger aims to be as close to the original Jinja language as possible, but
@@ -73,8 +73,8 @@ other operation fails.
 ### Expressions
 Variables aren't the only thing that can go inside `{{ ... }}`; any valid
 Ginger expression can be used, and expressions can be constructed in many
-different ways. Note that all expressions are case sensitive: 1null1 and
-1Null1 are not the same thing.
+different ways. Note that all expressions are case sensitive: `null` and
+`Null` are not the same thing.
 Currently, the following constructs are available:
 
 #### Simple ("Atomic") Expressions
