@@ -69,6 +69,7 @@ import Data.Time ( Day (..)
                  , toGregorian
                  , fromGregorian
                  , LocalTime (..)
+                 , ZonedTime (..)
                  , TimeOfDay (..)
                  , TimeZone (..)
                  , TimeLocale (..)
@@ -330,9 +331,7 @@ timeToDict (TimeOfDay hours minutes seconds) =
 
 instance ToGVal m LocalTime where
     toGVal x =
-        let dayDict = dayToDict $ localDay x
-            timeDict = timeToDict $ localTimeOfDay x
-            dtDict = dayDict ++ timeDict
+        let dtDict = localTimeToDict x
             formatted = Text.pack $ formatTime defaultTimeLocale "%0Y-%m-%d %H:%M:%S" x
         in (orderedDict $
                 dtDict ++
@@ -346,13 +345,21 @@ instance ToGVal m LocalTime where
             , asList = Just (List.map snd dtDict)
             }
 
+localTimeToDict :: LocalTime -> [(Text, GVal m)]
+localTimeToDict x =
+        let dayDict = dayToDict $ localDay x
+            timeDict = timeToDict $ localTimeOfDay x
+        in dayDict ++ timeDict
+
 instance ToGVal m TimeZone where
-    toGVal (TimeZone minutes summerOnly name) =
-        dict
-            [ "minutes" ~> minutes
-            , "summerOnly" ~> summerOnly
-            , "name" ~> name
-            ]
+    toGVal  = dict . timeZoneToDict
+
+timeZoneToDict :: TimeZone -> [(Text, GVal m)]
+timeZoneToDict (TimeZone minutes summerOnly name) =
+    [ "minutes" ~> minutes
+    , "summerOnly" ~> summerOnly
+    , "name" ~> name
+    ]
 
 instance ToGVal m TimeLocale where
     toGVal t =
@@ -382,6 +389,20 @@ timeLocaleToDict t =
     ]
 
 -- TODO: ToGVal instance for ZonedTime
+instance ToGVal m ZonedTime where
+    toGVal x =
+        let dtDict = zonedTimeToDict x
+            formatted = Text.pack $ formatTime defaultTimeLocale "%0Y-%m-%d %H:%M:%S%z" x
+        in (dict dtDict)
+            { asHtml = html $ formatted
+            , asText = formatted
+            , asBoolean = True
+            , asNumber = Nothing
+            }
+
+zonedTimeToDict :: ZonedTime -> [(Text, GVal m)]
+zonedTimeToDict t =
+    ("tz", toGVal $ zonedTimeZone t):localTimeToDict (zonedTimeToLocalTime t)
 
 instance (ToGVal m a, ToGVal m b) => ToGVal m (a, b) where
     toGVal (a, b) = toGVal ([ toGVal a, toGVal b ] :: [GVal m])
@@ -749,6 +770,12 @@ instance FromGVal m LocalTime where
         date <- fromGVal g <|> g ~! "date"
         time <- fromGVal g <|> g ~! "time"
         return $ LocalTime date time
+
+instance FromGVal m ZonedTime where
+    fromGVal g = do
+        localTime <- fromGVal g
+        timeZone <- g ~! "tz"
+        return $ ZonedTime localTime timeZone
 
 instance FromGVal m TimeZone where
     fromGVal g =

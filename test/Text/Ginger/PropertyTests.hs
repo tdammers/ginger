@@ -53,6 +53,14 @@ instance Arbitrary LocalTime where
     arbitrary =
         LocalTime <$> arbitrary <*> arbitrary
 
+instance Arbitrary TimeZone where
+    arbitrary =
+        TimeZone <$> arbitrary <*> arbitrary <*> arbitrary
+
+instance Arbitrary ZonedTime where
+    arbitrary =
+        ZonedTime <$> arbitrary <*> arbitrary
+
 instance Arbitrary Statement where
     arbitrary = arbitraryStatement 2
 
@@ -93,16 +101,39 @@ propertyTests = testGroup "Properties"
         , testProperty "Maybe Text" (roundTripGValP :: Maybe Text -> Bool)
         , testProperty "Text" (roundTripGValP :: Text -> Bool)
         , testProperty "LocalTime" (roundTripGValP :: LocalTime -> Bool)
+        , testProperty "TimeZone" (roundTripGValP :: TimeZone -> Bool)
+        -- For ZonedTime, we don't have an Eq instance because it equality
+        -- of datetimes across time zones is unsolvable; we can, however, use
+        -- a "strict" equality test by simply rendering zoned times through
+        -- 'show', i.e., we consider two ZonedTime values equal iff they render
+        -- to the exact same string representations.
+        , testProperty "ZonedTime" (roundTripGValProjP show :: ZonedTime -> Bool)
         ]
     ]
 
+roundTripGValExP :: (ToGVal Identity a, FromGVal Identity a)
+               => (a -> a -> Bool)
+               -> a
+               -> Bool
+roundTripGValExP cmp orig =
+    let g :: GVal Identity
+        g = toGVal orig
+    in case fromGVal g of
+        Nothing -> False
+        Just final -> cmp orig final
+
+roundTripGValProjP :: (Eq b, ToGVal Identity a, FromGVal Identity a)
+               => (a -> b)
+               -> a
+               -> Bool
+roundTripGValProjP
+    proj = roundTripGValExP f
+    where
+        f x y = proj x == proj y
+
 roundTripGValP :: (Eq a, ToGVal Identity a, FromGVal Identity a)
                => a -> Bool
-roundTripGValP i =
-    let g :: GVal Identity
-        g = toGVal i
-        j = fromGVal g
-    in j == Just i
+roundTripGValP = roundTripGValExP (==)
 
 expand :: Template -> IO (Either String Text)
 expand tpl =
