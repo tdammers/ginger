@@ -112,6 +112,7 @@ defaultScope =
     , ("filesizeformat", fromFunction gfnFileSizeFormat)
     , ("filter", fromFunction gfnFilter)
     , ("floor", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.floor)
+    , ("format", fromFunction gfnPrintf)
     , ("greater", fromFunction gfnGreater)
     , ("greaterEquals", fromFunction gfnGreaterEquals)
     , ("int", fromFunction . unaryFunc $ toGVal . fmap (Prelude.truncate :: Scientific -> Int) . asNumber)

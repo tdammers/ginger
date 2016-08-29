@@ -421,6 +421,12 @@ simulationTests = testGroup "Simulation"
                     "{{ [1, 2, 3]|filter(greater, 2) }}"
                     "3"
             ]
+        , testGroup "\"format\""
+            [ testCase "jinja.pocoo.org example" $ do
+                mkTestHtml [] []
+                    "{{ \"%s - %s\"|format('Hello?', 'Foo!') }}"
+                    "Hello? - Foo!"
+            ]
         , testGroup "\"not-equals\""
             [ testCase "all equal" $ do
                 mkTestHtml [] []
