@@ -355,6 +355,16 @@ simulationTests = testGroup "Simulation"
             mkTestHtml [] []
                 "{{ difference(5,2) }}"
                 "3"
+        , testGroup "\"dictsort\""
+            [ testCase "by key" $ do
+                mkTestHtml [] []
+                    "{{ dictsort({4:4, 1:5}, by='key') }}"
+                    "54"
+            , testCase "by value" $ do
+                mkTestHtml [] []
+                    "{{ dictsort({4:4, 1:5}, by='value') }}"
+                    "45"
+            ]
         , testGroup "\"escape\""
             [ testCase "single item" $ do
                 mkTestHtml [] []

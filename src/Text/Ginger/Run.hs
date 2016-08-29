@@ -104,6 +104,7 @@ defaultScope =
     , ("date", fromFunction gfnDateFormat)
     , ("dateformat", fromFunction gfnDateFormat)
     , ("default", fromFunction gfnDefault)
+    , ("dictsort", fromFunction gfnDictsort)
     , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
     , ("e", fromFunction gfnEscape)
     , ("equals", fromFunction gfnEquals)

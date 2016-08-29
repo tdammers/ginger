@@ -528,3 +528,27 @@ gfnFilter ((_, xs):(_, p):args) = do
 printfG :: String -> [GVal m] -> String
 printfG fmt args = printfa fmt (fmap P args)
 
+
+gfnDictsort :: Monad m => Function (Run m h)
+gfnDictsort args =
+    let extracted =
+            extractArgsDefL
+                [ ("dict", def)
+                , ("case_sensitive", def)
+                , ("by", "key")
+                ]
+                args
+    in case extracted of
+        Right [gDict, gCaseSensitive, gSortBy] -> do
+            let caseSensitive = asBoolean gCaseSensitive
+            sortByKey <- case asText gSortBy of
+                "key" -> return True
+                "value" -> return False
+                "val" -> return False
+                x -> fail $ "Invalid value for 'dictsort()' argument 'by': " ++ show x
+            let items = fromMaybe [] $ asDictItems gDict
+            let projection =
+                    (if caseSensitive then id else Text.toUpper) .
+                    (if sortByKey then fst else (asText . snd))
+            return . orderedDict . List.sortOn projection $ items
+        _ -> fail "Invalid arguments to 'dictsort'"
