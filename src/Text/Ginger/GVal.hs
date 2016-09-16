@@ -20,6 +20,7 @@ import Prelude ( (.), ($), (==), (/=)
                , (++), (+), (-), (*), (/), div
                , (=<<), (>>=), return
                , undefined, otherwise, id, const
+               , fmap
                , Maybe (..)
                , Bool (..)
                , Either (..)
@@ -105,6 +106,26 @@ data GVal m =
         , length :: Maybe Int -- ^ Get length of value, if it is a collection (list/dict)
         , isNull :: Bool -- ^ Check if the value is null
         , asJSON :: Maybe JSON.Value -- ^ Provide a custom JSON representation of the value
+        }
+
+-- | Marshal a GVal between carrier monads.
+-- This will lose 'asFunction' information, because functions cannot be
+-- transferred to other carrier monads, but it will keep all other data
+-- structures intact.
+marshalGVal :: GVal m -> GVal n
+marshalGVal g =
+    GVal
+        { asList = fmap marshalGVal <$> asList g
+        , asDictItems = fmap (\items -> [(k, marshalGVal v) | (k, v) <- items]) (asDictItems g)
+        , asLookup = fmap (fmap marshalGVal .) (asLookup g)
+        , asHtml = asHtml g
+        , asText = asText g
+        , asBoolean = asBoolean g
+        , asNumber = asNumber g
+        , asFunction = Nothing
+        , isNull = isNull g
+        , length = length g
+        , asJSON = asJSON g
         }
 
 -- | Convenience wrapper around 'asDictItems' to represent a 'GVal' as a
