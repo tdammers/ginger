@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                ginger
-version:             0.3.3.0
+version:             0.3.4.0
 synopsis:            An implementation of the Jinja2 template language in Haskell
 description:         Ginger is Jinja, minus the most blatant pythonisms. Wants
                      to be feature complete, but isn't quite there yet.
@@ -26,10 +26,10 @@ library
                  , Text.Ginger.Parse
                  , Text.Ginger.Run
                  , Text.PrintfA
+                 , Text.Ginger.Run.VM
+                 , Text.Ginger.Run.FuncUtils
   other-modules: Text.Ginger.Run.Type
-               , Text.Ginger.Run.FuncUtils
                , Text.Ginger.Run.Builtins
-               , Text.Ginger.Run.VM
   -- other-extensions:
   build-depends: base >=4.5 && <5
                , aeson
