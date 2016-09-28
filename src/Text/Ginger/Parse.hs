@@ -1,6 +1,7 @@
 {-#LANGUAGE TupleSections #-}
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE ScopedTypeVariables #-}
+{-#LANGUAGE DeriveGeneric #-}
 -- | Ginger parser.
 module Text.Ginger.Parse
 ( parseGinger
@@ -39,6 +40,8 @@ import Control.Monad.Reader ( ReaderT
                             )
 import Control.Monad.Trans.Class ( lift )
 import Control.Applicative
+import Control.Exception (Exception)
+import GHC.Generics
 import Safe ( readMay )
 
 import Data.Text (Text)
@@ -73,7 +76,9 @@ data ParserError =
         , peSourceLine :: Maybe Int -- ^ Line number, if available
         , peSourceColumn :: Maybe Int -- ^ Column number, if available
         }
-        deriving (Show)
+        deriving (Show, Generic)
+
+instance Exception ParserError where
 
 -- | Helper function to create a Ginger parser error from a Parsec error.
 fromParsecError :: ParseError -> ParserError
