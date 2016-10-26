@@ -717,6 +717,21 @@ simulationTests = testGroup "Simulation"
                 ]
                 "{% include \"inherit-child.html\" %}"
                 "This is right."
+        , testCase "multi-tier inheritance" $ do
+            mkTestHtml
+                []
+                [ ( "./inherit-parent.html"
+                  , "{%- extends \"inherit-grandparent.html\" %}" ++
+                    "{%- block outer -%}Outer{%- block inner -%}{%- endblock -%}{%- endblock -%}"
+                  )
+                , ( "./inherit-grandparent.html"
+                  , "*{% block outer -%}{%- endblock %}*"
+                  )
+                ]
+                ( "{%- extends \"inherit-parent.html\" -%}" ++
+                  "{%- block inner %} Space{%- endblock -%}"
+                )
+                "*Outer Space*"
         ]
     , testGroup "Non-HTML Output"
         [ testCase "text" $ do

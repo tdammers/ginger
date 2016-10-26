@@ -52,6 +52,7 @@ import Data.List ( foldr, nub, sort )
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import Data.Default ( Default (..) )
+import Data.Monoid ( (<>) )
 
 import System.FilePath ( takeDirectory, (</>) )
 
@@ -174,7 +175,9 @@ derivedTemplateP :: Monad m => Parser m Template
 derivedTemplateP = do
     parentName <- try (spaces >> fancyTagP "extends" stringLiteralP)
     parentTemplate <- includeTemplate parentName
-    blocks <- HashMap.fromList <$> many blockP
+    topLevelBlocks <- HashMap.fromList <$> many blockP
+    nestedBlocks <- psBlocks <$> getState
+    let blocks = topLevelBlocks <> nestedBlocks
     return Template { templateBody = NullS, templateParent = Just parentTemplate, templateBlocks = blocks }
 
 baseTemplateP :: Monad m => Parser m Template
