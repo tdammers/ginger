@@ -586,6 +586,18 @@ simulationTests = testGroup "Simulation"
                 mkTestHtml [] []
                     "{{ ([ {\"age\":30, \"name\":\"zzz\"}, {\"age\":41, \"name\":\"aaa\"} ]|sort(by=\"age\", reverse=true))[0]['name'] }}"
                     "aaa"
+            , testCase "sort dictionary by keys" $ do
+                mkTestHtml [] []
+                    "{{ {'foo': 1, 'bar': 2}|sort(by='__key') }}"
+                    "21"
+            , testCase "sort by a projection function" $ do
+                mkTestHtml [] []
+                    "{{ ['foo', 'bar', 'quux']|sort(by=(str) -> str[1:]) }}"
+                    "barfooquux"
+            , testCase "sort by a path" $ do
+                mkTestHtml [] []
+                    "{{ [{'main':{'sub': 2}, 'msg':'no'},{'main':{'sub': 1}, 'msg':'yes'}]|sort(by=['main', 'sub']) }}"
+                    "1yes2no"
             ]
         , testGroup "\"slice\""
             [ testCase "full positional args" $ do

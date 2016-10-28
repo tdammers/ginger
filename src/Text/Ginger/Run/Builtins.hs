@@ -269,46 +269,70 @@ gfnSort args = do
             ]
             args
     (sortee, sortKey, sortReverse) <- case parsedArgs of
-        Right [sortee, sortKeyG, reverseG] ->
+        Right [sortee, sortKey, reverseG] ->
             return ( sortee
-                   , asText sortKeyG
+                   , sortKey
                    , asBoolean reverseG
                    )
         _ ->
             fail "Invalid args to sort()"
-    let baseComparer :: GVal (Run m h) -> GVal (Run m h) -> Prelude.Ordering
-        baseComparer a b = Prelude.compare (asText a) (asText b)
-        extractKey :: Text -> GVal (Run m h) -> GVal (Run m h)
-        extractKey k g = fromMaybe def $ do
-            l <- asLookup g
-            l k
-    if isDict sortee
-        then do
-            let comparer' :: (Text, GVal (Run m h)) -> (Text, GVal (Run m h)) -> Prelude.Ordering
-                comparer' = case sortKey of
-                    "" -> \(_, a) (_, b) -> baseComparer a b
-                    "__key" -> \(a, _) (b, _) -> Prelude.compare a b
-                    k -> \(_, a) (_, b) ->
-                        baseComparer
-                            (extractKey k a) (extractKey k b)
-                comparer =
-                    if sortReverse
-                        then flip comparer'
-                        else comparer'
-            return . toGVal $ List.sortBy comparer (fromMaybe [] $ asDictItems sortee)
-        else do
-            let comparer' :: GVal (Run m h) -> GVal (Run m h) -> Prelude.Ordering
-                comparer' = case sortKey of
-                    "" ->
-                        baseComparer
-                    k -> \a b ->
-                        baseComparer
-                            (extractKey k a) (extractKey k b)
-            let comparer =
-                    if sortReverse
-                        then flip comparer'
-                        else comparer'
-            return . toGVal $ List.sortBy comparer (fromMaybe [] $ asList sortee)
+    let -- extractByFunc :: Maybe ((Text, GVal (Run m h)) -> Run m h (GVal (Run m h)))
+        extractByFunc = do
+            f <- asFunction sortKey
+            return $ \g ->
+                f [(Nothing, snd g)]
+
+    let -- extractByPath :: Maybe ((Text, GVal (Run m h)) -> Run m h (GVal (Run m h)))
+        extractByPath = do
+            keys <- asList sortKey
+            return $ \g ->
+                return $ List.foldl' (flip (lookupLooseDef def)) (snd g) keys
+
+        extractByKey :: Monad m => Maybe ((Text, a) -> Run m h (GVal (Run m h)))
+        extractByKey =
+            if asText sortKey == "__key"
+                then Just $ return . toGVal . fst
+                else Nothing
+
+        extractByProp =
+            if isNull sortKey
+                then Nothing
+                else return $ return . lookupLooseDef def sortKey . snd
+
+        extractFunc = fromMaybe (return . snd) $
+            extractByFunc <|>
+            extractByPath <|>
+            extractByKey <|>
+            extractByProp
+
+        (pack, unpacked) =
+            case (asDictItems sortee, asList sortee) of
+                (Just dictItems, _) ->
+                    (orderedDict, dictItems)
+                (Nothing, Just listItems) ->
+                    (toGVal . fmap snd, listToIndexedDict listItems)
+                (Nothing, Nothing) ->
+                    (Prelude.const def, [])
+
+    tagged <- forM unpacked $ \item -> do
+        extracted <- extractFunc item
+        return (asText extracted, item)
+    let compare =
+            onFst $ if sortReverse
+                then flip Prelude.compare
+                else Prelude.compare
+
+    let sorted = pack . fmap snd $ List.sortBy compare tagged
+
+    return sorted
+
+onFst :: (a -> a -> b) -> (a, c) -> (a, d) -> b
+onFst f (x, _) (y, _) = f x y
+
+listToIndexedDict :: [a] -> [(Text, a)]
+listToIndexedDict values =
+    let indexes = fmap (Text.pack . show) [0..]
+    in List.zip indexes values
 
 center :: Text -> Prelude.Int -> Text -> Text
 center str width pad =
