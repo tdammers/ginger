@@ -1,0 +1,8 @@
+- title: "Introduction"
+  url: "/intro"
+- title: "Getting Started"
+  url: "/getting-started"
+- title: "Syntax"
+  children:
+  - title: "Variables"
+    url: "/syntax/variables"
