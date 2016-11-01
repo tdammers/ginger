@@ -6,7 +6,7 @@
   children:
   - title: "Variables"
     url: "/syntax/variables"
-  - title: "Expression"
+  - title: "Expressions"
     url: "/syntax/expressions"
   - title: "Filters"
     url: "/syntax/filters"
