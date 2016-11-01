@@ -49,7 +49,9 @@ Concatenates all arguments into one.
 
 Checks whether `list` contains `elem`.
 
-## `date(date, format, tz=null, locale=null)`, `dateformat(date, format, tz=null, locale=null)`
+## `dateformat(date, format, tz=null, locale=null)`
+
+*Alias:* `date`
 
 Converts `datetime` to a proper date/time value, and then formats it according
 to the given `format`.
@@ -79,7 +81,9 @@ specification](http://hackage.haskell.org/package/time-1.6.0.1/docs/Data-Time-Fo
   equivalent to the "C locale").
 
 
-## `d(value, def)`, `default(value, def)`
+## `default(value, def)`
+
+*Alias:* `d`
 
 Return `value` if it is truthy, otherwise return `def`.
 
@@ -98,7 +102,9 @@ b - c - d`.
 A variadic equality comparison function. Returns true iff all arguments are
 equal to one another. Uses loose equality.
 
-## `escape()`, `e(arg)`
+## `escape()`
+
+*Alias:* `e`
 
 Explicitly HTML-encode `arg`.
 
