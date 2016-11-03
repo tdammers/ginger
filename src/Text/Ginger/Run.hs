@@ -67,6 +67,7 @@ import Text.Ginger.Run.FuncUtils
 import Text.Ginger.Run.VM
 import Text.Printf
 import Text.PrintfA
+import Text.Ginger.Parse (parseGinger)
 
 import Data.Text (Text)
 import Data.String (fromString)
@@ -88,7 +89,7 @@ import Network.HTTP.Types (urlEncode)
 import Debug.Trace (trace)
 import Data.List (lookup, zipWith, unzip)
 
-defaultScope :: forall m h. Monad m => [(Text, GVal (Run m h))]
+defaultScope :: forall m h. (Monoid h, Monad m, ToGVal (Run m h) h) => [(Text, GVal (Run m h))]
 defaultScope =
     [ ("raw", fromFunction gfnRawHtml)
     , ("abs", fromFunction . unaryNumericFunc 0 $ Prelude.abs)
@@ -109,6 +110,7 @@ defaultScope =
     , ("e", fromFunction gfnEscape)
     , ("equals", fromFunction gfnEquals)
     , ("escape", fromFunction gfnEscape)
+    , ("eval", fromFunction gfnEval)
     , ("filesizeformat", fromFunction gfnFileSizeFormat)
     , ("filter", fromFunction gfnFilter)
     , ("floor", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.floor)
@@ -337,7 +339,9 @@ echo src = do
     p <- asks contextWrite
     p . e $ src
 
-defRunState :: forall m h. (Monoid h, Monad m) => Template -> RunState m h
+defRunState :: forall m h. (ToGVal (Run m h) h, Monoid h, Monad m)
+            => Template
+            -> RunState m h
 defRunState tpl =
     RunState
         { rsScope = HashMap.fromList defaultScope
@@ -346,3 +350,36 @@ defRunState tpl =
         , rsCurrentBlockName = Nothing
         }
 
+gfnEval :: (Monad m, Monoid h, ToGVal (Run m h) h) => Function (Run m h)
+gfnEval args =
+    let extracted =
+            extractArgsDefL
+                [ ("src", def)
+                , ("context", def)
+                ]
+                args
+    in case extracted of
+        Left _ -> fail "Invalid arguments to 'dictsort'"
+        Right [gSrc, gContext] -> do
+            result <- parseGinger
+                (Prelude.const . return $ Nothing) -- include resolver
+                Nothing -- source name
+                (Text.unpack . asText $ gSrc) -- source code
+            tpl <- case result of
+                Left err -> fail $ "Error in evaluated code: " ++ show err
+                Right t -> return t
+            let localLookup varName = return $
+                    lookupLooseDef def (toGVal varName) gContext
+                localContext c = c
+                    { contextWrite = appendCapture
+                    , contextLookup = localLookup
+                    }
+            withLocalState $ do
+                put $ defRunState tpl
+                local localContext $ do
+                    clearCapture
+                    runStatement $ templateBody tpl
+                    -- At this point, we're still inside the local state, so the
+                    -- capture contains the macro's output; we now simply return
+                    -- the capture as the function's return value.
+                    toGVal <$> fetchCapture

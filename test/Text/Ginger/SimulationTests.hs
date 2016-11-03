@@ -385,6 +385,24 @@ simulationTests = testGroup "Simulation"
                     "{% if equals(1, 1, 2) %}yes{% else %}no{% endif %}"
                     "no"
             ]
+        , testGroup "\"eval\""
+            [ testCase "simple" $ do
+                mkTestHtml [] []
+                    "{{ eval('{% set x = 1 %}{{x}}') }}"
+                    "1"
+            , testCase "with extra state" $ do
+                mkTestHtml [] []
+                    "{{ eval('{{x}}', { 'x': 1 }) }}"
+                    "1"
+            , testCase "outside state does not bleed into eval()" $ do
+                mkTestHtml [] []
+                    "{% set x = 1 %}{{ eval('{{x}}') }}"
+                    ""
+            , testCase "standard functions available inside eval" $ do
+                mkTestHtml [] []
+                    "{{ eval(\"{{'foobar'|capitalize()}}\") }}"
+                    "Foobar"
+            ]
         , testGroup "\"filesizeformat\""
             [ testCase "bytes" $ do
                 mkTestHtml [] []
