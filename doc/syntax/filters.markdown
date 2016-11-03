@@ -108,6 +108,19 @@ equal to one another. Uses loose equality.
 
 Explicitly HTML-encode `arg`.
 
+## `eval(src, context)`
+
+Evaluate Ginger source code `src` in given `context`, returning the
+captured output of the evaluation.
+
+Evaluation runs in a "clean" environment, that is, none of the functions or
+variables defined in the current run state are available; `eval` only sees the
+standard functions (everything on this page), plus the variables defined
+through the `context` parameter.
+
+Because of this "sandboxing", Ginger's `eval` is considerably safer than
+comparable functions in, say, JavaScript or PHP.
+
 ## `filesizeformat(size_bytes, base2=false)`
 
 Format a file size (given in number of bytes) to a human-readable string. If
