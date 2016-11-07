@@ -698,6 +698,10 @@ scientificToPico :: Scientific -> Pico
 scientificToPico s =
     MkFixed (Prelude.floor $ scientific (coefficient s) (base10Exponent s + 12))
 
+{-#RULES "GVal/round-trip-Maybe" fromGVal . toGVal = Just #-}
+{-#RULES "GVal/round-trip-Either" fromGValEither . toGVal = Right #-}
+{-#RULES "GVal/text-shortcut" asText . toGVal = id #-}
+
 class FromGVal m a where
     fromGValEither :: GVal m -> Either Prelude.String a
     fromGValEither = Prelude.maybe (Left "Conversion from GVal failed") Right . fromGVal
