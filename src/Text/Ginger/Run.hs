@@ -19,9 +19,18 @@
 -- >        context = makeContext contextLookup
 -- >    in htmlSource $ runGinger context template
 module Text.Ginger.Run
-( runGingerT
+(
+-- * The \"easy\" interface
+-- | Provides a straightforward way of rendering templates monadically
+-- as well as purely.
+  easyRenderM
+, easyRender
+, easyContext
+-- * The \"direct\" interface
+-- | This interface gives more control than the easy interface, at the
+-- expense of requiring more yak shaving.
+, runGingerT
 , runGinger
-, GingerContext
 , makeContext
 , makeContextM
 , makeContext'
@@ -30,7 +39,11 @@ module Text.Ginger.Run
 , makeContextHtmlM
 , makeContextText
 , makeContextTextM
+-- * The context type
+, GingerContext
+-- * The Run monad
 , Run, liftRun, liftRun2
+-- * Helper functions for interpreting argument lists
 , extractArgs, extractArgsT, extractArgsL, extractArgsDefL
 )
 where
@@ -139,6 +152,37 @@ defaultScope =
     , ("truncate", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.truncate)
     , ("urlencode", fromFunction gfnUrlEncode)
     ]
+
+-- | Simplified interface to render a ginger template \"into\" a monad.
+--
+-- @easyRenderM emit context template@ renders the @template@ with the
+-- given @context@ object (which should represent some sort of
+-- dictionary-like object) by feeding any output to the @emit@ function.
+easyRenderM :: ( Monad m
+               , ContextEncodable h
+               , Monoid h
+               , ToGVal (Run m h) v
+               , ToGVal (Run m h) h
+               )
+            => (h -> m ()) -> v -> Template -> m ()
+easyRenderM emit context template =
+    runGingerT (easyContext emit context) template
+
+-- | Simplified interface to render a ginger template in a pure fashion.
+--
+-- @easyRender context template@ renders the @template@ with the
+-- given @context@ object (which should represent some sort of
+-- dictionary-like object) by returning the concatenated output.
+easyRender :: ( ContextEncodable h
+              , Monoid h
+              , ToGVal (Run (Writer h) h) v
+              , ToGVal (Run (Writer h) h) h
+              )
+           => v
+           -> Template
+           -> h
+easyRender context template =
+    execWriter $ easyRenderM tell context template
 
 -- | Purely expand a Ginger template. The underlying carrier monad is 'Writer'
 -- 'h', which is used to collect the output and render it into a 'h'

@@ -15,6 +15,8 @@ module Text.Ginger.Run.Type
 , makeContextHtmlM
 , makeContextText
 , makeContextTextM
+, easyContext
+, ContextEncodable (..)
 , liftRun
 , liftRun2
 , Run (..)
@@ -85,6 +87,34 @@ data GingerContext m h
 contextWriteEncoded :: GingerContext m h -> GVal (Run m h) -> Run m h ()
 contextWriteEncoded context =
     contextWrite context . contextEncode context
+
+easyContext :: (Monad m, ContextEncodable h, ToGVal (Run m h) v)
+            => (h -> m ())
+            -> v
+            -> GingerContext m h
+easyContext emit context =
+    makeContextM'
+        (\varName ->
+            return
+                (lookupLooseDef def
+                    (toGVal varName)
+                    (toGVal context)))
+        emit
+        encode
+
+
+-- | Typeclass that defines how to encode 'GVal's into a given type.
+class ContextEncodable h where
+    encode :: forall m. GVal m -> h
+
+-- | Encoding to text just takes the text representation without further
+-- processing.
+instance ContextEncodable Text where
+    encode = asText
+
+-- | Encoding to Html is implemented as returning the 'asHtml' representation.
+instance ContextEncodable Html where
+    encode = toHtml
 
 -- | Create an execution context for runGingerT.
 -- Takes a lookup function, which returns ginger values into the carrier monad
