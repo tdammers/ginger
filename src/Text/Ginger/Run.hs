@@ -68,6 +68,7 @@ import Text.Ginger.Run.VM
 import Text.Printf
 import Text.PrintfA
 import Text.Ginger.Parse (parseGinger)
+import Control.Monad.Except (runExceptT)
 
 import Data.Text (Text)
 import Data.String (fromString)
@@ -147,8 +148,9 @@ runGinger :: (ToGVal (Run (Writer h) h) h, Monoid h) => GingerContext (Writer h)
 runGinger context template = execWriter $ runGingerT context template
 
 -- | Monadically run a Ginger template. The @m@ parameter is the carrier monad.
-runGingerT :: (ToGVal (Run m h) h, Monoid h, Monad m, Functor m) => GingerContext m h -> Template -> m ()
-runGingerT context tpl = runReaderT (evalStateT (runTemplate tpl) (defRunState tpl)) context
+runGingerT :: (ToGVal (Run m h) h, Monoid h, Monad m, Functor m) => GingerContext m h -> Template -> m (Either RuntimeError ())
+runGingerT context tpl =
+    runReaderT (evalStateT (runExceptT (runTemplate tpl)) (defRunState tpl)) context
 
 -- | Find the effective base template of an inheritance chain
 baseTemplate :: Template -> Template
@@ -159,7 +161,7 @@ baseTemplate t =
 
 -- | Run a template.
 runTemplate :: (ToGVal (Run m h) h, Monoid h, Monad m, Functor m) => Template -> Run m h ()
-runTemplate = runStatement . templateBody . baseTemplate
+runTemplate = fmap (Prelude.const ()) . runStatement . templateBody . baseTemplate
 
 -- | Run an action within a different template context.
 withTemplate :: (Monad m, Functor m) => Template -> Run m h a -> Run m h a

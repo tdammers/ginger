@@ -19,6 +19,7 @@ module Text.Ginger.Run.Type
 , liftRun2
 , Run (..)
 , RunState (..)
+, RuntimeError (..)
 )
 where
 
@@ -51,7 +52,8 @@ import Text.Ginger.GVal
 import Text.Printf
 import Text.PrintfA
 import Data.Scientific (formatScientific)
-
+import Control.Monad.Except (ExceptT (..))
+import Data.Default (Default (..), def)
 import Data.Text (Text)
 import Data.String (fromString)
 import qualified Data.Text as Text
@@ -169,12 +171,23 @@ data RunState m h
         , rsCurrentBlockName :: Maybe Text -- the name of the innermost block we're currently in
         }
 
+data RuntimeError =
+    RuntimeError
+        { rteMessage :: Text
+        }
+        deriving (Show)
+
+instance Default RuntimeError where
+    def = RuntimeError
+        { rteMessage = "Unspecified Error"
+        }
+
 -- | Internal type alias for our template-runner monad stack.
-type Run m h = StateT (RunState m h) (ReaderT (GingerContext m h) m)
+type Run m h = ExceptT RuntimeError (StateT (RunState m h) (ReaderT (GingerContext m h) m))
 
 -- | Lift a value from the host monad @m@ into the 'Run' monad.
 liftRun :: Monad m => m a -> Run m h a
-liftRun = lift . lift
+liftRun = lift . lift . lift
 
 -- | Lift a function from the host monad @m@ into the 'Run' monad.
 liftRun2 :: Monad m => (a -> m b) -> a -> Run m h b

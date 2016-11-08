@@ -85,7 +85,7 @@ main = do
             displayParserError tplSource err
         Right t -> do
             let context = makeContextHtmlM contextLookup (putStr . Text.unpack . htmlSource)
-            runGingerT context t
+            runGingerT context t >>= either print return
 
 printParserError :: ParserError -> IO ()
 printParserError = putStrLn . formatParserError
