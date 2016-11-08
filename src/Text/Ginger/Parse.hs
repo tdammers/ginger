@@ -196,6 +196,7 @@ statementsP =
 statementP :: Monad m => Parser m Statement
 statementP = interpolationStmtP
            <|> commentStmtP
+           <|> tryCatchStmtP
            <|> ifStmtP
            <|> setStmtP
            <|> forStmtP
@@ -256,6 +257,25 @@ elifBranchP = do
     falseStmt <- elifBranchP <|> elseBranchP <|> return NullS
     -- No endif here: the parent {% if %} owns that one.
     return $ IfS condExpr trueStmt falseStmt
+
+tryCatchStmtP :: Monad m => Parser m Statement
+tryCatchStmtP = do
+    try $ simpleTagP "try"
+    tryS <- statementsP
+    catchS <- catchBranchP <|> return NullS
+    finallyS <- finallyBranchP <|> return NullS
+    simpleTagP "endtry"
+    return $ TryCatchS tryS catchS finallyS
+
+catchBranchP :: Monad m => Parser m Statement
+catchBranchP = do
+    try $ simpleTagP "catch"
+    statementsP
+
+finallyBranchP :: Monad m => Parser m Statement
+finallyBranchP = do
+    try $ simpleTagP "finally"
+    statementsP
 
 setStmtP :: Monad m => Parser m Statement
 setStmtP = fancyTagP "set" setStmtInnerP

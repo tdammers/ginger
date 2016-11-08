@@ -67,8 +67,8 @@ import Text.Ginger.Run.FuncUtils
 import Text.Ginger.Run.VM
 import Text.Printf
 import Text.PrintfA
-import Text.Ginger.Parse (parseGinger)
-import Control.Monad.Except (runExceptT)
+import Text.Ginger.Parse (parseGinger, ParserError)
+import Control.Monad.Except (runExceptT, throwError, catchError)
 
 import Data.Text (Text)
 import Data.String (fromString)
@@ -187,7 +187,7 @@ lookupBlock blockName = do
     tpl <- gets rsCurrentTemplate
     let blockMay = resolveBlock blockName tpl
     case blockMay of
-        Nothing -> fail $ "Block " <> Text.unpack blockName <> " not defined"
+        Nothing -> throwError $ UndefinedBlockError blockName
         Just block -> return block
     where
         resolveBlock :: VarName -> Template -> Maybe Block
@@ -243,7 +243,7 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
                                  . fmap snd
                                  $ args
                 loop :: [(Maybe Text, GVal (Run m h))] -> Run m h (GVal (Run m h))
-                loop [] = fail "Invalid call to `loop`; at least one argument is required"
+                loop [] = throwError $ ArgumentsError "loop" "at least one argument is required"
                 loop ((_, loopee):_) = go (Prelude.succ recursionDepth) loopee
                 iteration :: (Int, (GVal (Run m h), GVal (Run m h))) -> Run m h ()
                 iteration (index, (key, value)) = do
@@ -271,6 +271,15 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
 
 runStatement (PreprocessedIncludeS tpl) =
     withTemplate tpl $ runTemplate tpl
+
+runStatement (TryCatchS tryS catchS finallyS) = do
+    result <- (runStatement tryS) `catchError` handle
+    runStatement finallyS
+    return result
+    where
+        handle e = withLocalScope $ do
+            setVar "exception" (toGVal e)
+            runStatement catchS
 
 -- | Deeply magical function that converts a 'Macro' into a Function.
 macroToGVal :: forall m h. (ToGVal (Run m h) h, Monoid h, Functor m, Monad m) => Macro -> GVal (Run m h)
@@ -361,14 +370,14 @@ gfnEval args =
                 ]
                 args
     in case extracted of
-        Left _ -> fail "Invalid arguments to 'dictsort'"
+        Left _ -> throwError $ ArgumentsError "eval" "expected: (src, context)"
         Right [gSrc, gContext] -> do
             result <- parseGinger
                 (Prelude.const . return $ Nothing) -- include resolver
                 Nothing -- source name
                 (Text.unpack . asText $ gSrc) -- source code
             tpl <- case result of
-                Left err -> fail $ "Error in evaluated code: " ++ show err
+                Left err -> throwError $ EvalParseError err
                 Right t -> return t
             let localLookup varName = return $
                     lookupLooseDef def (toGVal varName) gContext

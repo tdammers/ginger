@@ -45,6 +45,7 @@ data Statement
     | BlockRefS VarName
     | PreprocessedIncludeS Template -- ^ {% include "template" %}
     | NullS -- ^ The do-nothing statement (NOP)
+    | TryCatchS Statement Statement Statement -- ^ Try / catch / finally
     deriving (Show)
 
 -- | Expressions, building blocks for the expression minilanguage.

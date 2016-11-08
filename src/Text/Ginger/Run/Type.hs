@@ -49,6 +49,7 @@ import qualified Data.List as List
 import Text.Ginger.AST
 import Text.Ginger.Html
 import Text.Ginger.GVal
+import Text.Ginger.Parse (ParserError (..))
 import Text.Printf
 import Text.PrintfA
 import Data.Scientific (formatScientific)
@@ -171,16 +172,55 @@ data RunState m h
         , rsCurrentBlockName :: Maybe Text -- the name of the innermost block we're currently in
         }
 
-data RuntimeError =
-    RuntimeError
-        { rteMessage :: Text
-        }
+data RuntimeError = RuntimeError Text -- ^ Generic runtime error
+                  | UndefinedBlockError Text -- ^ Tried to use a block that isn't defined
+                  | ArgumentsError -- ^ Invalid arguments to function
+                        Text -- ^ name of function being called
+                        Text -- ^ explanation
+                  | EvalParseError ParserError
+                  | NotAFunctionError
         deriving (Show)
 
 instance Default RuntimeError where
-    def = RuntimeError
-        { rteMessage = "Unspecified Error"
-        }
+    def = RuntimeError ""
+
+instance ToGVal m RuntimeError where
+    toGVal = runtimeErrorToGVal
+
+runtimeErrorToGVal :: RuntimeError -> GVal m
+runtimeErrorToGVal (RuntimeError msg) =
+    rteGVal "RuntimeError"
+        msg []
+runtimeErrorToGVal (UndefinedBlockError blockName) =
+    rteGVal "UndefinedBlockError"
+        ("undefined block: '" <> blockName <> "'")
+        [ "block" ~> blockName
+        ]
+runtimeErrorToGVal (ArgumentsError funcName explanation) =
+    rteGVal "ArgumentsError"
+        ("invalid arguments to function '" <> funcName <> "': " <> explanation)
+        [ "explanation" ~> explanation
+        , "function" ~> funcName
+        ]
+runtimeErrorToGVal (EvalParseError e) =
+    rteGVal "EvalParseError"
+        ("error parsing eval()-ed code: " <> Text.pack (peErrorMessage e))
+        [ "errorMessage" ~> peErrorMessage e
+        , "sourceFile" ~> peSourceName e
+        , "line" ~> peSourceLine e
+        , "col" ~> peSourceColumn e
+        ]
+runtimeErrorToGVal NotAFunctionError =
+    rteGVal "NotAFunctionError"
+        ("attempted to call something that is not a function")
+        []
+
+rteGVal :: Text -> Text -> [(Text, GVal m)] -> GVal m
+rteGVal what msg extra =
+    (dict $
+        [ "what" ~> what
+        , "message" ~> msg
+        ] ++ extra) { asText = msg }
 
 -- | Internal type alias for our template-runner monad stack.
 type Run m h = ExceptT RuntimeError (StateT (RunState m h) (ReaderT (GingerContext m h) m))
