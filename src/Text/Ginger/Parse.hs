@@ -262,15 +262,42 @@ tryCatchStmtP :: Monad m => Parser m Statement
 tryCatchStmtP = do
     try $ simpleTagP "try"
     tryS <- statementsP
-    catchS <- catchBranchP <|> return NullS
+    catchesS <- many catchBranchP
     finallyS <- finallyBranchP <|> return NullS
     simpleTagP "endtry"
-    return $ TryCatchS tryS catchS finallyS
+    return $ TryCatchS tryS catchesS finallyS
 
-catchBranchP :: Monad m => Parser m Statement
+catchBranchP :: Monad m => Parser m CatchBlock
 catchBranchP = do
-    try $ simpleTagP "catch"
-    statementsP
+    (what, captureName) <- try $
+        fancyTagP "catch" (try catchHeaderP <|> return (Nothing, Nothing))
+    body <- statementsP
+    return $ Catch what captureName body
+
+suchThat :: Monad m => (a -> Bool) -> Parser m a -> Parser m a
+suchThat p action = do
+    val <- action
+    if p val then return val else fail "Requirement not met"
+
+catchHeaderP :: Monad m => Parser m (Maybe Text, Maybe VarName)
+catchHeaderP = do
+    spaces
+    what <- catchWhatP
+    spaces
+    captureName <- catchCaptureP
+    return $ (what, captureName)
+
+catchWhatP :: Monad m => Parser m (Maybe Text)
+catchWhatP =
+    (Nothing <$ char '*') <|>
+    (Just . Text.pack <$> try stringLiteralP) <|>
+    (Just <$> try identifierP)
+
+catchCaptureP :: Monad m => Parser m (Maybe VarName)
+catchCaptureP = optionMaybe $ do
+    try (string "as" >> notFollowedBy identCharP)
+    spaces
+    identifierP
 
 finallyBranchP :: Monad m => Parser m Statement
 finallyBranchP = do

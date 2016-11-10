@@ -20,6 +20,7 @@ module Text.Ginger.Run.Type
 , Run (..)
 , RunState (..)
 , RuntimeError (..)
+, runtimeErrorWhat
 )
 where
 
@@ -186,6 +187,13 @@ instance Default RuntimeError where
 
 instance ToGVal m RuntimeError where
     toGVal = runtimeErrorToGVal
+
+runtimeErrorWhat :: RuntimeError -> Text
+runtimeErrorWhat (ArgumentsError funcName explanation) = "ArgumentsError"
+runtimeErrorWhat (EvalParseError e) = "EvalParseError"
+runtimeErrorWhat (RuntimeError msg) = "RuntimeError"
+runtimeErrorWhat (UndefinedBlockError blockName) = "UndefinedBlockError"
+runtimeErrorWhat NotAFunctionError = "NotAFunctionError"
 
 runtimeErrorToGVal :: RuntimeError -> GVal m
 runtimeErrorToGVal (RuntimeError msg) =

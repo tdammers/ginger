@@ -272,14 +272,23 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
 runStatement (PreprocessedIncludeS tpl) =
     withTemplate tpl $ runTemplate tpl
 
-runStatement (TryCatchS tryS catchS finallyS) = do
-    result <- (runStatement tryS) `catchError` handle
+runStatement (TryCatchS tryS catchesS finallyS) = do
+    result <- (runStatement tryS) `catchError` handle catchesS
     runStatement finallyS
     return result
     where
-        handle e = withLocalScope $ do
-            setVar "exception" (toGVal e)
-            runStatement catchS
+        handle [] e = return ()
+        handle ((Catch whatMay varNameMay catchS):catches) e = do
+            let what = runtimeErrorWhat e
+            if whatMay == Just what || whatMay == Nothing
+                then
+                    withLocalScope $ do
+                        case varNameMay of
+                            Nothing -> return ()
+                            Just varName -> setVar varName (toGVal e)
+                        runStatement catchS
+                else
+                    handle catches e
 
 -- | Deeply magical function that converts a 'Macro' into a Function.
 macroToGVal :: forall m h. (ToGVal (Run m h) h, Monoid h, Functor m, Monad m) => Macro -> GVal (Run m h)

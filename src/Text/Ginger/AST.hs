@@ -45,8 +45,17 @@ data Statement
     | BlockRefS VarName
     | PreprocessedIncludeS Template -- ^ {% include "template" %}
     | NullS -- ^ The do-nothing statement (NOP)
-    | TryCatchS Statement Statement Statement -- ^ Try / catch / finally
+    | TryCatchS Statement [CatchBlock] Statement -- ^ Try / catch / finally
     deriving (Show)
+
+-- | A @catch@ block
+data CatchBlock =
+    Catch
+        { catchWhat :: Maybe Text
+        , catchCaptureAs :: Maybe VarName
+        , catchBody :: Statement
+        }
+        deriving (Show)
 
 -- | Expressions, building blocks for the expression minilanguage.
 data Expression

@@ -181,13 +181,28 @@ simulationTests = testGroup "Simulation"
         , testCase "try/catch, trigger arguments exception" $ do
             mkTestHtml
                 [] []
-                "{% try %}{{ dictsort(1, 2, 3, 4, 5) }}{% catch %}Caught: {{ exception.what }}{% endtry %}"
+                "{% try %}{{ dictsort(1, 2, 3, 4, 5) }}{% catch * as exception %}Caught: {{ exception.what }}{% endtry %}"
                 "Caught: ArgumentsError"
         , testCase "try/finally, trigger arguments exception" $ do
             mkTestHtml
                 [] []
                 "{% try %}{{ dictsort(1, 2, 3, 4, 5) }} Nope!{% finally %}All clear{% endtry %}"
                 "All clear"
+        , testCase "try/catch, catch selectively (string syntax)" $ do
+            mkTestHtml
+                [] []
+                "{% try %}{{ dictsort(1, 2, 3, 4, 5) }}{% catch * as exception %}Caught: {{ exception.what }}{% endtry %}"
+                "Caught: ArgumentsError"
+        , testCase "try/catch, catch selectively (identifier syntax)" $ do
+            mkTestHtml
+                [] []
+                "{% try %}{{ dictsort(1, 2, 3, 4, 5) }}{% catch 'ArgumentsError' as exception %}Caught: {{ exception.what }}{% endtry %}"
+                "Caught: ArgumentsError"
+        , testCase "try/catch, skip non-matching catches" $ do
+            mkTestHtml
+                [] []
+                "{% try %}{{ dictsort(1, 2, 3, 4, 5) }}{% catch 'SomeOtherError' as exception %}This is wrong{% catch * as exception %}Caught: {{ exception.what }}{% endtry %}"
+                "Caught: ArgumentsError"
         ]
     , testGroup "Comparisons"
         [ testCase "if 1 == 1 then \"yes\" else \"no\"" $ do
