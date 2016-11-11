@@ -706,6 +706,7 @@ stringCharP = do
             c2 <- anyChar
             case c2 of
                 'n' -> return '\n'
+                'r' -> return '\r'
                 'b' -> return '\b'
                 'v' -> return '\v'
                 '0' -> return '\0'

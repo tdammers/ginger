@@ -38,8 +38,12 @@ simulationTests = testGroup "Simulation"
             [] [] "- {%- set x=1 -%} -" "--"
         ]
     , testGroup "Literals"
-        [ testCase "String: \"foobar\"" $ mkTestHtml
-            [] [] "{{ \"foobar\" }}" "foobar"
+        [ testGroup "Strings"
+            [ testCase "String: \"foobar\"" $ mkTestHtml
+                [] [] "{{ \"foobar\" }}" "foobar"
+            , testCase "String: \"\\r\\n\\t\\b\"" $ mkTestHtml
+                [] [] "{{ \"\\r\\n\\t\\b\" }}" "\r\n\t\b"
+            ]
         , testGroup "Numbers"
             [ testCase "123" $ mkTestHtml
                 [] [] "{{ 123 }}" "123"
