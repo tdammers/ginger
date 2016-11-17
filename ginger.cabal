@@ -17,6 +17,7 @@ build-type:          Simple
 -- extra-source-files:
 data-files: test/fixtures/*.json
 cabal-version:       >=1.10
+bug-reports:         https://github.com/tdammers/ginger/issues
 
 library
   exposed-modules: Text.Ginger
