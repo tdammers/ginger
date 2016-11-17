@@ -71,6 +71,7 @@ exactly where the `include` is written.
 
 `{% scope %}...{% endscope %}` creates an explicit local scope:
 
+
 - variables defined inside the scope disappear when the scope is left
 - variables defined outside the scope are available inside it
 - variables defined outside the scope and again inside it will take on the
@@ -126,3 +127,161 @@ These two together implement *template inheritance*. Here's how it works:
   inner block (leaving the rest of the containing block unchanged).
 - Blocks that are not overridden, as well as content outside of any blocks, is
   copied from the parent template.
+
+# `try`
+# `catch`
+# `finally`
+
+Exception handling. These work similar to exception handling constructs in
+other languages. Example:
+
+```ginger
+{% try %}
+  <div>
+  {# This block gets executed unconditionally, until an exception is thrown. #}
+  {{ something_that_may_fail() }}
+{% catch 'ArgumentsError' as exception %}
+  {# This block fires when the 'try' block throws an exception of type
+     'ArgumentsError'. #}
+  <p class="warning">Invalid arguments.</p>
+{% catch * as exception %}
+  {# This block fires on any other exception. #}
+  <p class="error">Something went wrong.</p>
+{% finally %}
+  </div>
+{% endtry %}
+```
+
+The way error handling flow works is as follows:
+
+- A try/catch/finally block is enclosed in `{% try %}`...`{% endtry %}`.
+- Everything up to the first `{% catch %}` or `{% finally %}` is executed,
+  until an exception is thrown.
+- Upon throwing an exception, ginger proceeds to checking the available `catch`
+  blocks, in the order in which they are written in the source file.
+- As soon as one of the `catch` blocks matches, ginger enters it, runs it, and
+  skips the remaining `catch` blocks after it.
+- If none of the `catch` blocks match, the exception is kept alive and gets
+  re-thrown at the end of the `try` construct.
+- At this point, four possible situations can exist: a) no exception has
+  occurred; b) an exception has occurred and has been caught; c) an exception
+  has occurred and hasn't been caught; d) an exception has been caught, but a
+  new exception has been thrown while handling the original one. In all four
+  cases, ginger will first execute the `finally` block; after that, it will
+  "bubble" any remaining uncaught exceptions (cases c and d), or return without
+  error (cases a and b).
+
+## `catch` Statements
+
+The `catch` statement header comes in multiple flavors. The most complete one
+is:
+
+```ginger
+{% catch what as name %}
+```
+
+Where:
+
+- `what` is either the special token `*` to catch any exception, or a string
+  literal that must match the exception type.
+- `name` is a valid identifier name; the caught exception will be bound to that
+  name for the duration of the catch block, which is useful if you want to
+  inspect the exception further.
+
+Both the `what` filter and the `name` are optional, however, if you want to
+bind to a `name`, you also need to provide a `what` (use `*` to catch
+everything). So the following forms are all valid:
+
+```ginger
+{% catch %}
+  {# anonymously catch any exception #}
+```
+
+```ginger
+{% catch * %}
+  {# anonymously catch any exception #}
+```
+
+```ginger
+{% catch 'ArgumentsError' %}
+  {# anonymously catch only ArgumentsErrors #}
+```
+
+```ginger
+{% catch * as bloop %}
+  {# catch any exception, and bind it to 'bloop' #}
+```
+
+```ginger
+{% catch 'ArgumentsError' as bloop %}
+  {# catch 'ArgumentsError' exception, and bind it to 'bloop' #}
+```
+
+## Exception Objects
+
+Exception objects are regular Ginger values; when used as a dictionary, they
+expose at least the following common properties:
+
+- `what` - A string containing the exact exception type. See below for a list
+  of possible exception types.
+- `message` - A human-readable error message.
+
+## Exception Types
+
+### `RuntimeError`
+
+A generic run-time error.
+
+#### Properties:
+
+- `what`: Exception type
+- `message`: Human-readable error message
+
+### `UndefinedBlockError`
+
+Thrown when a template attempts to explicitly call a block that hasn't been
+defined yet.
+
+#### Properties:
+
+- `what`: Exception type
+- `message`: Human-readable error message
+- `block`: Name of the non-existent block
+
+### `ArgumentsError`
+
+A function call has received arguments that do not match its accepted
+arguments.
+
+#### Properties:
+
+- `what`: Exception type
+- `message`: Human-readable error message
+- `function`: The canonical name of the function that was called
+- `explanation`: Explanation how exactly the arguments failed to meet the
+  function's expectations
+
+### `EvalParseError`
+
+Thrown when code passed to `eval` dynamically contains a syntax error.
+
+#### Properties:
+
+- `what`: Exception type
+- `message`: Human-readable error message
+- `errorMessage`: Error message from the Ginger parser
+- `sourceFile`: Source file name, if any. Typically not useful.
+- `line`: Line number of the parser error. This is relative to the evaluated
+  string, not the source file the `eval` call was made from.
+- `col`: Column number of the parser error. Just like `line`, this refers to
+  the evaluated string, not the originating source file.
+
+### `NotAFunctionError`
+
+Thrown when trying to call a non-function as a function, or using a
+non-function as a filter.
+
+#### Properties:
+
+- `what`: Exception type
+- `message`: Human-readable error message
