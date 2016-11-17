@@ -15,6 +15,7 @@ maintainer:          tdammers@gmail.com
 category:            Text
 build-type:          Simple
 -- extra-source-files:
+data-files: test/fixtures/*.json
 cabal-version:       >=1.10
 
 library
