@@ -83,6 +83,12 @@ flavor 'runGingerT'); in order to pass an initial context to the template
 engine, pass a suitable 'GingerContext', which you can create using the
 'makeContext' / 'makeContextM' functions.
 
+Note that, because Ginger is a unityped ("dynamically typed") language, passing
+values to a template execution context requires conversion to Ginger's unitype,
+`GVal`. The `ToGVal` typeclass exposes a number of convenience functions that
+can be used for this purpose, and there are instances for many of Haskell's
+standard data types.
+
 An example call (for running a template in 'IO') would look something like
 this:
 
