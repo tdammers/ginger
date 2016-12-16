@@ -250,6 +250,24 @@ runStatement (IfS condExpr true false) = do
     cond <- runExpression condExpr
     runStatement $ if toBoolean cond then true else false
 
+runStatement (SwitchS pivotExpr cases def) = do
+    pivot <- runExpression pivotExpr
+    let branches =
+            [ \cont -> do
+                cond <- runExpression condExpr
+                if pivot `looseEquals` cond
+                    then runStatement body
+                    else cont
+            | (condExpr, body)
+            <- cases
+            ] ++
+            [ Prelude.const (runStatement def)
+            ]
+    go branches
+    where
+        go [] = return ()
+        go (x:xs) = x (go xs)
+
 runStatement (SetVarS name valExpr) = do
     val <- runExpression valExpr
     setVar name val

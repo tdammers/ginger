@@ -39,6 +39,7 @@ data Statement
     | LiteralS Html -- ^ Literal output (anything outside of any tag)
     | InterpolationS Expression -- ^ {{ expression }}
     | IfS Expression Statement Statement -- ^ {% if expression %}statement{% else %}statement{% endif %}
+    | SwitchS Expression [(Expression, Statement)] Statement -- ^ {% switch expression %}{% case expression %}statement{% endcase %}...{% default %}statement{% enddefault %}{% endswitch %}
     | ForS (Maybe VarName) VarName Expression Statement -- ^ {% for index, varname in expression %}statement{% endfor %}
     | SetVarS VarName Expression -- ^ {% set varname = expr %}
     | DefMacroS VarName Macro -- ^ {% macro varname %}statements{% endmacro %}

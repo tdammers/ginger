@@ -171,6 +171,25 @@ simulationTests = testGroup "Simulation"
         , testCase "if false then \"yes\" else if true then \"maybe\" else \"no\"" $ do
             mkTestHtml [] [] "{% if false %}yes{% elif true %}maybe{% else %}no{% endif %}" "maybe"
         ]
+    , testGroup "Switch"
+        [ testCase "switch 1 of 1, 2, default" $ do
+            mkTestHtml [] []
+                ( "{% switch 1 %}\n" ++
+                  "{% case 1 %}One{% endcase %}\n" ++
+                  "{% case 2 %}Two{% endcase %}\n" ++
+                  "{% default %}Default{% enddefault %}\n" ++
+                  "{% endswitch %}\n"
+                )
+                "One"
+        , testCase "switch 1 of 1, 2" $ do
+            mkTestHtml [] []
+                ( "{% switch 1 %}\n" ++
+                  "{% case 1 %}One{% endcase %}\n" ++
+                  "{% case 2 %}Two{% endcase %}\n" ++
+                  "{% endswitch %}\n"
+                )
+                "One"
+        ]
     , testGroup "Comparisons"
         [ testCase "if 1 == 1 then \"yes\" else \"no\"" $ do
             mkTestHtml [] [] "{% if (1 == 1) %}yes{% else %}no{% endif %}" "yes"

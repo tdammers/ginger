@@ -197,6 +197,7 @@ statementP :: Monad m => Parser m Statement
 statementP = interpolationStmtP
            <|> commentStmtP
            <|> ifStmtP
+           <|> switchStmtP
            <|> setStmtP
            <|> forStmtP
            <|> includeP
@@ -256,6 +257,25 @@ elifBranchP = do
     falseStmt <- elifBranchP <|> elseBranchP <|> return NullS
     -- No endif here: the parent {% if %} owns that one.
     return $ IfS condExpr trueStmt falseStmt
+
+switchStmtP :: Monad m => Parser m Statement
+switchStmtP = do
+    pivotExpr <- try $ fancyTagP "switch" expressionP
+    cases <- many switchCaseP
+    def <- option NullS $ switchDefaultP
+    simpleTagP "endswitch"
+    return $ SwitchS pivotExpr cases def
+
+switchCaseP :: Monad m => Parser m (Expression, Statement)
+switchCaseP = do
+    cmpExpr <- try $ fancyTagP "case" expressionP
+    body <- statementsP
+    simpleTagP "endcase"
+    return (cmpExpr, body)
+
+switchDefaultP :: Monad m => Parser m Statement
+switchDefaultP = do
+    try (simpleTagP "default") *> statementsP <* simpleTagP "enddefault"
 
 setStmtP :: Monad m => Parser m Statement
 setStmtP = fancyTagP "set" setStmtInnerP
