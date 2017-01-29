@@ -800,6 +800,126 @@ simulationTests = testGroup "Simulation"
                 "{{ '<>' }}{{ 1 }}{{ {'foo': true} }}"
                 "[\"<>\",1,{\"foo\":true}]"
         ]
+    , testGroup "Script mode"
+        [ testCase "empty script block" $
+            mkTestHtml
+                []
+                []
+                "{% script %}{% endscript %}"
+                ""
+        , testCase "comments" $
+            mkTestHtml
+                []
+                []
+                "{% script %}  // this is a comment\n{% endscript %}"
+                ""
+        , testCase "echo" $
+            mkTestHtml
+                []
+                []
+                "{% script %}echo('Hi!');{% endscript %}"
+                "Hi!"
+        , testCase "expression statement" $
+            mkTestHtml
+                []
+                []
+                "{% script %}12 + 15;{% endscript %}"
+                ""
+        , testCase "if" $
+            mkTestHtml
+                []
+                []
+                "{% script %}if (true) { echo('Hi!'); }{% endscript %}"
+                "Hi!"
+        , testCase "if/else" $
+            mkTestHtml
+                []
+                []
+                "{% script %}if (false) echo ('nope'); else { echo('Hi!'); }{% endscript %}"
+                "Hi!"
+        , testCase "switch" $
+            mkTestHtml
+                []
+                []
+                "{% script %}switch ('hi') { case 'hi': echo('Hello'); case 'no': echo('Nope'); default: echo('Default'); }{% endscript %}"
+                "Hello"
+        , testCase "for" $
+            mkTestHtml
+                []
+                []
+                "{% script %}for (i in [1,2,3]) echo(i);{% endscript %}"
+                "123"
+        , testCase "for/else (loop)" $
+            mkTestHtml
+                []
+                []
+                "{% script %}for (i in [1,2,3]) echo(i); else echo('none');{% endscript %}"
+                "123"
+        , testCase "for/else (recover)" $
+            mkTestHtml
+                []
+                []
+                "{% script %}for (i in null) echo(i); else echo('none');{% endscript %}"
+                "none"
+        , testCase "set" $
+            mkTestHtml
+                []
+                []
+                "{% script %}set a = 'Hi' ~ '!'; echo(a);{% endscript %}"
+                "Hi!"
+        , testCase "include" $ do
+            mkTestHtml [] [("./features-included.html", "This is an included template")]
+                "{% script %}include('features-included.html');{% endscript %}"
+                "This is an included template"
+        , testCase "macro" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% script %}"
+                    , "macro greet(name) {"
+                    , "echo('Hello, ');"
+                    , "echo(name);"
+                    , "}"
+                    , ""
+                    , "echo(greet('tobias'));"
+                    , "{% endscript %}"
+                    ])
+                "Hello, tobias"
+        , testGroup "Explicit Local Scopes"
+            [ testCase "baseline" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "set bedazzle = 'no';"
+                        , "echo(bedazzle);"
+                        , "{% endscript %}"
+                        ])
+                    "no"
+            , testCase "inside local scope" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "set bedazzle = 'no';"
+                        , "{"
+                        , "    set bedazzle = 'ya';"
+                        , "    echo(bedazzle);"
+                        , "}"
+                        , "{% endscript %}"
+                        ])
+                    "ya"
+            , testCase "after exiting local scope" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "set bedazzle = 'no';"
+                        , "{"
+                        , "    set bedazzle = 'ya';"
+                        , "}"
+                        , "echo(bedazzle);"
+                        , "{% endscript %}"
+                        ])
+                    "no"
+            ]
+        ]
     ]
 
 mkTestHtml :: [(VarName, GVal (Run IO Html))]

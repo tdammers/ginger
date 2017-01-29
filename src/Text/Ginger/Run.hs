@@ -246,6 +246,7 @@ runStatement NullS = return ()
 runStatement (MultiS xs) = forM_ xs runStatement
 runStatement (LiteralS html) = echo (toGVal html)
 runStatement (InterpolationS expr) = runExpression expr >>= echo
+runStatement (ExpressionS expr) = runExpression expr >> return ()
 runStatement (IfS condExpr true false) = do
     cond <- runExpression condExpr
     runStatement $ if toBoolean cond then true else false

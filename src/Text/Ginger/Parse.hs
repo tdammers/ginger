@@ -53,6 +53,7 @@ import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import Data.Default ( Default (..) )
 import Data.Monoid ( (<>) )
+import Data.Char (isSpace)
 
 import System.FilePath ( takeDirectory, (</>) )
 
@@ -186,12 +187,28 @@ baseTemplateP = do
     blocks <- psBlocks <$> getState
     return Template { templateBody = body, templateParent = Nothing, templateBlocks = blocks }
 
+isNullS NullS = True
+isNullS _ = False
+
 statementsP :: Monad m => Parser m Statement
 statementsP =
     reduceStatements . filter (not . isNullS) <$> many (try statementP)
-    where
-        isNullS NullS = True
-        isNullS _ = False
+
+scriptStatementsP :: Monad m => Parser m Statement
+scriptStatementsP = do
+    scriptSkippableP
+    reduceStatements . filter (not . isNullS) <$>
+        many (try scriptStatementP)
+
+
+scriptStatementBlockP :: Monad m => Parser m Statement
+scriptStatementBlockP = do
+    char '{'
+    spaces
+    inner <- scriptStatementsP
+    char '}'
+    scriptSkippableP
+    return $ ScopedS inner
 
 statementP :: Monad m => Parser m Statement
 statementP = interpolationStmtP
@@ -205,7 +222,19 @@ statementP = interpolationStmtP
            <|> blockStmtP
            <|> callStmtP
            <|> scopeStmtP
+           <|> scriptStmtP
            <|> literalStmtP
+
+scriptStatementP :: Monad m => Parser m Statement
+scriptStatementP = scriptStatementBlockP
+                 <|> scriptEchoStmtP
+                 <|> scriptIfStmtP
+                 <|> scriptSwitchStmtP
+                 <|> scriptSetStmtP
+                 <|> scriptForStmtP
+                 <|> scriptIncludeP
+                 <|> scriptMacroStmtP
+                 <|> scriptExprStmtP
 
 interpolationStmtP :: Monad m => Parser m Statement
 interpolationStmtP = do
@@ -214,6 +243,19 @@ interpolationStmtP = do
     expr <- expressionP
     spaces
     closeInterpolationP
+    return $ InterpolationS expr
+
+scriptEchoStmtP :: Monad m => Parser m Statement
+scriptEchoStmtP = do
+    try $ keyword "echo"
+    spaces
+    char '('
+    expr <- expressionP
+    spaces
+    char ')'
+    spaces
+    char ';'
+    scriptSkippableP
     return $ InterpolationS expr
 
 literalStmtP :: Monad m => Parser m Statement
@@ -237,6 +279,34 @@ commentStmtP = do
     manyTill anyChar (try closeCommentP)
     return NullS
 
+scriptCommentP :: Monad m => Parser m ()
+scriptCommentP = do
+    try $ string "//"
+    manyTill anyChar endl
+    spaces
+
+scriptSkippableP :: Monad m => Parser m ()
+scriptSkippableP = do
+    many $ scriptCommentP <|> (oneOf " \t\r\n" *> return ())
+    return ()
+
+scriptExprStmtP :: Monad m => Parser m Statement
+scriptExprStmtP = do
+    expr <- try $ expressionP
+    char ';'
+    scriptSkippableP
+    return $ ExpressionS expr
+
+endl :: Monad m => Parser m Char
+endl = char '\n' <|> (char '\r' >> char '\n')
+
+scriptStmtP :: Monad m => Parser m Statement
+scriptStmtP =
+    between
+        (try $ simpleTagP "script")
+        (simpleTagP "endscript")
+        scriptStatementsP
+
 ifStmtP :: Monad m => Parser m Statement
 ifStmtP = do
     condExpr <- fancyTagP "if" expressionP
@@ -258,6 +328,41 @@ elifBranchP = do
     -- No endif here: the parent {% if %} owns that one.
     return $ IfS condExpr trueStmt falseStmt
 
+scriptIfStmtP :: Monad m => Parser m Statement
+scriptIfStmtP = do
+    try $ keyword "if"
+    scriptSkippableP
+    char '('
+    condExpr <- expressionP
+    scriptSkippableP
+    char ')'
+    scriptSkippableP
+    trueStmt <- scriptStatementP
+    scriptSkippableP
+    falseStmt <- scriptElifP <|> scriptElseP <|> return NullS
+    return $ IfS condExpr trueStmt falseStmt
+
+scriptElseP :: Monad m => Parser m Statement
+scriptElseP = do
+    try $ keyword "else"
+    scriptSkippableP
+    scriptStatementP
+
+scriptElifP :: Monad m => Parser m Statement
+scriptElifP = do
+    try $ keyword "elif"
+    scriptSkippableP
+    char '('
+    scriptSkippableP
+    condExpr <- expressionP
+    scriptSkippableP
+    char ')'
+    scriptSkippableP
+    trueStmt <- scriptStatementP
+    scriptSkippableP
+    falseStmt <- scriptElifP <|> scriptElseP <|> return NullS
+    return $ IfS condExpr trueStmt falseStmt
+
 switchStmtP :: Monad m => Parser m Statement
 switchStmtP = do
     pivotExpr <- try $ fancyTagP "switch" expressionP
@@ -277,6 +382,47 @@ switchDefaultP :: Monad m => Parser m Statement
 switchDefaultP = do
     try (simpleTagP "default") *> statementsP <* simpleTagP "enddefault"
 
+scriptSwitchStmtP :: Monad m => Parser m Statement
+scriptSwitchStmtP = do
+    try $ keyword "switch"
+    scriptSkippableP
+    char '('
+    scriptSkippableP
+    pivotExpr <- expressionP
+    scriptSkippableP
+    char ')'
+    scriptSkippableP
+    char '{'
+    scriptSkippableP
+    cases <- many scriptSwitchCaseP
+    def <- option NullS $ scriptSwitchDefaultP
+    scriptSkippableP
+    char '}'
+    scriptSkippableP
+    return $ SwitchS pivotExpr cases def
+
+scriptSwitchCaseP :: Monad m => Parser m (Expression, Statement)
+scriptSwitchCaseP = do
+    try $ keyword "case"
+    scriptSkippableP
+    cmpExpr <- expressionP
+    scriptSkippableP
+    char ':'
+    scriptSkippableP
+    body <- scriptStatementP
+    scriptSkippableP
+    return (cmpExpr, body)
+
+scriptSwitchDefaultP :: Monad m => Parser m Statement
+scriptSwitchDefaultP = do
+    try $ keyword "default"
+    scriptSkippableP
+    char ':'
+    scriptSkippableP
+    body <- scriptStatementP
+    scriptSkippableP
+    return body
+
 setStmtP :: Monad m => Parser m Statement
 setStmtP = fancyTagP "set" setStmtInnerP
 
@@ -288,6 +434,20 @@ setStmtInnerP = do
     spaces
     val <- expressionP
     spaces
+    return $ SetVarS name val
+
+scriptSetStmtP :: Monad m => Parser m Statement
+scriptSetStmtP = do
+    try $ keyword "set"
+    scriptSkippableP
+    name <- identifierP
+    scriptSkippableP
+    char '='
+    scriptSkippableP
+    val <- expressionP
+    scriptSkippableP
+    char ';'
+    scriptSkippableP
     return $ SetVarS name val
 
 defineBlock :: VarName -> Block -> ParseState -> ParseState
@@ -312,6 +472,18 @@ macroStmtP = do
     (name, args) <- try $ fancyTagP "macro" macroHeadP
     body <- statementsP
     fancyTagP "endmacro" (optional $ string (Text.unpack name) >> spaces)
+    return $ DefMacroS name (Macro args body)
+
+scriptMacroStmtP :: Monad m => Parser m Statement
+scriptMacroStmtP = do
+    try $ keyword "macro"
+    scriptSkippableP
+    name <- identifierP
+    scriptSkippableP
+    args <- option [] $ groupP "(" ")" identifierP
+    scriptSkippableP
+    body <- scriptStatementP
+    scriptSkippableP
     return $ DefMacroS name (Macro args body)
 
 macroHeadP :: Monad m => Parser m (VarName, [VarName])
@@ -354,7 +526,7 @@ scopeStmtP :: Monad m => Parser m Statement
 scopeStmtP =
     ScopedS <$>
         between
-            (simpleTagP "scope")
+            (try $ simpleTagP "scope")
             (simpleTagP "endscope")
             statementsP
 
@@ -372,14 +544,47 @@ forStmtP = do
         (IfS iteree forLoop)
         elseBranchMay
 
+scriptForStmtP :: Monad m => Parser m Statement
+scriptForStmtP = do
+    try $ keyword "for"
+    scriptSkippableP
+    char '('
+    (iteree, varNameVal, varNameIndex) <- forHeadP
+    scriptSkippableP
+    char ')'
+    scriptSkippableP
+    body <- scriptStatementP
+    elseBranchMay <- optionMaybe $ do
+        try $ keyword "else"
+        scriptSkippableP
+        scriptStatementP
+    let forLoop = ForS varNameIndex varNameVal iteree body
+    return $ maybe
+        forLoop
+        (IfS iteree forLoop)
+        elseBranchMay
+
 includeP :: Monad m => Parser m Statement
 includeP = do
     sourceName <- fancyTagP "include" stringLiteralP
     include sourceName
 
+scriptIncludeP :: Monad m => Parser m Statement
+scriptIncludeP = do
+    try $ keyword "include"
+    scriptSkippableP
+    char '('
+    sourceName <- stringLiteralP
+    scriptSkippableP
+    char ')'
+    scriptSkippableP
+    char ';'
+    scriptSkippableP
+    include sourceName
+
 forHeadP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
 forHeadP =
-    (try forHeadInP <|> forHeadAsP) <* optional (string "recursive" >> spaces)
+    (try forHeadInP <|> forHeadAsP) <* optional (keyword "recursive" >> spaces)
 
 forIteratorP :: Monad m => Parser m (VarName, Maybe VarName)
 forIteratorP = try forIndexedIteratorP <|> try forSimpleIteratorP <?> "iteration variables"
@@ -404,8 +609,7 @@ forHeadInP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
 forHeadInP = do
     (varIdent, indexIdent) <- forIteratorP
     spaces
-    string "in"
-    notFollowedBy identCharP
+    keyword "in"
     spaces
     iteree <- expressionP
     return (iteree, varIdent, indexIdent)
@@ -414,8 +618,7 @@ forHeadAsP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
 forHeadAsP = do
     iteree <- expressionP
     spaces
-    string "as"
-    notFollowedBy identCharP
+    keyword "as"
     spaces
     (varIdent, indexIdent) <- forIteratorP
     return (iteree, varIdent, indexIdent)
@@ -425,7 +628,7 @@ fancyTagP tagName =
     between
         (try $ do
             openTagP
-            string tagName
+            keyword tagName
             spaces)
         closeTagP
 
@@ -533,12 +736,10 @@ cTernaryTailP condition = do
 
 pyTernaryTailP :: Monad m => Expression -> Parser m Expression
 pyTernaryTailP yesBranch = do
-    string "if"
-    notFollowedBy identCharP
+    keyword "if"
     spaces
     condition <- booleanExprP
-    string "else"
-    notFollowedBy identCharP
+    keyword "else"
     spaces
     noBranch <- expressionP
     return $ TernaryE condition yesBranch noBranch
@@ -755,3 +956,9 @@ followedBy b a = a >>= \x -> b >> return x
 
 before :: Monad m => m a -> m b -> m a
 before = flip followedBy
+
+keyword :: Monad m => String -> Parser m String
+keyword kw = do
+    string kw
+    notFollowedBy identCharP
+    return kw
