@@ -1,3 +1,8 @@
+## 0.3.11.0
+
+- Fixed the way local scopes work in script mode
+- Documented script mode
+
 ## 0.3.10.0
 
 - Script mode: alternative syntax that makes it easier to use
