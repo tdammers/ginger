@@ -807,12 +807,33 @@ simulationTests = testGroup "Simulation"
                 []
                 "{% script %}{% endscript %}"
                 ""
-        , testCase "comments" $
-            mkTestHtml
-                []
-                []
-                "{% script %}  // this is a comment\n{% endscript %}"
-                ""
+        , testGroup "comments"
+            [ testCase "simple" $
+                mkTestHtml
+                    []
+                    []
+                    "{% script %}  # this is a comment\n{% endscript %}"
+                    ""
+            , testCase "multiple" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "23; # this is a comment"
+                        , " ## this is a comment, too"
+                        , "{% endscript %}"
+                        ])
+                    ""
+            , testCase "inside expressions" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "23 # this is a comment"
+                        , " ## this is a comment, too"
+                        , " ;"
+                        , "{% endscript %}"
+                        ])
+                    ""
+            ]
         , testCase "echo" $
             mkTestHtml
                 []

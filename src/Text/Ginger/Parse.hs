@@ -20,7 +20,7 @@ import Text.Parsec ( ParseError
                    , runParserT
                    , try, lookAhead
                    , manyTill, oneOf, string, notFollowedBy, between, sepBy
-                   , eof, spaces, anyChar, char
+                   , eof, spaces, anyChar, noneOf, char
                    , option, optionMaybe
                    , unexpected
                    , digit
@@ -196,7 +196,7 @@ statementsP =
 
 scriptStatementsP :: Monad m => Parser m Statement
 scriptStatementsP = do
-    scriptSkippableP
+    spacesOrComment
     reduceStatements . filter (not . isNullS) <$>
         many (try scriptStatementP)
 
@@ -204,10 +204,10 @@ scriptStatementsP = do
 scriptStatementBlockP :: Monad m => Parser m Statement
 scriptStatementBlockP = do
     char '{'
-    spaces
+    spacesOrComment
     inner <- scriptStatementsP
     char '}'
-    scriptSkippableP
+    spacesOrComment
     return $ ScopedS inner
 
 statementP :: Monad m => Parser m Statement
@@ -239,23 +239,23 @@ scriptStatementP = scriptStatementBlockP
 interpolationStmtP :: Monad m => Parser m Statement
 interpolationStmtP = do
     try openInterpolationP
-    spaces
+    spacesOrComment
     expr <- expressionP
-    spaces
+    spacesOrComment
     closeInterpolationP
     return $ InterpolationS expr
 
 scriptEchoStmtP :: Monad m => Parser m Statement
 scriptEchoStmtP = do
     try $ keyword "echo"
-    spaces
+    spacesOrComment
     char '('
     expr <- expressionP
-    spaces
+    spacesOrComment
     char ')'
-    spaces
+    spacesOrComment
     char ';'
-    scriptSkippableP
+    spacesOrComment
     return $ InterpolationS expr
 
 literalStmtP :: Monad m => Parser m Statement
@@ -276,17 +276,21 @@ endOfLiteralP =
 commentStmtP :: Monad m => Parser m Statement
 commentStmtP = do
     try openCommentP
-    manyTill anyChar (try closeCommentP)
+    manyTill
+        (   (noneOf "#" *> return ())
+        <|> (try $ char '#' *> notFollowedBy (char '}'))
+        )
+        (try closeCommentP)
     return NullS
 
 scriptCommentP :: Monad m => Parser m ()
 scriptCommentP = do
-    try $ string "//"
+    try $ char '#' *> notFollowedBy (char '}')
     manyTill anyChar endl
-    spaces
+    spacesOrComment
 
-scriptSkippableP :: Monad m => Parser m ()
-scriptSkippableP = do
+spacesOrComment :: Monad m => Parser m ()
+spacesOrComment = do
     many $ scriptCommentP <|> (oneOf " \t\r\n" *> return ())
     return ()
 
@@ -294,7 +298,7 @@ scriptExprStmtP :: Monad m => Parser m Statement
 scriptExprStmtP = do
     expr <- try $ expressionP
     char ';'
-    scriptSkippableP
+    spacesOrComment
     return $ ExpressionS expr
 
 endl :: Monad m => Parser m Char
@@ -331,35 +335,35 @@ elifBranchP = do
 scriptIfStmtP :: Monad m => Parser m Statement
 scriptIfStmtP = do
     try $ keyword "if"
-    scriptSkippableP
+    spacesOrComment
     char '('
     condExpr <- expressionP
-    scriptSkippableP
+    spacesOrComment
     char ')'
-    scriptSkippableP
+    spacesOrComment
     trueStmt <- scriptStatementP
-    scriptSkippableP
+    spacesOrComment
     falseStmt <- scriptElifP <|> scriptElseP <|> return NullS
     return $ IfS condExpr trueStmt falseStmt
 
 scriptElseP :: Monad m => Parser m Statement
 scriptElseP = do
     try $ keyword "else"
-    scriptSkippableP
+    spacesOrComment
     scriptStatementP
 
 scriptElifP :: Monad m => Parser m Statement
 scriptElifP = do
     try $ keyword "elif"
-    scriptSkippableP
+    spacesOrComment
     char '('
-    scriptSkippableP
+    spacesOrComment
     condExpr <- expressionP
-    scriptSkippableP
+    spacesOrComment
     char ')'
-    scriptSkippableP
+    spacesOrComment
     trueStmt <- scriptStatementP
-    scriptSkippableP
+    spacesOrComment
     falseStmt <- scriptElifP <|> scriptElseP <|> return NullS
     return $ IfS condExpr trueStmt falseStmt
 
@@ -385,42 +389,42 @@ switchDefaultP = do
 scriptSwitchStmtP :: Monad m => Parser m Statement
 scriptSwitchStmtP = do
     try $ keyword "switch"
-    scriptSkippableP
+    spacesOrComment
     char '('
-    scriptSkippableP
+    spacesOrComment
     pivotExpr <- expressionP
-    scriptSkippableP
+    spacesOrComment
     char ')'
-    scriptSkippableP
+    spacesOrComment
     char '{'
-    scriptSkippableP
+    spacesOrComment
     cases <- many scriptSwitchCaseP
     def <- option NullS $ scriptSwitchDefaultP
-    scriptSkippableP
+    spacesOrComment
     char '}'
-    scriptSkippableP
+    spacesOrComment
     return $ SwitchS pivotExpr cases def
 
 scriptSwitchCaseP :: Monad m => Parser m (Expression, Statement)
 scriptSwitchCaseP = do
     try $ keyword "case"
-    scriptSkippableP
+    spacesOrComment
     cmpExpr <- expressionP
-    scriptSkippableP
+    spacesOrComment
     char ':'
-    scriptSkippableP
+    spacesOrComment
     body <- scriptStatementP
-    scriptSkippableP
+    spacesOrComment
     return (cmpExpr, body)
 
 scriptSwitchDefaultP :: Monad m => Parser m Statement
 scriptSwitchDefaultP = do
     try $ keyword "default"
-    scriptSkippableP
+    spacesOrComment
     char ':'
-    scriptSkippableP
+    spacesOrComment
     body <- scriptStatementP
-    scriptSkippableP
+    spacesOrComment
     return body
 
 setStmtP :: Monad m => Parser m Statement
@@ -429,25 +433,25 @@ setStmtP = fancyTagP "set" setStmtInnerP
 setStmtInnerP :: Monad m => Parser m Statement
 setStmtInnerP = do
     name <- identifierP
-    spaces
+    spacesOrComment
     char '='
-    spaces
+    spacesOrComment
     val <- expressionP
-    spaces
+    spacesOrComment
     return $ SetVarS name val
 
 scriptSetStmtP :: Monad m => Parser m Statement
 scriptSetStmtP = do
     try $ keyword "set"
-    scriptSkippableP
+    spacesOrComment
     name <- identifierP
-    scriptSkippableP
+    spacesOrComment
     char '='
-    scriptSkippableP
+    spacesOrComment
     val <- expressionP
-    scriptSkippableP
+    spacesOrComment
     char ';'
-    scriptSkippableP
+    spacesOrComment
     return $ SetVarS name val
 
 defineBlock :: VarName -> Block -> ParseState -> ParseState
@@ -464,34 +468,34 @@ blockP :: Monad m => Parser m (VarName, Block)
 blockP = do
     name <- fancyTagP "block" identifierP
     body <- statementsP
-    fancyTagP "endblock" (optional $ string (Text.unpack name) >> spaces)
+    fancyTagP "endblock" (optional $ string (Text.unpack name) >> spacesOrComment)
     return (name, Block body)
 
 macroStmtP :: Monad m => Parser m Statement
 macroStmtP = do
     (name, args) <- try $ fancyTagP "macro" macroHeadP
     body <- statementsP
-    fancyTagP "endmacro" (optional $ string (Text.unpack name) >> spaces)
+    fancyTagP "endmacro" (optional $ string (Text.unpack name) >> spacesOrComment)
     return $ DefMacroS name (Macro args body)
 
 scriptMacroStmtP :: Monad m => Parser m Statement
 scriptMacroStmtP = do
     try $ keyword "macro"
-    scriptSkippableP
+    spacesOrComment
     name <- identifierP
-    scriptSkippableP
+    spacesOrComment
     args <- option [] $ groupP "(" ")" identifierP
-    scriptSkippableP
+    spacesOrComment
     body <- scriptStatementP
-    scriptSkippableP
+    spacesOrComment
     return $ DefMacroS name (Macro args body)
 
 macroHeadP :: Monad m => Parser m (VarName, [VarName])
 macroHeadP = do
     name <- identifierP
-    spaces
+    spacesOrComment
     args <- option [] $ groupP "(" ")" identifierP
-    spaces
+    spacesOrComment
     return (name, args)
 
 -- {% call (foo) bar(baz) %}quux{% endcall %}
@@ -517,9 +521,9 @@ callStmtP = do
 callHeadP :: Monad m => Parser m ([Text], Expression)
 callHeadP = do
     callerArgs <- option [] $ groupP "(" ")" identifierP
-    spaces
+    spacesOrComment
     call <- expressionP
-    spaces
+    spacesOrComment
     return (callerArgs, call)
 
 scopeStmtP :: Monad m => Parser m Statement
@@ -547,16 +551,16 @@ forStmtP = do
 scriptForStmtP :: Monad m => Parser m Statement
 scriptForStmtP = do
     try $ keyword "for"
-    scriptSkippableP
+    spacesOrComment
     char '('
     (iteree, varNameVal, varNameIndex) <- forHeadP
-    scriptSkippableP
+    spacesOrComment
     char ')'
-    scriptSkippableP
+    spacesOrComment
     body <- scriptStatementP
     elseBranchMay <- optionMaybe $ do
         try $ keyword "else"
-        scriptSkippableP
+        spacesOrComment
         scriptStatementP
     let forLoop = ForS varNameIndex varNameVal iteree body
     return $ maybe
@@ -572,19 +576,19 @@ includeP = do
 scriptIncludeP :: Monad m => Parser m Statement
 scriptIncludeP = do
     try $ keyword "include"
-    scriptSkippableP
+    spacesOrComment
     char '('
     sourceName <- stringLiteralP
-    scriptSkippableP
+    spacesOrComment
     char ')'
-    scriptSkippableP
+    spacesOrComment
     char ';'
-    scriptSkippableP
+    spacesOrComment
     include sourceName
 
 forHeadP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
 forHeadP =
-    (try forHeadInP <|> forHeadAsP) <* optional (keyword "recursive" >> spaces)
+    (try forHeadInP <|> forHeadAsP) <* optional (keyword "recursive" >>spacesOrComment)
 
 forIteratorP :: Monad m => Parser m (VarName, Maybe VarName)
 forIteratorP = try forIndexedIteratorP <|> try forSimpleIteratorP <?> "iteration variables"
@@ -592,34 +596,34 @@ forIteratorP = try forIndexedIteratorP <|> try forSimpleIteratorP <?> "iteration
 forIndexedIteratorP :: Monad m => Parser m (VarName, Maybe VarName)
 forIndexedIteratorP = do
     indexIdent <- identifierP
-    spaces
+    spacesOrComment
     char ','
-    spaces
+    spacesOrComment
     varIdent <- identifierP
-    spaces
+    spacesOrComment
     return (varIdent, Just indexIdent)
 
 forSimpleIteratorP :: Monad m => Parser m (VarName, Maybe VarName)
 forSimpleIteratorP = do
     varIdent <- identifierP
-    spaces
+    spacesOrComment
     return (varIdent, Nothing)
 
 forHeadInP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
 forHeadInP = do
     (varIdent, indexIdent) <- forIteratorP
-    spaces
+    spacesOrComment
     keyword "in"
-    spaces
+    spacesOrComment
     iteree <- expressionP
     return (iteree, varIdent, indexIdent)
 
 forHeadAsP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
 forHeadAsP = do
     iteree <- expressionP
-    spaces
+    spacesOrComment
     keyword "as"
-    spaces
+    spacesOrComment
     (varIdent, indexIdent) <- forIteratorP
     return (iteree, varIdent, indexIdent)
 
@@ -629,7 +633,7 @@ fancyTagP tagName =
         (try $ do
             openTagP
             keyword tagName
-            spaces)
+            spacesOrComment)
         closeTagP
 
 simpleTagP :: Monad m => String -> Parser m ()
@@ -660,25 +664,25 @@ openWP :: Monad m => Char -> Parser m ()
 openWP c = ignore $ do
     spaces
     string [ '{', c, '-' ]
-    spaces
+    spacesOrComment
 
 openNWP :: Monad m => Char -> Parser m ()
 openNWP c = ignore $ do
     string [ '{', c ]
-    spaces
+    spacesOrComment
 
 closeP :: Monad m => Char -> Parser m ()
 closeP c = try (closeWP c) <|> try (closeNWP c)
 
 closeWP :: Monad m => Char -> Parser m ()
 closeWP c = ignore $ do
-    spaces
+    spacesOrComment
     string [ '-', c, '}' ]
     spaces
 
 closeNWP :: Monad m => Char -> Parser m ()
 closeNWP c = ignore $ do
-    spaces
+    spacesOrComment
     string [ c, '}' ]
     optional . ignore . char $ '\n'
 
@@ -689,12 +693,12 @@ lambdaExprP :: Monad m => Parser m Expression
 lambdaExprP = do
     argNames <- try $ do
         char '('
-        spaces
-        argNames <- sepBy (spaces >> identifierP) (try $ spaces >> char ',')
+        spacesOrComment
+        argNames <- sepBy (spacesOrComment>> identifierP) (try $ spacesOrComment>> char ',')
         char ')'
-        spaces
+        spacesOrComment
         string "->"
-        spaces
+        spacesOrComment
         return argNames
     body <- expressionP
     return $ LambdaE argNames body
@@ -702,7 +706,7 @@ lambdaExprP = do
 operativeExprP :: forall m. Monad m => Parser m Expression -> [ (String, Text) ] -> Parser m Expression
 operativeExprP operandP operators = do
     lhs <- operandP
-    spaces
+    spacesOrComment
     tails <- many . try $ operativeTail
     return $ foldl (flip ($)) lhs tails
     where
@@ -713,34 +717,34 @@ operativeExprP operandP operators = do
             funcName <-
                 foldl (<|>) (fail "operator")
                     [ try (string op >> notFollowedBy (oneOf opChars)) >> return fn | (op, fn) <- operators ]
-            spaces
+            spacesOrComment
             rhs <- operandP
-            spaces
+            spacesOrComment
             return (\lhs -> CallE (VarE funcName) [(Nothing, lhs), (Nothing, rhs)])
 
 ternaryExprP :: Monad m => Parser m Expression
 ternaryExprP = do
     expr1 <- booleanExprP
-    spaces
+    spacesOrComment
     cTernaryTailP expr1 <|> pyTernaryTailP expr1 <|> return expr1
 
 cTernaryTailP :: Monad m => Expression -> Parser m Expression
 cTernaryTailP condition = do
     char '?'
-    spaces
+    spacesOrComment
     yesBranch <- expressionP
     char ':'
-    spaces
+    spacesOrComment
     noBranch <- expressionP
     return $ TernaryE condition yesBranch noBranch
 
 pyTernaryTailP :: Monad m => Expression -> Parser m Expression
 pyTernaryTailP yesBranch = do
     keyword "if"
-    spaces
+    spacesOrComment
     condition <- booleanExprP
     keyword "else"
-    spaces
+    spacesOrComment
     noBranch <- expressionP
     return $ TernaryE condition yesBranch noBranch
 
@@ -786,8 +790,8 @@ multiplicativeExprP =
 postfixExprP :: Monad m => Parser m Expression
 postfixExprP = do
     base <- atomicExprP
-    spaces
-    postfixes <- many . try $ postfixP `before` spaces
+    spacesOrComment
+    postfixes <- many . try $ postfixP `before`spacesOrComment
     return $ foldl (flip ($)) base postfixes
 
 postfixP :: Monad m => Parser m (Expression -> Expression)
@@ -799,7 +803,7 @@ postfixP = dotPostfixP
 dotPostfixP :: Monad m => Parser m (Expression -> Expression)
 dotPostfixP = do
     char '.'
-    spaces
+    spacesOrComment
     i <- StringLiteralE <$> identifierP
     return $ \e -> MemberLookupE e i
 
@@ -833,7 +837,7 @@ funcArgP = namedFuncArgP <|> positionalFuncArgP
 
 namedFuncArgP :: Monad m => Parser m (Maybe Text, Expression)
 namedFuncArgP = do
-    name <- try $ identifierP `before` between spaces spaces (string "=")
+    name <- try $ identifierP `before` between spacesOrComment spacesOrComment (string "=")
     expr <- expressionP
     return (Just name, expr)
 
@@ -843,7 +847,7 @@ positionalFuncArgP = try $ (Nothing,) <$> expressionP
 filterP :: Monad m => Parser m (Expression -> Expression)
 filterP = do
     char '|'
-    spaces
+    spacesOrComment
     func <- atomicExprP
     args <- option [] $ groupP "(" ")" funcArgP
     return $ \e -> CallE func ((Nothing, e):args)
@@ -859,8 +863,8 @@ atomicExprP = parenthesizedExprP
 parenthesizedExprP :: Monad m => Parser m Expression
 parenthesizedExprP =
     between
-        (try . ignore $ char '(' >> spaces)
-        (ignore $ char ')' >> spaces)
+        (try . ignore $ char '(' >> spacesOrComment)
+        (ignore $ char ')' >> spacesOrComment)
         expressionP
 
 listExprP :: Monad m => Parser m Expression
@@ -872,28 +876,28 @@ objectExprP = ObjectE <$> groupP "{" "}" expressionPairP
 expressionPairP :: Monad m => Parser m (Expression, Expression)
 expressionPairP = do
     a <- expressionP
-    spaces
+    spacesOrComment
     char ':'
-    spaces
+    spacesOrComment
     b <- expressionP
-    spaces
+    spacesOrComment
     return (a, b)
 
 groupP :: Monad m => String -> String -> Parser m a -> Parser m [a]
 groupP obr cbr inner =
     bracedP obr cbr
-        (sepBy (inner `before` spaces) (try $ string "," `before` spaces))
+        (sepBy (inner `before` spacesOrComment) (try $ string "," `before` spacesOrComment))
 
 bracedP :: Monad m => String -> String -> Parser m a -> Parser m a
 bracedP obr cbr =
     between
-        (try . ignore $ string obr >> spaces)
-        (ignore $ string cbr >> spaces)
+        (try . ignore $ string obr >> spacesOrComment)
+        (ignore $ string cbr >> spacesOrComment)
 
 varExprP :: Monad m => Parser m Expression
 varExprP = do
     litName <- identifierP
-    spaces
+    spacesOrComment
     return $ case litName of
         "true" -> BoolLiteralE True
         "false" -> BoolLiteralE False
