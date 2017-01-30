@@ -208,7 +208,7 @@ scriptStatementBlockP = do
     inner <- scriptStatementsP
     char '}'
     spacesOrComment
-    return $ ScopedS inner
+    return inner
 
 statementP :: Monad m => Parser m Statement
 statementP = interpolationStmtP
@@ -234,6 +234,7 @@ scriptStatementP = scriptStatementBlockP
                  <|> scriptForStmtP
                  <|> scriptIncludeP
                  <|> scriptMacroStmtP
+                 <|> scriptScopeStmtP
                  <|> scriptExprStmtP
 
 interpolationStmtP :: Monad m => Parser m Statement
@@ -533,6 +534,12 @@ scopeStmtP =
             (try $ simpleTagP "scope")
             (simpleTagP "endscope")
             statementsP
+
+scriptScopeStmtP :: Monad m => Parser m Statement
+scriptScopeStmtP = do
+    keyword "scope"
+    spacesOrComment
+    ScopedS <$> scriptStatementP
 
 forStmtP :: Monad m => Parser m Statement
 forStmtP = do

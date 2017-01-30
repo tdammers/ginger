@@ -905,7 +905,7 @@ simulationTests = testGroup "Simulation"
                     , "{% endscript %}"
                     ])
                 "Hello, tobias"
-        , testGroup "Explicit Local Scopes"
+        , testGroup "Script statment blocks"
             [ testCase "baseline" $ do
                 mkTestHtml [] []
                     (unlines
@@ -927,12 +927,47 @@ simulationTests = testGroup "Simulation"
                         , "{% endscript %}"
                         ])
                     "ya"
-            , testCase "after exiting local scope" $ do
+            , testCase "after exiting block" $ do
                 mkTestHtml [] []
                     (unlines
                         [ "{% script %}"
                         , "set bedazzle = 'no';"
                         , "{"
+                        , "    set bedazzle = 'ya';"
+                        , "}"
+                        , "echo(bedazzle);"
+                        , "{% endscript %}"
+                        ])
+                    "ya"
+            ]
+        , testGroup "Explicit Local Scopes"
+            [ testCase "baseline" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "set bedazzle = 'no';"
+                        , "echo(bedazzle);"
+                        , "{% endscript %}"
+                        ])
+                    "no"
+            , testCase "inside local scope" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "set bedazzle = 'no';"
+                        , "scope {"
+                        , "    set bedazzle = 'ya';"
+                        , "    echo(bedazzle);"
+                        , "}"
+                        , "{% endscript %}"
+                        ])
+                    "ya"
+            , testCase "after exiting local scope" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "set bedazzle = 'no';"
+                        , "scope {"
                         , "    set bedazzle = 'ya';"
                         , "}"
                         , "echo(bedazzle);"
