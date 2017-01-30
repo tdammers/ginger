@@ -126,3 +126,13 @@ These two together implement *template inheritance*. Here's how it works:
   inner block (leaving the rest of the containing block unchanged).
 - Blocks that are not overridden, as well as content outside of any blocks, is
   copied from the parent template.
+
+# `script`
+
+The `{% script %}` statement introduces a Script Mode Block. Inside a script
+block, Ginger uses an alternate syntax that is more similar to an imperative
+programming language like C or JavaScript, and less similar to a regular
+template language. Most of the statements are still available, but the syntax
+is different: for example, `{% for i in items %}{{ item }}{% endfor %}` becomes
+`for (i in items) { echo(item); }`. For full details, see [Script
+Mode](script.html).

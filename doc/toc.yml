@@ -12,3 +12,5 @@
     url: "/syntax/filters"
   - title: "Statements"
     url: "/syntax/statements"
+  - title: "Script Mode"
+    url: "/syntax/script"
