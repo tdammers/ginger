@@ -5,6 +5,7 @@
 {-#LANGUAGE TypeSynonymInstances #-}
 {-#LANGUAGE MultiParamTypeClasses #-}
 {-#LANGUAGE ScopedTypeVariables #-}
+{-#LANGUAGE LambdaCase #-}
 -- | Execute Ginger templates in an arbitrary monad.
 --
 -- Usage example:
@@ -164,7 +165,7 @@ easyRenderM :: ( Monad m
                , ToGVal (Run m h) v
                , ToGVal (Run m h) h
                )
-            => (h -> m ()) -> v -> Template -> m ()
+            => (h -> m ()) -> v -> Template -> m (GVal (Run m h))
 easyRenderM emit context template =
     runGingerT (easyContext emit context) template
 
@@ -191,7 +192,10 @@ runGinger :: (ToGVal (Run (Writer h) h) h, Monoid h) => GingerContext (Writer h)
 runGinger context template = execWriter $ runGingerT context template
 
 -- | Monadically run a Ginger template. The @m@ parameter is the carrier monad.
-runGingerT :: (ToGVal (Run m h) h, Monoid h, Monad m, Functor m) => GingerContext m h -> Template -> m ()
+runGingerT :: (ToGVal (Run m h) h, Monoid h, Monad m, Functor m)
+           => GingerContext m h
+           -> Template
+           -> m (GVal (Run m h))
 runGingerT context tpl = runReaderT (evalStateT (runTemplate tpl) (defRunState tpl)) context
 
 -- | Find the effective base template of an inheritance chain
@@ -202,11 +206,16 @@ baseTemplate t =
         Just p -> baseTemplate p
 
 -- | Run a template.
-runTemplate :: (ToGVal (Run m h) h, Monoid h, Monad m, Functor m) => Template -> Run m h ()
+runTemplate :: (ToGVal (Run m h) h, Monoid h, Monad m, Functor m)
+            => Template
+            -> Run m h (GVal (Run m h))
 runTemplate = runStatement . templateBody . baseTemplate
 
 -- | Run an action within a different template context.
-withTemplate :: (Monad m, Functor m) => Template -> Run m h a -> Run m h a
+withTemplate :: (Monad m, Functor m)
+             => Template
+             -> Run m h a
+             -> Run m h a
 withTemplate tpl a = do
     oldTpl <- gets rsCurrentTemplate
     oldBlockName <- gets rsCurrentBlockName
@@ -216,7 +225,10 @@ withTemplate tpl a = do
     return result
 
 -- | Run an action within a block context
-withBlockName :: (Monad m, Functor m) => VarName -> Run m h a -> Run m h a
+withBlockName :: (Monad m, Functor m)
+              => VarName
+              -> Run m h a
+              -> Run m h a
 withBlockName blockName a = do
     oldBlockName <- gets rsCurrentBlockName
     modify (\s -> s { rsCurrentBlockName = Just blockName })
@@ -241,17 +253,26 @@ lookupBlock blockName = do
                     templateParent tpl >>= resolveBlock name
 
 -- | Run one statement.
-runStatement :: forall m h. (ToGVal (Run m h) h, Monoid h, Monad m, Functor m) => Statement -> Run m h ()
-runStatement NullS = return ()
-runStatement (MultiS xs) = forM_ xs runStatement
-runStatement (LiteralS html) = echo (toGVal html)
-runStatement (InterpolationS expr) = runExpression expr >>= echo
-runStatement (ExpressionS expr) = runExpression expr >> return ()
+runStatement :: forall m h. (ToGVal (Run m h) h, Monoid h, Monad m, Functor m)
+             => Statement
+             -> Run m h (GVal (Run m h))
+runStatement NullS =
+    return def
+runStatement (MultiS xs) =
+    forM xs runStatement >>= \case
+        [] -> return def
+        rvals -> return $ List.last rvals
+runStatement (LiteralS html) =
+    echo (toGVal html) >> return def
+runStatement (InterpolationS expr) =
+    runExpression expr >>= echo >> return def
+runStatement (ExpressionS expr) =
+    runExpression expr
 runStatement (IfS condExpr true false) = do
     cond <- runExpression condExpr
     runStatement $ if toBoolean cond then true else false
 
-runStatement (SwitchS pivotExpr cases def) = do
+runStatement (SwitchS pivotExpr cases defBranch) = do
     pivot <- runExpression pivotExpr
     let branches =
             [ \cont -> do
@@ -262,20 +283,23 @@ runStatement (SwitchS pivotExpr cases def) = do
             | (condExpr, body)
             <- cases
             ] ++
-            [ Prelude.const (runStatement def)
-            ]
+            [ Prelude.const $ runStatement defBranch ]
     go branches
     where
-        go [] = return ()
+        go :: [ Run m h (GVal (Run m h)) -> Run m h (GVal (Run m h)) ]
+           -> Run m h (GVal (Run m h))
+        go [] = return def
         go (x:xs) = x (go xs)
 
 runStatement (SetVarS name valExpr) = do
     val <- runExpression valExpr
     setVar name val
+    return def
 
 runStatement (DefMacroS name macro) = do
     let val = macroToGVal macro
     setVar name val
+    return def
 
 runStatement (BlockRefS blockName) = do
     block <- lookupBlock blockName
@@ -284,7 +308,7 @@ runStatement (BlockRefS blockName) = do
 
 runStatement (ScopedS body) = withLocalScope runInner
     where
-        runInner :: (Functor m, Monad m) => Run m h ()
+        runInner :: (Functor m, Monad m) => Run m h (GVal (Run m h))
         runInner = runStatement body
 
 runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
@@ -306,7 +330,8 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
                 loop :: [(Maybe Text, GVal (Run m h))] -> Run m h (GVal (Run m h))
                 loop [] = fail "Invalid call to `loop`; at least one argument is required"
                 loop ((_, loopee):_) = go (Prelude.succ recursionDepth) loopee
-                iteration :: (Int, (GVal (Run m h), GVal (Run m h))) -> Run m h ()
+                iteration :: (Int, (GVal (Run m h), GVal (Run m h)))
+                          -> Run m h (GVal (Run m h))
                 iteration (index, (key, value)) = do
                     setVar varNameValue value
                     setVar "loop" $
@@ -323,12 +348,13 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
                              ])
                              { asFunction = Just loop }
                     case varNameIndex of
-                        Nothing -> return ()
+                        Nothing -> return def
                         Just n -> setVar n key
                     runStatement body
-            withLocalScope $ forM_ (Prelude.zip [0..] iterPairs) iteration
-            return def
-    runExpression itereeExpr >>= go 0 >> return ()
+            (withLocalScope $ forM (Prelude.zip [0..] iterPairs) iteration) >>= \case
+                [] -> return def
+                rvals -> return $ List.last rvals
+    runExpression itereeExpr >>= go 0
 
 runStatement (PreprocessedIncludeS tpl) =
     withTemplate tpl $ runTemplate tpl
