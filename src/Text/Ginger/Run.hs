@@ -419,6 +419,8 @@ runExpression (TernaryE condition yes no) = do
     condVal <- runExpression condition
     let expr = if asBoolean condVal then yes else no
     runExpression expr
+runExpression (DoE stmt) =
+    runStatement stmt
 
 -- | Helper function to output a HTML value using whatever print function the
 -- context provides.

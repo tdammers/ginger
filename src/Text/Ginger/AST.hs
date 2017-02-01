@@ -38,7 +38,7 @@ data Statement
     | ScopedS Statement -- ^ Run wrapped statement in a local scope
     | LiteralS Html -- ^ Literal output (anything outside of any tag)
     | InterpolationS Expression -- ^ {{ expression }}
-    | ExpressionS Expression -- ^ Evaluate expression and discard value
+    | ExpressionS Expression -- ^ Evaluate expression
     | IfS Expression Statement Statement -- ^ {% if expression %}statement{% else %}statement{% endif %}
     | SwitchS Expression [(Expression, Statement)] Statement -- ^ {% switch expression %}{% case expression %}statement{% endcase %}...{% default %}statement{% enddefault %}{% endswitch %}
     | ForS (Maybe VarName) VarName Expression Statement -- ^ {% for index, varname in expression %}statement{% endfor %}
@@ -62,4 +62,5 @@ data Expression
     | CallE Expression [(Maybe Text, Expression)] -- ^ foo(bar=baz, quux)
     | LambdaE [Text] Expression -- ^ (foo, bar) -> expr
     | TernaryE Expression Expression Expression -- ^ expr ? expr : expr
+    | DoE Statement -- ^ do { statement; }
     deriving (Show)

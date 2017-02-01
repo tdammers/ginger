@@ -982,6 +982,16 @@ simulationTests = testGroup "Simulation"
                     "no"
             ]
         ]
+    , testGroup "do expressions"
+        [ testCase "single statement" $ do
+            mkTestHtml [] []
+                "{{ do 'hello'; }}"
+                "hello"
+        , testCase "statement block" $ do
+            mkTestHtml [] []
+                "{{ do { 'hello'; 'world'; } }}"
+                "world"
+        ]
     ]
 
 mkTestHtml :: [(VarName, GVal (Run IO Html))]

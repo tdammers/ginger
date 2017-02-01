@@ -860,7 +860,8 @@ filterP = do
     return $ \e -> CallE func ((Nothing, e):args)
 
 atomicExprP :: Monad m => Parser m Expression
-atomicExprP = parenthesizedExprP
+atomicExprP = doExprP
+            <|> parenthesizedExprP
             <|> objectExprP
             <|> listExprP
             <|> stringLiteralExprP
@@ -873,6 +874,14 @@ parenthesizedExprP =
         (try . ignore $ char '(' >> spacesOrComment)
         (ignore $ char ')' >> spacesOrComment)
         expressionP
+
+doExprP :: Monad m => Parser m Expression
+doExprP = do
+    try $ keyword "do"
+    spacesOrComment
+    stmt <- scriptStatementP
+    spacesOrComment
+    return $ DoE stmt
 
 listExprP :: Monad m => Parser m Expression
 listExprP = ListE <$> groupP "[" "]" expressionP
