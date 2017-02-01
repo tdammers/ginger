@@ -1,3 +1,12 @@
+## 0.4.0.0
+
+- Statements can now return values
+- Added `do` expressions (lift statements into expressions)
+
+## 0.3.11.1
+
+- Fixed a parser bug related to whitespace in script mode
+
 ## 0.3.11.0
 
 - Fixed the way local scopes work in script mode
