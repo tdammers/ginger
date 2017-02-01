@@ -846,6 +846,12 @@ simulationTests = testGroup "Simulation"
                 []
                 "{% script %}12 + 15;{% endscript %}"
                 ""
+        , testCase "grouped statements" $
+            mkTestHtml
+                []
+                []
+                "{% script %}{ \n 1; 2; 3; 4; }{% endscript %}"
+                ""
         , testCase "if" $
             mkTestHtml
                 []

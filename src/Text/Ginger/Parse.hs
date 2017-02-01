@@ -537,7 +537,7 @@ scopeStmtP =
 
 scriptScopeStmtP :: Monad m => Parser m Statement
 scriptScopeStmtP = do
-    keyword "scope"
+    try $ keyword "scope"
     spacesOrComment
     ScopedS <$> scriptStatementP
 
