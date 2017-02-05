@@ -27,6 +27,26 @@ constructs to Python constructs.
 On top of that, we deviate on a few points, and add some features that we think
 are very useful and help make the language better and more consistent.
 
+## Installation
+
+Ginger is available from [Hackage](https://hackage.haskell.org/package/ginger),
+and it is in Stackage, so you can use it in plain Cabal projects as well as
+Stack ones.
+
+### Installing with Cabal:
+
+    cabal install ginger
+
+### Installing with Stack:
+
+    stack install ginger
+
+### Using as part of another project:
+
+Add the following to your `.cabal`'s `build-depends`:
+
+    ginger >=0.3.9.1 && <0.4
+
 ## Template Syntax
 
 Full template syntax documentation is available from the `/docs` subdirectory
