@@ -1,5 +1,9 @@
 # Ginger
 
+
+[![Build Status](https://travis-ci.org/tdammers/ginger.svg?branch=master)](https://travis-ci.org/tdammers/ginger)
+[![Hackage](https://img.shields.io/hackage/v/ginger.svg)](https://hackage.haskell.org/package/ginger)
+
 A note of warning: the git repository at https://bitbucket.org/tdammers/ginger
 has been deleted and restored with a rewritten commit tree on 2016-04-06 in
 order to clean up the messy history. This means that if you have a checkout
