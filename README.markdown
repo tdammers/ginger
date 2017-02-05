@@ -4,23 +4,34 @@
 [![Build Status](https://travis-ci.org/tdammers/ginger.svg?branch=master)](https://travis-ci.org/tdammers/ginger)
 [![Hackage](https://img.shields.io/hackage/v/ginger.svg)](https://hackage.haskell.org/package/ginger)
 
-A note of warning: the git repository at https://bitbucket.org/tdammers/ginger
-has been deleted and restored with a rewritten commit tree on 2016-04-06 in
-order to clean up the messy history. This means that if you have a checkout
-from before that date, merging the bitbucket repo will most likely break
-things; please do a fresh clone to fix this. Sorry for the inconvenience.
-
-## Intro
+![](http://ginger.tobiasdammers.nl/static/img/ginger-leaf.svg)
 
 A Haskell implementation of the [Jinja2](http://jinja.pocoo.org/) template
 language.
 
-Ginger aims to be as close to the original Jinja language as possible, but
-avoiding blatant pythonisms and features that make little sense outside of
-an impure dynamic host language context, especially when this would require
-sacrificing runtime performance.
+> A note of warning: the git repository at https://bitbucket.org/tdammers/ginger
+> has been deleted and restored with a rewritten commit tree on 2016-04-06 in
+> order to clean up the messy history. This means that if you have a checkout
+> from before that date, merging the bitbucket repo will most likely break
+> things; please do a fresh clone to fix this. Sorry for the inconvenience.
+
+## Introduction
+
+Ginger provides most of the original Jinja2 template language, as much as that
+makes sense in a Haskell host application.
+
+We do, however, some of the most blatant Pythonisms, especially when we felt
+the features in question were more of an accidental result of binding template
+constructs to Python constructs.
+
+On top of that, we deviate on a few points, and add some features that we think
+are very useful and help make the language better and more consistent.
 
 ## Template Syntax
+
+Full template syntax documentation is available from the `/docs` subdirectory
+in the project repository itself, or from [the User Guide section on the
+Ginger website](https://ginger.tobiasdammers.nl/guide).
 
 ### Minimal example template
 
@@ -52,12 +63,19 @@ tags from `{% %}` and `{{ }}` to different tokens, e.g. `<% %>` and `<< >>`.
 Ginger does not currently support this.
 
 ## Haskell API
+
+The Haskell API is documented fully through Haddock documentation, available
+from [Hackage](https://hackage.haskell.org/package/ginger). We'll just provide
+a short overview here.
+
 ### General
+
 On the Haskell side of things, executing a template is a two-step process.
 First, template source code is parsed into a 'Template' data structure,
 which is then fed to 'runGinger' or 'runGingerT'.
 
 ###  Parsing
+
 Because Ginger templates can include other templates, the parser needs a way of
 resolving template names. Instead of hard-wiring the parser into 'IO' though,
 Ginger will work on any Monad type, but requires the caller to provide a
@@ -87,6 +105,7 @@ have pre-loaded all template sources), you can use the pure 'parseGinger'
 flavor, which does not rely on a host monad.
 
 ### Running
+
 The core function for running a template is 'runGinger' (or its monadic
 flavor 'runGingerT'); in order to pass an initial context to the template
 engine, pass a suitable 'GingerContext', which you can create using the
