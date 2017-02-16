@@ -222,6 +222,7 @@ statementP = interpolationStmtP
            <|> blockStmtP
            <|> callStmtP
            <|> scopeStmtP
+           <|> indentStmtP
            <|> scriptStmtP
            <|> literalStmtP
 
@@ -534,6 +535,17 @@ scopeStmtP =
             (try $ simpleTagP "scope")
             (simpleTagP "endscope")
             statementsP
+
+indentStmtP :: Monad m => Parser m Statement
+indentStmtP = do
+    indentExpr <- try $ fancyTagP "indent" indentHeadP
+    body <- statementsP
+    simpleTagP "endindent"
+    return $ IndentS indentExpr body
+
+indentHeadP :: Monad m => Parser m Expression
+indentHeadP =
+    (expressionP <|> return (StringLiteralE "  ")) <* spacesOrComment
 
 scriptScopeStmtP :: Monad m => Parser m Statement
 scriptScopeStmtP = do

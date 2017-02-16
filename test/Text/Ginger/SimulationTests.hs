@@ -727,6 +727,100 @@ simulationTests = testGroup "Simulation"
         , testCase "after exiting local scope" $ do
             mkTestHtml [] [] "{% set bedazzle = \"no\" %}{% scope %}{% set bedazzle = \"ya\" %}{% endscope %}{{ bedazzle }}" "no"
         ]
+    , testGroup "Indentation"
+        [ testCase "stripping leading spaces" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% indent %}"
+                    , "    aaaaa"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "aaaaa"
+                    , "aaaaa"
+                    ])
+        , testCase "explicit indent string" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% indent %}"
+                    , "    aaaaa"
+                    , "{% indent '    ' %}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "aaaaa"
+                    , "    aaaaa"
+                    , "aaaaa"
+                    ])
+        , testCase "implicit indent string" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% indent %}"
+                    , "    aaaaa"
+                    , "{% indent %}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "aaaaa"
+                    , "  aaaaa"
+                    , "aaaaa"
+                    ])
+        , testCase "explicit non-whitespace indent string" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% indent %}"
+                    , "    aaaaa"
+                    , "{% indent '--- ' %}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "aaaaa"
+                    , "--- aaaaa"
+                    , "aaaaa"
+                    ])
+        , testCase "explicit indent string from more complex expression" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% indent %}"
+                    , "    aaaaa"
+                    , "{% indent (17 + 4) ~ ' '%}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "aaaaa"
+                    , "21 aaaaa"
+                    , "aaaaa"
+                    ])
+        , testCase "discarding level-0 indents" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% indent 'nope' %}"
+                    , "    aaaaa"
+                    , "{% indent %}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "aaaaa"
+                    , "  aaaaa"
+                    , "aaaaa"
+                    ])
+        ]
     , testGroup "Macros"
         [ testCase "simple" $ do
             mkTestHtml [] []
@@ -1014,7 +1108,7 @@ mkTestJSON :: [(VarName, GVal (Run IO [JSON.Value]))]
            -> Text
            -> Assertion
 mkTestJSON = mkTest
-    (\l w -> makeContextM' l w toJSONSingleton) encodeText
+    (\l w -> makeContextM' l w toJSONSingleton Nothing) encodeText
     where
         toJSONSingleton = (:[]) . JSON.toJSON
 

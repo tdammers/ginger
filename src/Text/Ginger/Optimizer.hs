@@ -268,7 +268,7 @@ runCT :: Template -> Collected
 runCT = runGinger ctContext
 
 ctContext :: GingerContext (Writer Collected) Collected
-ctContext = makeContext' ctLookup ctEncode
+ctContext = makeContext' ctLookup ctEncode Nothing
 
 ctLookup :: VarName -> GVal m
 ctLookup = const def

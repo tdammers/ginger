@@ -36,6 +36,7 @@ data Block
 data Statement
     = MultiS [Statement] -- ^ A sequence of multiple statements
     | ScopedS Statement -- ^ Run wrapped statement in a local scope
+    | IndentS Expression Statement -- ^ Establish an indented context around the wrapped statement
     | LiteralS Html -- ^ Literal output (anything outside of any tag)
     | InterpolationS Expression -- ^ {{ expression }}
     | ExpressionS Expression -- ^ Evaluate expression

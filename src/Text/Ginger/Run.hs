@@ -102,6 +102,7 @@ import Safe (readMay, lastDef, headMay)
 import Network.HTTP.Types (urlEncode)
 import Debug.Trace (trace)
 import Data.List (lookup, zipWith, unzip)
+import Data.Aeson as JSON
 
 defaultScope :: forall m h. (Monoid h, Monad m, ToGVal (Run m h) h) => [(Text, GVal (Run m h))]
 defaultScope =
@@ -253,7 +254,12 @@ lookupBlock blockName = do
                     templateParent tpl >>= resolveBlock name
 
 -- | Run one statement.
-runStatement :: forall m h. (ToGVal (Run m h) h, Monoid h, Monad m, Functor m)
+runStatement :: forall m h
+              . ( ToGVal (Run m h) h
+                , Monoid h
+                , Monad m
+                , Functor m
+                )
              => Statement
              -> Run m h (GVal (Run m h))
 runStatement NullS =
@@ -271,6 +277,12 @@ runStatement (ExpressionS expr) =
 runStatement (IfS condExpr true false) = do
     cond <- runExpression condExpr
     runStatement $ if toBoolean cond then true else false
+
+runStatement (IndentS expr body) = do
+    i <- runExpression expr
+    encode <- asks contextEncode
+    let istr = encode i
+    indented istr $ runStatement body
 
 runStatement (SwitchS pivotExpr cases defBranch) = do
     pivot <- runExpression pivotExpr
@@ -360,7 +372,12 @@ runStatement (PreprocessedIncludeS tpl) =
     withTemplate tpl $ runTemplate tpl
 
 -- | Deeply magical function that converts a 'Macro' into a Function.
-macroToGVal :: forall m h. (ToGVal (Run m h) h, Monoid h, Functor m, Monad m) => Macro -> GVal (Run m h)
+macroToGVal :: forall m h
+             . ( ToGVal (Run m h) h
+               , Monoid h
+               , Functor m
+               , Monad m
+               ) => Macro -> GVal (Run m h)
 macroToGVal (Macro argNames body) =
     fromFunction f
     where
@@ -424,11 +441,59 @@ runExpression (DoE stmt) =
 
 -- | Helper function to output a HTML value using whatever print function the
 -- context provides.
-echo :: (Monad m, Functor m) => GVal (Run m h) -> Run m h ()
+echo :: (Monad m, Functor m, Monoid h)
+     => GVal (Run m h) -> Run m h ()
 echo src = do
     e <- asks contextEncode
+    newlinesMay <- asks contextNewlines
+    indentationMay <- gets rsIndentation
     p <- asks contextWrite
-    p . e $ src
+    let indent = fromMaybe id $ do
+            newlines <- newlinesMay
+            indentation <- indentationMay
+            return $ applyIndentation newlines indentation
+
+    p . indent . e $ src
+
+applyIndentation :: (Monoid h)
+                 => Newlines h
+                 -> [h]
+                 -> h
+                 -> h
+applyIndentation n levels =
+    let indent = mconcat . List.reverse $ levels
+    in joinLines n .
+       fmap (indent <>) .
+       fmap (stripIndent n) .
+       splitLines n
+
+indented :: (Monad m, Functor m, Monoid h)
+         => h
+         -> Run m h a
+         -> Run m h a
+indented i action = do
+    pushIndent i *> action <* popIndent
+
+pushIndent :: (Monad m, Functor m, Monoid h)
+           => h
+           -> Run m h ()
+pushIndent i =
+    modify $ \state ->
+        state { rsIndentation = increaseIndent i (rsIndentation state) }
+popIndent :: (Monad m, Functor m, Monoid h)
+           => Run m h ()
+popIndent =
+    modify $ \state ->
+        state { rsIndentation = decreaseIndent (rsIndentation state) }
+
+increaseIndent :: a -> Maybe [a] -> Maybe [a]
+increaseIndent _ Nothing = Just []
+increaseIndent x (Just xs) = Just (x:xs)
+
+decreaseIndent :: Maybe [a] -> Maybe [a]
+decreaseIndent Nothing = Nothing
+decreaseIndent (Just []) = Nothing
+decreaseIndent (Just (x:xs)) = Just xs
 
 defRunState :: forall m h. (ToGVal (Run m h) h, Monoid h, Monad m)
             => Template
@@ -439,9 +504,11 @@ defRunState tpl =
         , rsCapture = mempty
         , rsCurrentTemplate = tpl
         , rsCurrentBlockName = Nothing
+        , rsIndentation = Nothing
         }
 
-gfnEval :: (Monad m, Monoid h, ToGVal (Run m h) h) => Function (Run m h)
+gfnEval :: (Monad m, Monoid h, ToGVal (Run m h) h)
+        => Function (Run m h)
 gfnEval args =
     let extracted =
             extractArgsDefL
