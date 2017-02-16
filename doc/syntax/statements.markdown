@@ -77,6 +77,60 @@ exactly where the `include` is written.
   value from inside the scope while inside, but revert to the value from
   outside after leaving the scope
 
+# `indent`
+
+`{% indent %}...{% endindent %}` creates an indentation scope using the default
+indent (two spaces)
+
+`{% indent expr %}...{% endindent %}` interprets `expr` as an indent and
+creates a matching indentation scope.
+
+Indentation blocks can be nested.
+
+The topmost indentation block removes all existing indentation; all nested
+indentation blocks add their respective indents to the surrounding ones.
+
+Indentation blocks cover all line endings in the output, regardless of whether
+they come from literal output (bare text), interpolations, macro invocations,
+or includes.
+
+Indentation level is determined from the runtime context, so if you put an
+indentation block inside a macro and call it from another indentation block,
+the two will nest as if you had written the macro body directly into the
+calling context. This means that the following:
+
+```ginger
+{%- macro foobar %}
+{% indent '' %}
+<div>
+{% indent '  ' %}
+<h1>Hello!</h1>
+{% endindent %}
+</div>
+{% endindent %}
+{% endmacro -%}
+
+
+{% indent %}
+<body>
+{{ foobar() }}
+</body>
+{% endindent }
+```
+
+...will render as:
+
+```html
+<body>
+  <div>
+    <h1>Hello!</h1>
+  </div>
+</body>
+```
+
+Thus, `{% indent %}` allows authors to write reusable template code that
+produces correct indentation.
+
 # `macro`
 
 `{% macro name(arg0,...) %}...{% endmacro %}` defines a macro named `name`.

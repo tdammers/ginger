@@ -464,7 +464,6 @@ applyIndentation n levels =
     let indent = mconcat . List.reverse $ levels
     in joinLines n .
        fmap (indent <>) .
-       fmap (stripIndent n) .
        splitLines n
 
 indented :: (Monad m, Functor m, Monoid h)

@@ -732,7 +732,7 @@ simulationTests = testGroup "Simulation"
             mkTestHtml [] []
                 (unlines
                     [ "{% indent %}"
-                    , "    aaaaa"
+                    , "  aaaaa"
                     , "  aaaaa"
                     , "{% endindent %}"
                     ])
@@ -746,9 +746,9 @@ simulationTests = testGroup "Simulation"
                     [ "{% indent %}"
                     , "    aaaaa"
                     , "{% indent '    ' %}"
-                    , "  aaaaa"
+                    , "    aaaaa"
                     , "{% endindent %}"
-                    , "  aaaaa"
+                    , "    aaaaa"
                     , "{% endindent %}"
                     ])
                 (Text.unlines
@@ -764,7 +764,7 @@ simulationTests = testGroup "Simulation"
                     , "{% indent %}"
                     , "  aaaaa"
                     , "{% endindent %}"
-                    , "  aaaaa"
+                    , "    aaaaa"
                     , "{% endindent %}"
                     ])
                 (Text.unlines
@@ -778,9 +778,9 @@ simulationTests = testGroup "Simulation"
                     [ "{% indent %}"
                     , "    aaaaa"
                     , "{% indent '--- ' %}"
-                    , "  aaaaa"
+                    , "    aaaaa"
                     , "{% endindent %}"
-                    , "  aaaaa"
+                    , "    aaaaa"
                     , "{% endindent %}"
                     ])
                 (Text.unlines
@@ -792,7 +792,7 @@ simulationTests = testGroup "Simulation"
             mkTestHtml [] []
                 (unlines
                     [ "{% indent %}"
-                    , "    aaaaa"
+                    , "  aaaaa"
                     , "{% indent (17 + 4) ~ ' '%}"
                     , "  aaaaa"
                     , "{% endindent %}"
@@ -808,7 +808,7 @@ simulationTests = testGroup "Simulation"
             mkTestHtml [] []
                 (unlines
                     [ "{% indent 'nope' %}"
-                    , "    aaaaa"
+                    , "  aaaaa"
                     , "{% indent %}"
                     , "  aaaaa"
                     , "{% endindent %}"
@@ -819,6 +819,32 @@ simulationTests = testGroup "Simulation"
                     [ "aaaaa"
                     , "  aaaaa"
                     , "aaaaa"
+                    ])
+        , testCase "indentation levels inherited at runtime (dynamic)" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{%- macro foobar() %}"
+                    , "{% indent '  ' %}"
+                    , "<div>"
+                    , "{% indent '  ' %}"
+                    , "<h1>Hello!</h1>"
+                    , "{% endindent %}"
+                    , "</div>"
+                    , "{% endindent %}"
+                    , "{% endmacro -%}"
+                    , ""
+                    , "{% indent '' %}"
+                    , "<body>"
+                    , "{{ foobar() }}"
+                    , "</body>"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "<body>"
+                    , "  <div>"
+                    , "    <h1>Hello!</h1>"
+                    , "  </div>"
+                    , "</body>"
                     ])
         ]
     , testGroup "Macros"

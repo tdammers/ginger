@@ -24,7 +24,7 @@ import Text.Parsec ( ParseError
                    , option, optionMaybe
                    , unexpected
                    , digit
-                   , getState, modifyState
+                   , getState, modifyState, putState
                    , (<?>)
                    )
 import Text.Parsec.Error ( errorMessages
@@ -34,6 +34,7 @@ import Text.Parsec.Error ( errorMessages
 import Text.Ginger.AST
 import Text.Ginger.Html ( unsafeRawHtml )
 
+import Control.Monad (when)
 import Control.Monad.Reader ( ReaderT
                             , runReaderT
                             , ask, asks
@@ -125,12 +126,14 @@ data ParseContext m
 data ParseState
     = ParseState
         { psBlocks :: HashMap VarName Block
+        , psStripIndent :: String
         }
 
 defParseState :: ParseState
 defParseState =
     ParseState
         { psBlocks = HashMap.empty
+        , psStripIndent = ""
         }
 
 -- | Parse Ginger source from memory.
@@ -262,11 +265,22 @@ scriptEchoStmtP = do
 
 literalStmtP :: Monad m => Parser m Statement
 literalStmtP = do
-    txt <- manyTill anyChar endOfLiteralP
+    txt <- manyTill literalCharP endOfLiteralP
 
     case txt of
         [] -> unexpected "{{"
         _ -> return . LiteralS . unsafeRawHtml . Text.pack $ txt
+
+literalCharP :: Monad m => Parser m Char
+literalCharP =
+    literalNewlineP <|> anyChar
+
+literalNewlineP :: Monad m => Parser m Char
+literalNewlineP = do
+    stripStr <- psStripIndent <$> getState
+    char '\n'
+    when (not $ null stripStr) (ignore . optional . try $ string stripStr)
+    return '\n'
 
 endOfLiteralP :: Monad m => Parser m ()
 endOfLiteralP =
@@ -539,7 +553,12 @@ scopeStmtP =
 indentStmtP :: Monad m => Parser m Statement
 indentStmtP = do
     indentExpr <- try $ fancyTagP "indent" indentHeadP
+    preIndent <- many (oneOf " \t")
+    oldState <- getState
+    modifyState $ \state ->
+        state { psStripIndent = preIndent }
     body <- statementsP
+    putState oldState
     simpleTagP "endindent"
     return $ IndentS indentExpr body
 
@@ -703,7 +722,7 @@ closeNWP :: Monad m => Char -> Parser m ()
 closeNWP c = ignore $ do
     spacesOrComment
     string [ c, '}' ]
-    optional . ignore . char $ '\n'
+    optional . ignore $ literalNewlineP
 
 expressionP :: Monad m => Parser m Expression
 expressionP = lambdaExprP <|> ternaryExprP
