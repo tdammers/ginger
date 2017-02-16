@@ -1,3 +1,7 @@
+## 0.5.0.0
+
+- Indentation mode: `{% indent %}` introduces an indentation context
+
 ## 0.4.0.0
 
 - Statements can now return values
