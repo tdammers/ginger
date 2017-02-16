@@ -202,6 +202,9 @@ makeContextTextM :: (Monad m, Functor m)
                  -> GingerContext m Text
 makeContextTextM l w = makeContextM' l w asText (Just textNewlines)
 
+-- | A 'Newlines' determines the rules by which a 'h' value can be
+-- split into lines, how a list of lines can be joined into a single
+-- value, and how to remove leading whitespace.
 data Newlines h =
     Newlines
         { splitLines :: h -> [h]
