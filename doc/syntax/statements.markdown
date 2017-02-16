@@ -87,8 +87,15 @@ creates a matching indentation scope.
 
 Indentation blocks can be nested.
 
-The topmost indentation block removes all existing indentation; all nested
-indentation blocks add their respective indents to the surrounding ones.
+Existing indentation in the template source is removed inside `{% indent %}`
+blocks, based on the indentation of the first line after the opening
+`{% indent %}` tag. After that first line, all subsequent lines that begin with
+the same indent will have it stripped, while any additional whitespace will be
+kept, as will whitespace sequences that differ from the first line.
+
+After that, indentation blocks add one level of indentation, except for the
+outermost one, which serves just to establish the indentation context in the
+first place.
 
 Indentation blocks cover all line endings in the output, regardless of whether
 they come from literal output (bare text), interpolations, macro invocations,
