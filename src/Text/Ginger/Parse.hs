@@ -7,6 +7,7 @@ module Text.Ginger.Parse
 ( parseGinger
 , parseGingerFile
 , ParserError (..)
+, formatParserError
 , IncludeResolver
 , Source, SourceName
 )
@@ -46,7 +47,7 @@ import GHC.Generics
 import Safe ( readMay )
 
 import Data.Text (Text)
-import Data.Maybe ( fromMaybe )
+import Data.Maybe ( fromMaybe, catMaybes, listToMaybe )
 import Data.Scientific ( Scientific )
 import qualified Data.Text as Text
 import Data.List ( foldr, nub, sort )
@@ -57,6 +58,7 @@ import Data.Monoid ( (<>) )
 import Data.Char (isSpace)
 
 import System.FilePath ( takeDirectory, (</>) )
+import Text.Printf ( printf )
 
 -- | Input type for the parser (source code).
 type Source = String
@@ -82,6 +84,30 @@ data ParserError =
         deriving (Show, Generic)
 
 instance Exception ParserError where
+
+-- | 
+formatParserError :: Maybe String -> ParserError -> String
+formatParserError tplSrc e =
+    let sourceLocation = do
+            printf "%s:%i:%i\n"
+                <$> peSourceName e
+                <*> peSourceLine e
+                <*> peSourceColumn e
+        markerLines = do
+            sourceLines <- lines <$> tplSrc
+            lineNum <- peSourceLine e
+            offendingLine <- listToMaybe . drop (pred lineNum) $ sourceLines
+            offendingColumn <- peSourceColumn e <|> Just 1
+            return . unlines $
+                [ offendingLine
+                , (replicate (pred offendingColumn) ' ') <> "^"
+                ]
+
+    in unlines . catMaybes $
+        [ sourceLocation
+        , markerLines
+        , Just (peErrorMessage e)
+        ]
 
 -- | Helper function to create a Ginger parser error from a Parsec error.
 fromParsecError :: ParseError -> ParserError

@@ -74,29 +74,20 @@ main = do
 
     case tpl of
         Left err -> do
-            printParserError err
             tplSource <- case src of
-                            Just s -> return s
+                            Just s -> return (Just s)
                             Nothing -> do
                                 let s = peSourceName err
                                 case s of
-                                    Nothing -> return ""
-                                    Just sn -> loadFile sn
-            displayParserError tplSource err
+                                    Nothing -> return Nothing
+                                    Just sn -> Just <$> loadFile sn
+            printParserError tplSource err
         Right t -> do
             let context = makeContextHtmlM contextLookup (putStr . Text.unpack . htmlSource)
             runGingerT context t >>= hPutStrLn stderr . show
 
-printParserError :: ParserError -> IO ()
-printParserError = putStrLn . formatParserError
-
-formatParserError :: ParserError -> String
-formatParserError pe = Prelude.concat
-    [ fromMaybe "<<unknown source>>" . peSourceName $ pe
-    , ":"
-    , fromMaybe "" $ (++ ":") . show <$> peSourceLine pe
-    , fromMaybe "" $ (++ ":") . show <$> peSourceColumn pe
-    , peErrorMessage pe ]
+printParserError :: Maybe String -> ParserError -> IO ()
+printParserError srcMay = putStrLn . formatParserError srcMay
 
 displayParserError :: String -> ParserError -> IO ()
 displayParserError src pe = do
