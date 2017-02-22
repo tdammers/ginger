@@ -210,22 +210,16 @@ data Newlines h =
         { splitLines :: h -> [h]
         , joinLines :: [h] -> h
         , stripIndent :: h -> h
-        }
-
-stringNewlines :: Newlines String
-stringNewlines =
-    Newlines
-        { splitLines = List.lines
-        , joinLines = List.unlines
-        , stripIndent = List.dropWhile isSpace
+        , endsWithNewline :: h -> Bool
         }
 
 textNewlines :: Newlines Text
 textNewlines =
     Newlines
-        { splitLines = Text.lines
-        , joinLines = Text.unlines
+        { splitLines = reNewline . Text.splitOn "\n"
+        , joinLines = mconcat
         , stripIndent = Text.stripStart
+        , endsWithNewline = ("\n" `Text.isSuffixOf`)
         }
 
 htmlNewlines :: Newlines Html
@@ -234,8 +228,16 @@ htmlNewlines =
         { splitLines = fmap unsafeRawHtml . splitLines textNewlines . htmlSource
         , joinLines = unsafeRawHtml . joinLines textNewlines . fmap htmlSource
         , stripIndent = unsafeRawHtml . stripIndent textNewlines . htmlSource
+        , endsWithNewline = endsWithNewline textNewlines . htmlSource
         }
 
+-- | Helper; reinstates newlines after splitting a 'Text' into lines.
+reNewline :: [Text] -> [Text]
+reNewline [] = []
+reNewline ("":[]) = []
+reNewline (x:[]) = [x]
+reNewline (x:"":[]) = [x <> "\n"]
+reNewline (x:xs) = (x <> "\n") : reNewline xs
 
 data RunState m h
     = RunState
@@ -244,6 +246,7 @@ data RunState m h
         , rsCurrentTemplate :: Template -- the template we are currently running
         , rsCurrentBlockName :: Maybe Text -- the name of the innermost block we're currently in
         , rsIndentation :: Maybe [h] -- current indentation level, if any
+        , rsAtLineStart :: Bool -- is the next output position the first column
         }
 
 -- | Internal type alias for our template-runner monad stack.

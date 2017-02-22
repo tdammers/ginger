@@ -445,26 +445,22 @@ echo :: (Monad m, Functor m, Monoid h)
      => GVal (Run m h) -> Run m h ()
 echo src = do
     e <- asks contextEncode
-    newlinesMay <- asks contextNewlines
-    indentationMay <- gets rsIndentation
     p <- asks contextWrite
-    let indent = fromMaybe id $ do
-            newlines <- newlinesMay
-            indentation <- indentationMay
-            return $ applyIndentation newlines indentation
-
-    p . indent . e $ src
-
-applyIndentation :: (Monoid h)
-                 => Newlines h
-                 -> [h]
-                 -> h
-                 -> h
-applyIndentation n levels =
-    let indent = mconcat . List.reverse $ levels
-    in joinLines n .
-       fmap (indent <>) .
-       splitLines n
+    asks contextNewlines >>= \case
+        Nothing ->
+            p . e $ src
+        Just newlines -> do
+            indentation <- fromMaybe [] <$> gets rsIndentation
+            let ls = splitLines newlines $ e src
+                indent = mconcat . List.reverse $ indentation
+            forM_ ls $ \l -> do
+                atLineStart <- gets rsAtLineStart
+                if atLineStart
+                    then p $ indent <> l
+                    else p l
+                modify $ \state -> state {
+                    rsAtLineStart = endsWithNewline newlines l
+                }
 
 indented :: (Monad m, Functor m, Monoid h)
          => h
@@ -504,6 +500,7 @@ defRunState tpl =
         , rsCurrentTemplate = tpl
         , rsCurrentBlockName = Nothing
         , rsIndentation = Nothing
+        , rsAtLineStart = True
         }
 
 gfnEval :: (Monad m, Monoid h, ToGVal (Run m h) h)
