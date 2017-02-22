@@ -1,3 +1,11 @@
+## 0.5.1.1
+
+- Bugfixes wrt indentation mode
+
+## 0.5.1.0
+
+- Expose parser error pretty-printer from the library
+
 ## 0.5.0.0
 
 - Indentation mode: `{% indent %}` introduces an indentation context

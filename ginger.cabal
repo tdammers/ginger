@@ -14,7 +14,8 @@ maintainer:          tdammers@gmail.com
 -- copyright:
 category:            Text
 build-type:          Simple
--- extra-source-files:
+extra-source-files:  README.md
+                  ,  CHANGELOG.md
 data-files: test/fixtures/*.json
 cabal-version:       >=1.10
 bug-reports:         https://github.com/tdammers/ginger/issues
