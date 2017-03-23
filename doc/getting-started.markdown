@@ -92,7 +92,7 @@ standard data types.
 An example call (for running a template in 'IO') would look something like
 this:
 
-    runGingerT (makeContextM scopeLookup (putStr . Text.unpack . htmlSource)) tpl
+    runGingerT (makeContextHtmlM scopeLookup (putStr . Text.unpack . htmlSource)) tpl
 
 ## Further Reading
 
