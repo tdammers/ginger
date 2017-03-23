@@ -11,13 +11,13 @@
 -- Usage example:
 --
 -- > render :: Template -> Text -> Text -> Text
--- > render template -> username imageURL = do
+-- > render template username imageURL = do
 -- >    let contextLookup varName =
 -- >            case varName of
 -- >                "username" -> toGVal username
 -- >                "imageURL" -> toGVal imageURL
 -- >                _ -> def -- def for GVal is equivalent to a NULL value
--- >        context = makeContext contextLookup
+-- >        context = makeContextHtml contextLookup
 -- >    in htmlSource $ runGinger context template
 module Text.Ginger.Run
 (
