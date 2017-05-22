@@ -44,7 +44,7 @@ var $prelude = (function () {
     }
     defaultContext.urlencode = encodeURI
     defaultContext.capitalize = function (str) {
-            str.replace(/(?:^[a-z])[a-z]/g, function(x) { return x.toUpperCase })
+            ((str || '') + '').replace(/(?:^[a-z])[a-z]/g, function(x) { return x.toUpperCase })
         }
     defaultContext.center = function (str) {
         // TODO
@@ -55,6 +55,7 @@ var $prelude = (function () {
     }
     defaultContext.raw = function (a) { return { __html: a } }
     defaultContext.escape = function (a) {
+        if (!a) return null
         if (a.__html) { return a } else { return { __html: htmlencode(a) } }
     }
     defaultContext.filesizeformat = function (a) {
@@ -64,11 +65,12 @@ var $prelude = (function () {
     defaultContext.filter = function (items, predicate) {
         var result = []
         var predicate = predicate || function (x) { return true }
-        for (var x of items) {
-            if (predicate(x)) {
-                result.push(x)
-            }
-        }
+        iterate(items,
+            function (k, x) {
+                if (predicate(x)) {
+                    result.push(x)
+                }
+            })
         return result
     }
     defaultContext.sort = function (items) {
@@ -135,10 +137,20 @@ var $prelude = (function () {
         }
     }
 
+    var callFunction = function (fn, args) {
+        if (typeof(fn) === 'function') {
+            fn.apply(args)
+        }
+        else {
+            return null
+        }
+    }
+
     return {
         defaultContext: defaultContext,
         mergeObjects: mergeObjects,
         lookup: lookup,
-        iterate: iterate
+        iterate: iterate,
+        callFunction: callFunction
     }
 })()

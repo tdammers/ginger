@@ -29,7 +29,7 @@ compileTemplate tpl = do
     out "var context = $prelude.mergeObjects($prelude.defaultContext, context)\n"
     out "var blocks = {};\n"
     compileTemplateBlocks tpl
-    traceM . show $ templateBody tpl
+    -- traceM . show $ templateBody tpl
     compileTemplateBody tpl
     out "}\n"
 
@@ -159,8 +159,10 @@ compileExpression (TernaryE c y n) = do
     compileExpression n
     out ")"
 compileExpression (CallE f args) = do
+    out "$prelude.callFunction("
     compileExpression f
-    out "("
+    out ","
+    out "["
     let positionalArgs = [ a | (Nothing, a) <- args ]
         namedArgs = [ (name, a) | (Just name, a) <- args ]
     case positionalArgs of
@@ -170,6 +172,7 @@ compileExpression (CallE f args) = do
             forM_ xs $ \x -> do
                 out ", "
                 compileExpression x
+    out "]"
     out ")"
 compileExpression (LambdaE argNames body) = do
     out "(function () {"
