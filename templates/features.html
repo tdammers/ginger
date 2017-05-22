@@ -255,10 +255,13 @@ actual: {% if all(0, 0, false) %}yes{% else %}no{% endif %}
 "ceil"
 expect: 15
 actual: {{ 14.1|ceil }}
+
 expect: 15
 actual: {{ 14.8|ceil }}
+
 expect: -14
 actual: {{ -14.1|ceil }}
+
 expect: -14
 actual: {{ -14.8|ceil }}
 
@@ -269,6 +272,7 @@ actual: {{ "this is the end of the world"|capitalize }}
 "center"
 expect:     asdf    
 actual: {{ "asdf"|center(12) }}
+
 expect: foobar
 actual: {{ "foobar"|center(2) }}
 
@@ -289,6 +293,7 @@ actual: {% if ['hello', 'world']|contains('hello', 'you', 'world') %}yes{% else 
 "default"
 expect: hi
 actual: {{ 0|default("hi") }}
+
 expect: hi
 actual: {{ "hi"|default("nope") }}
 
@@ -299,6 +304,7 @@ actual: {{ difference(5,2) }}
 "escape"
 expect: &lt;
 actual: {{ escape('<')|raw }}
+
 expect: &lt;&gt;
 actual: {{ escape('<', '>')|raw }}
 
@@ -312,20 +318,26 @@ actual: {% if equals(1, 1, 2) %}yes{% else %}no{% endif %}
 "filesizeformat"
 expect: 100 B
 actual: {{ 100|filesizeformat }}
+
 expect: 12 kB
 actual: {{ 12000|filesizeformat }}
+
 expect: 1.5 MB
 actual: {{ 1500000|filesizeformat }}
+
 expect: 100 B
 actual: {{ 100|filesizeformat(true) }}
+
 expect: 11.7 kiB
 actual: {{ 12000|filesizeformat(true) }}
+
 expect: 1.4 MiB
 actual: {{ 1500000|filesizeformat(true) }}
 
 "filter"
 expect: 13
 actual: {{ [1, 0, 3]|filter(int) }}
+
 expect: 3
 actual: {{ [1, 2, 3]|filter(greater, 2) }}
 
@@ -339,22 +351,29 @@ actual: {% if nequals(1, 1, 2) %}yes{% else %}no{% endif %}
 "floor"
 expect: 14
 actual: {{ 14.1|floor }}
+
 expect: 14
 actual: {{ 14.8|floor }}
+
 expect: -15
 actual: {{ -14.1|floor }}
+
 expect: -15
 actual: {{ -14.8|floor }}
 
 "int"
 expect: 14
 actual: {{ 14.1|int }}
+
 expect: 14
 actual: {{ 14.8|int }}
+
 expect: -14
 actual: {{ -14.1|int }}
+
 expect: -14
 actual: {{ -14.8|int }}
+
 
 "int_ratio"
 TODO
@@ -374,14 +393,19 @@ TODO
 
 expect: 1
 actual: {{ printf("%i", 1) }}
+
 expect: 1
 actual: {{ printf("%i", "1") }}
+
 expect: 1
 actual: {{ printf("%i", 1.3) }}
+
 expect: 1.0
 actual: {{ printf("%f", 1) }}
+
 expect: 1.000
 actual: {{ printf("%.3f", 1) }}
+
 expect: Hello
 actual: {{ printf("%s", "Hello") }}
 
@@ -396,10 +420,13 @@ actual: {{ ratio(6, 1.5, 2) }}
 "round"
 expect: 14
 actual: {{ 14.1|round }}
+
 expect: 15
 actual: {{ 14.8|round }}
+
 expect: -14
 actual: {{ -14.1|round }}
+
 expect: -15
 actual: {{ -14.8|round }}
 
@@ -417,10 +444,13 @@ actual: {{sum(1, 2, 3)}}
 "truncate"
 expect: 14
 actual: {{ 14.1|truncate }}
+
 expect: 14
 actual: {{ 14.8|truncate }}
+
 expect: -14
 actual: {{ -14.1|truncate }}
+
 expect: -14
 actual: {{ -14.8|truncate }}
 
@@ -431,12 +461,15 @@ actual: {{ "a/b c"|urlencode }}
 "sort"
 expect: 123
 actual: {{ [2,3,1]|sort }}
+
 expect: 321
 actual: {{ [2,3,1]|sort(reverse=true) }}
+
 expect: 41aaa30zzz
 actual: {{ [ {"age":30, "name":"zzz"}
            , {"age":41, "name":"aaa"}
            ]|sort(by="name") }}
+
 expect: 41aaa30zzz
 actual: {{ [ {"age":30, "name":"zzz"}
            , {"age":41, "name":"aaa"}
@@ -445,8 +478,10 @@ actual: {{ [ {"age":30, "name":"zzz"}
 "slice"
 expect: 234
 actual: {{ [1, 2, 3, 4, 5]|slice(1,3) }}
+
 expect: 2345
 actual: {{ [1, 2, 3, 4, 5]|slice(1) }}
+
 expect: 234
 actual: {{ [1, 2, 3, 4, 5]|slice(length=3,start=1) }}
 
@@ -504,10 +539,12 @@ actual: Hello, {{ user3 }}!
 {% set bedazzle = "no" %}
 expect: no
 actual: {{ bedazzle }}
+
 {% scope %}
 {% set bedazzle = "ya" %}
 expect: ya
 actual: {{ bedazzle }}
+
 {% endscope %}
 expect: no
 actual: {{ bedazzle }}

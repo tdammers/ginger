@@ -1,0 +1,9 @@
+{% set i = [1,2,3] %}
+
+{{ does_not_exist + 1 }}
+{{ i[0] + 2 }}
+
+{% for k, x in i %}
+Hello, world! {{ k }}: {{ x }}
+
+{% endfor %}

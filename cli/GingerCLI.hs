@@ -8,6 +8,7 @@ module Main where
 
 import Text.Ginger
 import Text.Ginger.Html
+import Text.Ginger.Compile.JS
 import Data.Text as Text
 import qualified Data.Aeson as JSON
 import Data.Maybe
@@ -23,6 +24,7 @@ import Control.Monad.Trans.Class ( lift )
 import Control.Monad.Trans.Maybe
 import Control.Monad
 import Data.Default ( def )
+import System.Exit (exitFailure)
 
 loadFile fn = openFile fn ReadMode >>= hGetContents
 
@@ -45,26 +47,19 @@ printF = fromFunction $ go
         printArg (Nothing, v) = liftRun . putStrLn . Text.unpack . asText $ v
         printArg (Just x, _) = return ()
 
+data Command = CmdRun | CmdCompileJS
+
 main = do
     args <- getArgs
-    let (srcFn, scopeFn) = case args of
-            [] -> (Nothing, Nothing)
-            a:[] -> (Just a, Nothing)
-            a:b:[] -> (Just a, Just b)
+    let (command, srcFn, scopeFn) = case args of
+            [] -> (CmdRun, Nothing, Nothing)
+            "--js":[] -> (CmdCompileJS, Nothing, Nothing)
+            "--js":a:[] -> (CmdCompileJS, Just a, Nothing)
+            a:[] -> (CmdRun, Just a, Nothing)
+            a:b:[] -> (CmdRun, Just a, Just b)
 
-    scope <- case scopeFn of
-        Nothing -> return Nothing
-        Just fn -> (decodeFile fn :: IO (Maybe (HashMap Text JSON.Value)))
-
-    let scopeLookup key = toGVal (scope >>= HashMap.lookup key)
-        resolve = loadFileMay
-    let contextLookup :: Text -> Run IO Html (GVal (Run IO Html))
-        contextLookup key =
-            case key of
-                "print" -> return printF
-                _ -> return $ scopeLookup key
-
-    (tpl, src) <- case srcFn of
+    let resolve = loadFileMay
+    (result, src) <- case srcFn of
             Just fn -> (,) <$> parseGingerFile resolve fn <*> return Nothing
             Nothing -> getContents >>= \s -> (,) <$> parseGinger resolve Nothing s <*> return (Just s)
 
@@ -72,7 +67,7 @@ main = do
     -- template dumping on or off.
     -- print tpl
 
-    case tpl of
+    tpl <- case result of
         Left err -> do
             tplSource <- case src of
                             Just s -> return (Just s)
@@ -82,9 +77,25 @@ main = do
                                     Nothing -> return Nothing
                                     Just sn -> Just <$> loadFile sn
             printParserError tplSource err
-        Right t -> do
+            exitFailure
+        Right tpl -> return tpl
+    case command of
+        CmdRun -> do
+            scope <- case scopeFn of
+                Nothing -> return Nothing
+                Just fn -> (decodeFile fn :: IO (Maybe (HashMap Text JSON.Value)))
+
+            let scopeLookup key = toGVal (scope >>= HashMap.lookup key)
+            let contextLookup :: Text -> Run IO Html (GVal (Run IO Html))
+                contextLookup key =
+                    case key of
+                        "print" -> return printF
+                        _ -> return $ scopeLookup key
+
             let context = makeContextHtmlM contextLookup (putStr . Text.unpack . htmlSource)
-            runGingerT context t >>= hPutStrLn stderr . show
+            runGingerT context tpl >>= hPutStrLn stderr . show
+        CmdCompileJS ->
+            compileTemplate tpl
 
 printParserError :: Maybe String -> ParserError -> IO ()
 printParserError srcMay = putStrLn . formatParserError srcMay
