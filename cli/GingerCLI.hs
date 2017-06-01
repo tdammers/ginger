@@ -95,7 +95,7 @@ main = do
             let context = makeContextHtmlM contextLookup (putStr . Text.unpack . htmlSource)
             runGingerT context tpl >>= hPutStrLn stderr . show
         CmdCompileJS ->
-            compileTemplate tpl
+            printCompiled $ compileTemplate tpl
 
 printParserError :: Maybe String -> ParserError -> IO ()
 printParserError srcMay = putStrLn . formatParserError srcMay

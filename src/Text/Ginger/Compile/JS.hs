@@ -3,166 +3,162 @@
 module Text.Ginger.Compile.JS
 where
 
-import Data.HashMap.Strict as HashMap
+import qualified Data.HashMap.Strict as HashMap
 import Text.Ginger.AST
 import Text.Ginger.Html
 import Control.Monad (forM_)
-import Data.Text.IO as Text
-import Data.Text as Text
+import qualified Data.Text.IO as Text
+import qualified Data.Text as Text
 import Data.Text (Text)
-import Data.FileEmbed
+import Data.FileEmbed (embedStringFile)
 import Debug.Trace (traceM)
+import Text.Wryte (wryte, wryteLn, Wryte, indented, runWryte_, defWryteOptions)
+import Data.String (fromString)
 
-class OutputStream m where
-    out :: Text -> m ()
-
-instance OutputStream IO where
-    out = Text.putStr
-
-jsPrelude :: Text
+jsPrelude :: String
 jsPrelude = $(embedStringFile "src/Text/Ginger/Compile/JS/prelude.js")
 
-compileTemplate :: (Monad m, OutputStream m) => Template -> m ()
-compileTemplate tpl = do
-    out "module.exports = function(write, encode, context) {\n"
-    out jsPrelude
-    out "var context = $prelude.mergeObjects($prelude.defaultContext, context)\n"
-    out "var blocks = {};\n"
-    compileTemplateBlocks tpl
-    -- traceM . show $ templateBody tpl
-    compileTemplateBody tpl
-    out "}\n"
+printCompiled :: Wryte Text () -> IO ()
+printCompiled a = Text.putStr $ runWryte_ defWryteOptions a
 
-compileTemplateBlocks :: (Monad m, OutputStream m) => Template -> m ()
+compileTemplate :: Template -> Wryte Text ()
+compileTemplate tpl = do
+    wryteLn "module.exports = function(write, encode, context) {"
+    indented $ do
+        mapM_ (wryteLn . fromString) $ lines jsPrelude
+        wryteLn "var context = $prelude.mergeObjects($prelude.defaultContext, context)"
+        wryteLn "var blocks = {};"
+        compileTemplateBlocks tpl
+        -- traceM . show $ templateBody tpl
+        compileTemplateBody tpl
+    wryteLn "}"
+
+compileTemplateBlocks :: Template -> Wryte Text ()
 compileTemplateBlocks tpl = do
     maybe (pure ()) compileTemplateBlocks $
         templateParent tpl
     forM_ (HashMap.toList $ templateBlocks tpl) $ \(name, block) -> do
-        out "blocks."
-        out name
-        out " = function() {"
+        wryte "blocks."
+        wryte name
+        wryte " = function() {"
         compileStatement (blockBody block)
-        out "}\n"
+        wryteLn "}"
 
-compileTemplateBody :: (Monad m, OutputStream m) => Template -> m ()
+compileTemplateBody :: Template -> Wryte Text ()
 compileTemplateBody tpl =
     case templateParent tpl of
         Nothing -> compileStatement (templateBody tpl)
         Just p -> compileTemplateBody tpl
 
-compileStatement :: (Monad m, OutputStream m) => Statement -> m ()
+compileStatement :: Statement -> Wryte Text ()
 compileStatement NullS =
-    out "''\n"
+    wryteLn "''"
 compileStatement (MultiS ss) =
     forM_ ss compileStatement
 compileStatement (InterpolationS e) = do
-    out "write(encode("
+    wryte "write(encode("
     compileExpression e
-    out "))\n"
+    wryteLn "))"
 compileStatement (LiteralS h) = do
-    out "write("
-    outShow $ htmlSource h
-    out ")\n"
+    wryte "write("
+    wryteShow $ htmlSource h
+    wryteLn ")"
 compileStatement (SetVarS n e) = do
-    out "context["
-    outShow n
-    out "] = "
+    wryte "context["
+    wryteShow n
+    wryte "] = "
     compileExpression e
-    out "\n"
+    wryteLn ""
 compileStatement (IfS cond yes no) = do
-    out "if ("
+    wryte "if ("
     compileExpression cond
-    out ") {\n"
+    wryteLn ") {"
     compileStatement yes
-    out "}\n"
-    out "else {\n"
+    wryteLn "}"
+    wryteLn "else {"
     compileStatement no
-    out "}\n"
+    wryteLn "}"
 compileStatement (ForS keyNameMay varName iteree body) = do
-    out ";(function (parentContext) {\n"
-    out "var context = $prelude.mergeObjects(parentContext, {})\n"
-    out "$prelude.iterate("
+    wryteLn ";(function (parentContext) {"
+    wryteLn "var context = $prelude.mergeObjects(parentContext, {})"
+    wryte "$prelude.iterate("
     compileExpression iteree
-    out ", function($iterkey, $iterval) {\n"
-    out "context["
-    outShow varName
-    out "] = $iterval\n"
+    wryteLn ", function($iterkey, $iterval) {"
+    wryte "context["
+    wryteShow varName
+    wryteLn "] = $iterval"
     case keyNameMay of
         Nothing -> pure ()
         Just keyName -> do
-            out "context["
-            outShow keyName
-            out "] = $iterkey\n"
+            wryte "context["
+            wryteShow keyName
+            wryteLn "] = $iterkey"
     compileStatement body
-    out "})\n"
-    out "})(context)\n"
+    wryteLn "})"
+    wryteLn "})(context)"
 compileStatement s = do
-    out "/* UNSUPPORTED: "
-    outShow s
-    out " */'';\n"
+    wryte "/* UNSUPPORTED: "
+    wryteShow s
+    wryteLn " */'';"
 
-outShow :: Show a
-        => Monad m
-        => OutputStream m
-        => a
-        -> m ()
-outShow = out . Text.pack . show
+wryteShow :: Show a => a -> Wryte Text ()
+wryteShow = wryte . Text.pack . show
 
-compileExpression :: (Monad m, OutputStream m) => Expression -> m ()
+compileExpression :: Expression -> Wryte Text ()
 compileExpression (StringLiteralE str) = do
-    outShow str
+    wryteShow str
 compileExpression (NumberLiteralE n) = do
-    outShow n
+    wryteShow n
 compileExpression (BoolLiteralE True) =
-    out "true"
+    wryte "true"
 compileExpression (BoolLiteralE False) =
-    out "false"
+    wryte "false"
 compileExpression NullLiteralE =
-    out "null"
+    wryte "null"
 compileExpression (MemberLookupE c k) = do
-    out "$prelude.lookup("
+    wryte "$prelude.lookup("
     compileExpression c
-    out ", "
+    wryte ", "
     compileExpression k
-    out ")"
+    wryte ")"
 compileExpression (VarE varName) = do
-    out "$prelude.lookup(context, "
-    outShow varName
-    out ")"
+    wryte "$prelude.lookup(context, "
+    wryteShow varName
+    wryte ")"
 compileExpression (ListE items) = do
-    out "["
+    wryte "["
     case items of
         [] -> pure ()
         (x:xs) -> do
             compileExpression x
             forM_ xs $ \x -> do
-                out ", "
+                wryte ", "
                 compileExpression x
-    out "]"
+    wryte "]"
 compileExpression (ObjectE keyvals) = do
-    out "(function() {\n"
-    out "var $result = {}\n"
+    wryteLn "(function() {"
+    wryteLn "var $result = {}"
     forM_ keyvals $ \(key, val) -> do
-        out "$result["
+        wryte "$result["
         compileExpression key
-        out "] = "
+        wryte "] = "
         compileExpression val
-        out "\n"
-    out "return $result\n"
-    out "})()"
+        wryteLn ""
+    wryteLn "return $result"
+    wryte "})()"
 compileExpression (TernaryE c y n) = do
-    out "("
+    wryte "("
     compileExpression c
-    out " ? "
+    wryte " ? "
     compileExpression y
-    out " : "
+    wryte " : "
     compileExpression n
-    out ")"
+    wryte ")"
 compileExpression (CallE f args) = do
-    out "$prelude.callFunction("
+    wryte "$prelude.callFunction("
     compileExpression f
-    out ","
-    out "["
+    wryte ","
+    wryte "["
     let positionalArgs = [ a | (Nothing, a) <- args ]
         namedArgs = [ (name, a) | (Just name, a) <- args ]
     case positionalArgs of
@@ -170,24 +166,24 @@ compileExpression (CallE f args) = do
         (x:xs) -> do
             compileExpression x
             forM_ xs $ \x -> do
-                out ", "
+                wryte ", "
                 compileExpression x
-    out "]"
-    out ")"
+    wryte "]"
+    wryte ")"
 compileExpression (LambdaE argNames body) = do
-    out "(function () {"
-    out "(function (parentContext) {\n"
-    out "var context = $prelude.mergeObjects(parentContext, {})\n"
-    out "var args = [].slice.call(arguments)\n"
-    out "for (var i = 0; i < argNames.length; ++i) {\n"
-    out "context[argNames[i]] = arguments[i] || null\n"
-    out "}\n"
+    wryte "(function () {"
+    wryteLn "(function (parentContext) {"
+    wryteLn "var context = $prelude.mergeObjects(parentContext, {})"
+    wryteLn "var args = [].slice.call(arguments)"
+    wryteLn "for (var i = 0; i < argNames.length; ++i) {"
+    wryteLn "context[argNames[i]] = arguments[i] || null"
+    wryteLn "}"
     compileExpression body
-    out "})(context)\n"
-    out "})\n"
+    wryteLn "})(context)"
+    wryteLn "})"
 
 
 compileExpression e = do
-    out "null /* UNSUPPORTED: "
-    outShow e
-    out " */"
+    wryte "null /* UNSUPPORTED: "
+    wryteShow e
+    wryte " */"
