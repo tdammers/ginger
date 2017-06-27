@@ -283,6 +283,14 @@ simulationTests = testGroup "Simulation"
             mkTestHtml [] []
                 "{{ \"this is the end of the world\"|capitalize }}"
                 "This is the end of the world"
+        , testCase "\"upper\"" $ do
+            mkTestHtml [] []
+                "{{ \"this is the end of the world\"|upper }}"
+                "THIS IS THE END OF THE WORLD"
+        , testCase "\"lower\"" $ do
+            mkTestHtml [] []
+                "{{ \"This is the END OF THE WORLD\"|lower }}"
+                "this is the end of the world"
         , testGroup "\"center\""
             [ testCase "extra space" $ do
                 mkTestHtml [] []
@@ -467,6 +475,20 @@ simulationTests = testGroup "Simulation"
                 mkTestHtml [] []
                     "{{ \"%s - %s\"|format('Hello?', 'Foo!') }}"
                     "Hello? - Foo!"
+            ]
+        , testGroup "\"map\""
+            [ testCase "map function over list" $ do
+                mkTestHtml [] []
+                    "{{ map(['FOO', 'BAR'], lower) }}"
+                    "foobar"
+            , testCase "map function over dictionary" $ do
+                mkTestHtml [] []
+                    "{{ map({'foo': 'bar'}, upper)['foo'] }}"
+                    "BAR"
+            , testCase "map to extract attribute" $ do
+                mkTestHtml [] []
+                    "{{ map([{'name':'foo'}, {'name': 'bar'}], attribute='name') }}"
+                    "foobar"
             ]
         , testGroup "\"not-equals\""
             [ testCase "all equal" $ do

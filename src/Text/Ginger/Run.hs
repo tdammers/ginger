@@ -138,6 +138,7 @@ defaultScope =
     , ("length", fromFunction . unaryFunc $ toGVal . length)
     , ("less", fromFunction gfnLess)
     , ("lessEquals", fromFunction gfnLessEquals)
+    , ("map", fromFunction gfnMap)
     , ("modulo", fromFunction . variadicNumericFunc 1 $ fromIntegral . modulo . Prelude.map Prelude.floor)
     , ("nequals", fromFunction gfnNEquals)
     , ("num", fromFunction . unaryFunc $ toGVal . asNumber)
@@ -153,6 +154,8 @@ defaultScope =
     , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
     , ("truncate", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.truncate)
     , ("urlencode", fromFunction gfnUrlEncode)
+    , ("upper", fromFunction . variadicStringFunc $ mconcat . Prelude.map Text.toUpper)
+    , ("lower", fromFunction . variadicStringFunc $ mconcat . Prelude.map Text.toLower)
     ]
 
 -- | Simplified interface to render a ginger template \"into\" a monad.
