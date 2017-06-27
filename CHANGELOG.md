@@ -1,3 +1,7 @@
+## 0.5.2.0
+
+- Added map(), upper(), lower() functions
+
 ## 0.5.1.3
 
 - Documentation fixes
