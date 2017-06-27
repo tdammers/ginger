@@ -1,3 +1,11 @@
+## 0.5.1.3
+
+- Documentation fixes
+
+## 0.5.1.2
+
+- Release-related fixups
+
 ## 0.5.1.1
 
 - Bugfixes wrt indentation mode
