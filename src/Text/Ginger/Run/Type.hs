@@ -24,6 +24,11 @@ module Text.Ginger.Run.Type
 -- * The Newlines type
 -- | Required for handling indentation
 , Newlines (..)
+-- * Hoisting
+, hoistContext
+, hoistRun
+, hoistNewlines
+, hoistRunState
 )
 where
 
@@ -87,6 +92,29 @@ data GingerContext m h
         , contextWrite :: h -> Run m h ()
         , contextEncode :: GVal (Run m h) -> h
         , contextNewlines :: Maybe (Newlines h)
+        }
+
+-- | Hoist a context onto a different output type.
+-- @hoistContext fwd rev context@ returns a context over a different
+-- output type, applying the @fwd@ and @rev@ projections to convert
+-- between the original and desired output types.
+hoistContext :: Monad m => (h -> t) -> (t -> h) -> GingerContext m h -> GingerContext m t
+hoistContext fwd rev c =
+    GingerContext
+        { contextLookup = \varName ->
+            marshalGValEx
+                (hoistRun fwd rev)
+                (hoistRun rev fwd) <$>
+                hoistRun fwd rev (contextLookup c varName)
+        , contextWrite = \val ->
+            hoistRun fwd rev (contextWrite c $ rev val)
+        , contextEncode = \gval ->
+            fwd .
+                contextEncode c .
+                marshalGValEx (hoistRun rev fwd) (hoistRun fwd rev) $
+                gval
+        , contextNewlines =
+            hoistNewlines fwd rev <$> contextNewlines c
         }
 
 contextWriteEncoded :: GingerContext m h -> GVal (Run m h) -> Run m h ()
@@ -213,6 +241,18 @@ data Newlines h =
         , endsWithNewline :: h -> Bool
         }
 
+-- | Hoist a 'Newlines' onto a different output type.
+-- You don't normally need to use this directly; see 'hoistRun' and/or
+-- 'hoistContext'.
+hoistNewlines :: (h -> t) -> (t -> h) -> Newlines h -> Newlines t
+hoistNewlines fwd rev n =
+    Newlines
+        { splitLines = List.map fwd . splitLines n . rev
+        , joinLines = fwd . joinLines n . List.map rev
+        , stripIndent = fwd . stripIndent n . rev
+        , endsWithNewline = endsWithNewline n . rev
+        }
+
 textNewlines :: Newlines Text
 textNewlines =
     Newlines
@@ -249,6 +289,20 @@ data RunState m h
         , rsAtLineStart :: Bool -- is the next output position the first column
         }
 
+-- | Hoist a 'RunState' onto a different output type.
+-- You don't normally need to use this directly; see 'hoistRun' and/or
+-- 'hoistContext'.
+hoistRunState :: Monad m => (h -> t) -> (t -> h) -> RunState m h -> RunState m t
+hoistRunState fwd rev rs =
+    RunState
+        { rsScope = marshalGValEx (hoistRun fwd rev) (hoistRun rev fwd) <$> rsScope rs
+        , rsCapture = fwd $ rsCapture rs
+        , rsCurrentTemplate = rsCurrentTemplate rs
+        , rsCurrentBlockName = rsCurrentBlockName rs
+        , rsIndentation = fmap fwd <$> rsIndentation rs
+        , rsAtLineStart = rsAtLineStart rs
+        }
+
 -- | Internal type alias for our template-runner monad stack.
 type Run m h = StateT (RunState m h) (ReaderT (GingerContext m h) m)
 
@@ -259,3 +313,18 @@ liftRun = lift . lift
 -- | Lift a function from the host monad @m@ into the 'Run' monad.
 liftRun2 :: Monad m => (a -> m b) -> a -> Run m h b
 liftRun2 f x = liftRun $ f x
+
+-- | Hoist a 'Run' action onto a different output type.
+-- @hoistRun fwd rev action@ hoists the @action@ from @Run m h a@ to
+-- @Run m t a@, applying @fwd@ and @rev@ to convert between the output
+-- types.
+hoistRun :: Monad m => (h -> t) -> (t -> h) -> Run m h a -> Run m t a
+hoistRun fwd rev action = do
+    contextT <- ask
+    let contextH = hoistContext rev fwd contextT
+    stateT <- get
+    let stateH = hoistRunState rev fwd stateT
+    (x, stateH') <- lift . lift $ runReaderT (runStateT action stateH) contextH
+    let stateT' = hoistRunState fwd rev stateH'
+    put stateT'
+    return x

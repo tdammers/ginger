@@ -2,6 +2,7 @@
 {-#LANGUAGE MultiParamTypeClasses #-}
 {-#LANGUAGE FlexibleInstances #-}
 {-#LANGUAGE ScopedTypeVariables #-}
+{-#LANGUAGE RankNTypes #-}
 
 -- | GVal is a generic unitype value, representing the kind of values that
 -- Ginger can understand.
@@ -34,6 +35,7 @@ import Prelude ( (.), ($), (==), (/=)
                , not
                , fst, snd
                , Monad
+               , Functor
                )
 import qualified Prelude
 import Data.Maybe ( fromMaybe, catMaybes, isJust, mapMaybe )
@@ -127,6 +129,39 @@ marshalGVal g =
         , length = length g
         , asJSON = asJSON g
         }
+
+-- | Marshal a GVal between carrier monads.
+-- Unlike 'marshalGVal', 'asFunction' information is retained by hoisting
+-- them using the provided hoisting functions. For 'Run' monads, which is
+-- what 'GVal' is typically used with, the 'hoistRun' function can be used
+-- to construct suitable hoisting functions.
+marshalGValEx :: (Functor m, Functor n)
+              => (forall a. m a -> n a)
+              -> (forall a. n a -> m a)
+              -> GVal m
+              -> GVal n
+marshalGValEx hoist unhoist g =
+    GVal
+        { asList = fmap (marshalGValEx hoist unhoist) <$> asList g
+        , asDictItems = fmap (\items -> [(k, marshalGValEx hoist unhoist v) | (k, v) <- items]) (asDictItems g)
+        , asLookup = fmap (fmap (marshalGValEx hoist unhoist) .) (asLookup g)
+        , asHtml = asHtml g
+        , asText = asText g
+        , asBoolean = asBoolean g
+        , asNumber = asNumber g
+        , asFunction = marshalFunction hoist unhoist <$> asFunction g
+        , isNull = isNull g
+        , length = length g
+        , asJSON = asJSON g
+        }
+
+marshalFunction :: (Functor m, Functor n) => (forall a. m a -> n a) -> (forall a. n a -> m a) -> Function m -> Function n
+-- [(Maybe Text, GVal m)] -> m (GVal m)
+marshalFunction hoist unhoist f args =
+    let args' = [ (name, marshalGValEx unhoist hoist value)
+                | (name, value) <- args
+                ]
+    in marshalGValEx hoist unhoist <$> hoist (f args')
 
 -- | Convenience wrapper around 'asDictItems' to represent a 'GVal' as a
 -- 'HashMap'.

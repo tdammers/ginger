@@ -46,6 +46,11 @@ module Text.Ginger.Run
 , Run, liftRun, liftRun2
 -- * Helper functions for interpreting argument lists
 , extractArgs, extractArgsT, extractArgsL, extractArgsDefL
+-- * Hoisting
+, hoistContext
+, hoistRun
+, hoistNewlines
+, hoistRunState
 )
 where
 
