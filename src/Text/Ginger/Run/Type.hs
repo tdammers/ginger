@@ -11,10 +11,13 @@ module Text.Ginger.Run.Type
 , makeContextM
 , makeContext'
 , makeContextM'
+, makeContextExM'
 , makeContextHtml
 , makeContextHtmlM
+, makeContextHtmlExM
 , makeContextText
 , makeContextTextM
+, makeContextTextExM
 , easyContext
 , ContextEncodable (..)
 , liftRun
@@ -29,6 +32,8 @@ module Text.Ginger.Run.Type
 , hoistRun
 , hoistNewlines
 , hoistRunState
+, warn
+, warnFromMaybe
 )
 where
 
@@ -90,6 +95,7 @@ data GingerContext m h
     = GingerContext
         { contextLookup :: VarName -> Run m h (GVal (Run m h))
         , contextWrite :: h -> Run m h ()
+        , contextWarn :: Text -> Run m h ()
         , contextEncode :: GVal (Run m h) -> h
         , contextNewlines :: Maybe (Newlines h)
         }
@@ -108,6 +114,8 @@ hoistContext fwd rev c =
                 hoistRun fwd rev (contextLookup c varName)
         , contextWrite = \val ->
             hoistRun fwd rev (contextWrite c $ rev val)
+        , contextWarn = \str ->
+            hoistRun fwd rev (contextWarn c str)
         , contextEncode = \gval ->
             fwd .
                 contextEncode c .
@@ -126,13 +134,22 @@ easyContext :: (Monad m, ContextEncodable h, ToGVal (Run m h) v)
             -> v
             -> GingerContext m h
 easyContext emit context =
-    makeContextM'
+    easyContextEx emit (Prelude.const $ return ()) context
+
+easyContextEx :: (Monad m, ContextEncodable h, ToGVal (Run m h) v)
+              => (h -> m ())
+              -> (Text -> m ())
+              -> v
+              -> GingerContext m h
+easyContextEx emit warn context =
+    makeContextExM'
         (\varName ->
             return
                 (lookupLooseDef def
                     (toGVal varName)
                     (toGVal context)))
         emit
+        warn
         encode
         newlines
 
@@ -166,9 +183,20 @@ makeContextM' :: (Monad m, Functor m)
              -> Maybe (Newlines h)
              -> GingerContext m h
 makeContextM' lookupFn writeFn encodeFn newlines =
+  makeContextExM' lookupFn writeFn (Prelude.const $ return ()) encodeFn newlines
+
+makeContextExM' :: (Monad m, Functor m)
+             => (VarName -> Run m h (GVal (Run m h)))
+             -> (h -> m ())
+             -> (Text -> m ())
+             -> (GVal (Run m h) -> h)
+             -> Maybe (Newlines h)
+             -> GingerContext m h
+makeContextExM' lookupFn writeFn warnFn encodeFn newlines =
     GingerContext
         { contextLookup = lookupFn
         , contextWrite = liftRun2 writeFn
+        , contextWarn = liftRun2 warnFn
         , contextEncode = encodeFn
         , contextNewlines = newlines
         }
@@ -220,6 +248,13 @@ makeContextHtmlM :: (Monad m, Functor m)
                  -> GingerContext m Html
 makeContextHtmlM l w = makeContextM' l w toHtml (Just htmlNewlines)
 
+makeContextHtmlExM :: (Monad m, Functor m)
+                 => (VarName -> Run m Html (GVal (Run m Html)))
+                 -> (Html -> m ())
+                 -> (Text -> m ())
+                 -> GingerContext m Html
+makeContextHtmlExM l w warn = makeContextExM' l w warn toHtml (Just htmlNewlines)
+
 makeContextText :: (VarName -> GVal (Run (Writer Text) Text))
                 -> GingerContext (Writer Text) Text
 makeContextText l = makeContext' l asText (Just textNewlines)
@@ -229,6 +264,13 @@ makeContextTextM :: (Monad m, Functor m)
                  -> (Text -> m ())
                  -> GingerContext m Text
 makeContextTextM l w = makeContextM' l w asText (Just textNewlines)
+
+makeContextTextExM :: (Monad m, Functor m)
+                 => (VarName -> Run m Text (GVal (Run m Text)))
+                 -> (Text -> m ())
+                 -> (Text -> m ())
+                 -> GingerContext m Text
+makeContextTextExM l w warn = makeContextExM' l w warn asText (Just textNewlines)
 
 -- | A 'Newlines' determines the rules by which a 'h' value can be
 -- split into lines, how a list of lines can be joined into a single
@@ -328,3 +370,13 @@ hoistRun fwd rev action = do
     let stateT' = hoistRunState fwd rev stateH'
     put stateT'
     return x
+
+warn :: (Monad m) => Text -> Run m h ()
+warn msg = do
+    warnFn <- asks contextWarn
+    warnFn msg
+
+warnFromMaybe :: Monad m => Text -> a -> Maybe a -> Run m h a
+warnFromMaybe msg d Nothing = warn msg >> return d
+warnFromMaybe _ d (Just x) = return x
+

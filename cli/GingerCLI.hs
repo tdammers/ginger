@@ -83,7 +83,11 @@ main = do
                                     Just sn -> Just <$> loadFile sn
             printParserError tplSource err
         Right t -> do
-            let context = makeContextHtmlM contextLookup (putStr . Text.unpack . htmlSource)
+            let context =
+                    makeContextHtmlExM
+                        contextLookup
+                        (putStr . Text.unpack . htmlSource)
+                        (hPutStrLn stderr . Text.unpack)
             runGingerT context t >>= hPutStrLn stderr . show
 
 printParserError :: Maybe String -> ParserError -> IO ()

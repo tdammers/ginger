@@ -77,6 +77,9 @@ import Data.Time ( defaultTimeLocale
                  )
 import Data.Foldable (asum)
 
+tshow :: Show a => a -> Text
+tshow = Text.pack . show
+
 gfnRawHtml :: Monad m => Function (Run m h)
 gfnRawHtml = unaryFunc (toGVal . unsafeRawHtml . asText)
 
@@ -121,12 +124,12 @@ gfnNEquals (x:xs) =
 
 gfnContains :: Monad m => Function (Run m h)
 gfnContains [] = return $ toGVal False
-gfnContains (list:elems) =
-    let rawList = fromMaybe [] . asList . snd $ list
-        rawElems = fmap snd elems
+gfnContains (list:elems) = do
+    rawList <- warnFromMaybe (tshow list <> " is not a list") [] . asList . snd $ list
+    let rawElems = fmap snd elems
         e `isInList` xs = Prelude.any (looseEquals e) xs
         es `areInList` xs = Prelude.all (`isInList` xs) es
-    in return . toGVal $ rawElems `areInList` rawList
+    return . toGVal $ rawElems `areInList` rawList
 
 looseEquals :: GVal (Run m h) -> GVal (Run m h) -> Bool
 looseEquals a b
@@ -364,7 +367,7 @@ onFst f (x, _) (y, _) = f x y
 
 listToIndexedDict :: [a] -> [(Text, a)]
 listToIndexedDict values =
-    let indexes = fmap (Text.pack . show) [0..]
+    let indexes = fmap (tshow) [0..]
     in List.zip indexes values
 
 center :: Text -> Prelude.Int -> Text -> Text

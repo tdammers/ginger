@@ -36,10 +36,13 @@ module Text.Ginger.Run
 , makeContextM
 , makeContext'
 , makeContextM'
+, makeContextExM'
 , makeContextHtml
 , makeContextHtmlM
+, makeContextHtmlExM
 , makeContextText
 , makeContextTextM
+, makeContextTextExM
 -- * The context type
 , GingerContext
 -- * The Run monad
@@ -334,11 +337,14 @@ runStatement (ScopedS body) = withLocalScope runInner
 runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
     let go :: Int -> GVal (Run m h) -> Run m h (GVal (Run m h))
         go recursionDepth iteree = do
-            let iterPairs =
-                    if isJust (asDictItems iteree)
-                        then [ (toGVal k, v) | (k, v) <- fromMaybe [] (asDictItems iteree) ]
-                        else Prelude.zip (Prelude.map toGVal ([0..] :: [Int])) (fromMaybe [] (asList iteree))
-                numItems :: Int
+            iterPairs <- if isJust (asDictItems iteree)
+                then return [ (toGVal k, v) | (k, v) <- fromMaybe [] (asDictItems iteree) ]
+                else case asList iteree of
+                  Just items -> return $ Prelude.zip (Prelude.map toGVal ([0..] :: [Int])) items
+                  Nothing -> do
+                    warn "Tried iterating over something that is neither a list nor a dictionary"
+                    return []
+            let numItems :: Int
                 numItems = Prelude.length iterPairs
                 cycle :: Int -> [(Maybe Text, GVal (Run m h))] -> Run m h (GVal (Run m h))
                 cycle index args = return
@@ -410,7 +416,6 @@ macroToGVal (Macro argNames body) =
                     matchArgs' = matchFuncArgs argNames
                     (matchedArgs, positionalArgs, namedArgs) = matchArgs' args
 
-
 -- | Run (evaluate) an expression and return its value into the Run monad
 runExpression (StringLiteralE str) = return . toGVal $ str
 runExpression (NumberLiteralE n) = return . toGVal $ n
@@ -427,13 +432,16 @@ runExpression (ObjectE xs) = do
 runExpression (MemberLookupE baseExpr indexExpr) = do
     base <- runExpression baseExpr
     index <- runExpression indexExpr
-    return . fromMaybe def . lookupLoose index $ base
+    warnFromMaybe ("No value at index " <> asText index) def . lookupLoose index $ base
 runExpression (CallE funcE argsEs) = do
     args <- forM argsEs $
         \(argName, argE) -> (argName,) <$> runExpression argE
-    func <- toFunction <$> runExpression funcE
+    e <- runExpression funcE
+    let func = toFunction e
     case func of
-        Nothing -> return def
+        Nothing -> do
+            warn $ asText e <> " is not a function"
+            return def
         Just f -> f args
 runExpression (LambdaE argNames body) = do
     let fn args = withLocalScope $ do
