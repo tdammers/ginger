@@ -342,7 +342,7 @@ runStatement (ForS varNameIndex varNameValue itereeExpr body) = do
                 else case asList iteree of
                   Just items -> return $ Prelude.zip (Prelude.map toGVal ([0..] :: [Int])) items
                   Nothing -> do
-                    warn "Tried iterating over something that is neither a list nor a dictionary"
+                    warn $ tshow iteree <> " is neither a list nor a dictionary"
                     return []
             let numItems :: Int
                 numItems = Prelude.length iterPairs
@@ -432,7 +432,8 @@ runExpression (ObjectE xs) = do
 runExpression (MemberLookupE baseExpr indexExpr) = do
     base <- runExpression baseExpr
     index <- runExpression indexExpr
-    warnFromMaybe ("No value at index " <> asText index) def . lookupLoose index $ base
+    warnFromMaybe ("No value at index " <> tshow (asText index)) def $
+        lookupLoose index base
 runExpression (CallE funcE argsEs) = do
     args <- forM argsEs $
         \(argName, argE) -> (argName,) <$> runExpression argE
@@ -440,7 +441,7 @@ runExpression (CallE funcE argsEs) = do
     let func = toFunction e
     case func of
         Nothing -> do
-            warn $ asText e <> " is not a function"
+            warn $ tshow e <> " is not a function"
             return def
         Just f -> f args
 runExpression (LambdaE argNames body) = do

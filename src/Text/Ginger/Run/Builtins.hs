@@ -427,7 +427,9 @@ formatFileSize binary size =
     in formattedSize ++ " " ++ unitName
 
 gfnPrintf :: Monad m => Function (Run m h)
-gfnPrintf [] = return def
+gfnPrintf [] = do
+    warn "No format string provided to printf"
+    return def
 gfnPrintf [(_, fmtStrG)] = return fmtStrG
 gfnPrintf ((_, fmtStrG):args) = do
     return . toGVal $ printfG fmtStr (fmap snd args)

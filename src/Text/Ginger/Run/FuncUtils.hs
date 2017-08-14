@@ -61,8 +61,14 @@ import Data.Maybe (isNothing)
 import Data.List (lookup, zipWith, unzip)
 
 unaryFunc :: forall m h. (Monad m) => (GVal (Run m h) -> GVal (Run m h)) -> Function (Run m h)
-unaryFunc f [] = return def
-unaryFunc f ((_, x):[]) = return (f x)
+unaryFunc f [] = do
+    warn $ "Expected at least one argument"
+    return def
+unaryFunc f ((_, x):[]) =
+    return (f x)
+unaryFunc f ((_, x):xs) = do
+    warn $ "Expected exactly one argument"
+    return (f x)
 
 ignoreArgNames :: ([a] -> b) -> ([(c, a)] -> b)
 ignoreArgNames f args = f (Prelude.map snd args)
