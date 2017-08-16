@@ -91,12 +91,12 @@ import Data.List (lookup, zipWith, unzip)
 
 -- | Execution context. Determines how to look up variables from the
 -- environment, and how to write out template output.
-data GingerContext m h
+data GingerContext p m h
     = GingerContext
-        { contextLookup :: VarName -> Run m h (GVal (Run m h))
-        , contextWrite :: h -> Run m h ()
-        , contextWarn :: Text -> Run m h ()
-        , contextEncode :: GVal (Run m h) -> h
+        { contextLookup :: VarName -> Run p m h (GVal (Run p m h))
+        , contextWrite :: h -> Run p m h ()
+        , contextWarn :: Text -> Run p m h ()
+        , contextEncode :: GVal (Run p m h) -> h
         , contextNewlines :: Maybe (Newlines h)
         }
 
@@ -104,7 +104,7 @@ data GingerContext m h
 -- @hoistContext fwd rev context@ returns a context over a different
 -- output type, applying the @fwd@ and @rev@ projections to convert
 -- between the original and desired output types.
-hoistContext :: Monad m => (h -> t) -> (t -> h) -> GingerContext m h -> GingerContext m t
+hoistContext :: Monad m => (h -> t) -> (t -> h) -> GingerContext p m h -> GingerContext p m t
 hoistContext fwd rev c =
     GingerContext
         { contextLookup = \varName ->
@@ -125,22 +125,22 @@ hoistContext fwd rev c =
             hoistNewlines fwd rev <$> contextNewlines c
         }
 
-contextWriteEncoded :: GingerContext m h -> GVal (Run m h) -> Run m h ()
+contextWriteEncoded :: GingerContext p m h -> GVal (Run p m h) -> Run p m h ()
 contextWriteEncoded context =
     contextWrite context . contextEncode context
 
-easyContext :: (Monad m, ContextEncodable h, ToGVal (Run m h) v)
+easyContext :: (Monad m, ContextEncodable h, ToGVal (Run p m h) v)
             => (h -> m ())
             -> v
-            -> GingerContext m h
+            -> GingerContext p m h
 easyContext emit context =
     easyContextEx emit (Prelude.const $ return ()) context
 
-easyContextEx :: (Monad m, ContextEncodable h, ToGVal (Run m h) v)
+easyContextEx :: (Monad m, ContextEncodable h, ToGVal (Run p m h) v)
               => (h -> m ())
               -> (Text -> m ())
               -> v
-              -> GingerContext m h
+              -> GingerContext p m h
 easyContextEx emit warn context =
     makeContextExM'
         (\varName ->
@@ -177,21 +177,21 @@ instance ContextEncodable Html where
 -- means the carrier monad provides, e.g. @putStr@ for @IO@, or @tell@ for
 -- @Writer@s).
 makeContextM' :: (Monad m, Functor m)
-             => (VarName -> Run m h (GVal (Run m h)))
+             => (VarName -> Run p m h (GVal (Run p m h)))
              -> (h -> m ())
-             -> (GVal (Run m h) -> h)
+             -> (GVal (Run p m h) -> h)
              -> Maybe (Newlines h)
-             -> GingerContext m h
+             -> GingerContext p m h
 makeContextM' lookupFn writeFn encodeFn newlines =
   makeContextExM' lookupFn writeFn (Prelude.const $ return ()) encodeFn newlines
 
 makeContextExM' :: (Monad m, Functor m)
-             => (VarName -> Run m h (GVal (Run m h)))
+             => (VarName -> Run p m h (GVal (Run p m h)))
              -> (h -> m ())
              -> (Text -> m ())
-             -> (GVal (Run m h) -> h)
+             -> (GVal (Run p m h) -> h)
              -> Maybe (Newlines h)
-             -> GingerContext m h
+             -> GingerContext p m h
 makeContextExM' lookupFn writeFn warnFn encodeFn newlines =
     GingerContext
         { contextLookup = lookupFn
@@ -201,7 +201,7 @@ makeContextExM' lookupFn writeFn warnFn encodeFn newlines =
         , contextNewlines = newlines
         }
 
-liftLookup :: (Monad m, ToGVal (Run m h) v) => (VarName -> m v) -> VarName -> Run m h (GVal (Run m h))
+liftLookup :: (Monad m, ToGVal (Run p m h) v) => (VarName -> m v) -> VarName -> Run p m h (GVal (Run p m h))
 liftLookup f k = do
     v <- liftRun $ f k
     return . toGVal $ v
@@ -217,59 +217,59 @@ liftLookup f k = do
 -- on them, so the 'GVal (Run (Writer Html))' part can usually be ignored.
 -- See the 'Text.Ginger.GVal' module for details.
 makeContext' :: Monoid h
-            => (VarName -> GVal (Run (Writer h) h))
-            -> (GVal (Run (Writer h) h) -> h)
+            => (VarName -> GVal (Run p (Writer h) h))
+            -> (GVal (Run p (Writer h) h) -> h)
             -> Maybe (Newlines h)
-            -> GingerContext (Writer h) h
+            -> GingerContext p (Writer h) h
 makeContext' lookupFn =
     makeContextM'
         (return . lookupFn)
         tell
 
 {-#DEPRECATED makeContext "Compatibility alias for makeContextHtml" #-}
-makeContext :: (VarName -> GVal (Run (Writer Html) Html))
-            -> GingerContext (Writer Html) Html
+makeContext :: (VarName -> GVal (Run p (Writer Html) Html))
+            -> GingerContext p (Writer Html) Html
 makeContext = makeContextHtml
 
 {-#DEPRECATED makeContextM "Compatibility alias for makeContextHtmlM" #-}
 makeContextM :: (Monad m, Functor m)
-             => (VarName -> Run m Html (GVal (Run m Html)))
+             => (VarName -> Run p m Html (GVal (Run p m Html)))
              -> (Html -> m ())
-             -> GingerContext m Html
+             -> GingerContext p m Html
 makeContextM = makeContextHtmlM
 
-makeContextHtml :: (VarName -> GVal (Run (Writer Html) Html))
-                -> GingerContext (Writer Html) Html
+makeContextHtml :: (VarName -> GVal (Run p (Writer Html) Html))
+                -> GingerContext p (Writer Html) Html
 makeContextHtml l = makeContext' l toHtml (Just htmlNewlines)
 
 makeContextHtmlM :: (Monad m, Functor m)
-                 => (VarName -> Run m Html (GVal (Run m Html)))
+                 => (VarName -> Run p m Html (GVal (Run p m Html)))
                  -> (Html -> m ())
-                 -> GingerContext m Html
+                 -> GingerContext p m Html
 makeContextHtmlM l w = makeContextM' l w toHtml (Just htmlNewlines)
 
 makeContextHtmlExM :: (Monad m, Functor m)
-                 => (VarName -> Run m Html (GVal (Run m Html)))
+                 => (VarName -> Run p m Html (GVal (Run p m Html)))
                  -> (Html -> m ())
                  -> (Text -> m ())
-                 -> GingerContext m Html
+                 -> GingerContext p m Html
 makeContextHtmlExM l w warn = makeContextExM' l w warn toHtml (Just htmlNewlines)
 
-makeContextText :: (VarName -> GVal (Run (Writer Text) Text))
-                -> GingerContext (Writer Text) Text
+makeContextText :: (VarName -> GVal (Run p (Writer Text) Text))
+                -> GingerContext p (Writer Text) Text
 makeContextText l = makeContext' l asText (Just textNewlines)
 
 makeContextTextM :: (Monad m, Functor m)
-                 => (VarName -> Run m Text (GVal (Run m Text)))
+                 => (VarName -> Run p m Text (GVal (Run p m Text)))
                  -> (Text -> m ())
-                 -> GingerContext m Text
+                 -> GingerContext p m Text
 makeContextTextM l w = makeContextM' l w asText (Just textNewlines)
 
 makeContextTextExM :: (Monad m, Functor m)
-                 => (VarName -> Run m Text (GVal (Run m Text)))
+                 => (VarName -> Run p m Text (GVal (Run p m Text)))
                  -> (Text -> m ())
                  -> (Text -> m ())
-                 -> GingerContext m Text
+                 -> GingerContext p m Text
 makeContextTextExM l w warn = makeContextExM' l w warn asText (Just textNewlines)
 
 -- | A 'Newlines' determines the rules by which a 'h' value can be
@@ -321,20 +321,21 @@ reNewline (x:[]) = [x]
 reNewline (x:"":[]) = [x <> "\n"]
 reNewline (x:xs) = (x <> "\n") : reNewline xs
 
-data RunState m h
+data RunState p m h
     = RunState
-        { rsScope :: HashMap VarName (GVal (Run m h))
+        { rsScope :: HashMap VarName (GVal (Run p m h))
         , rsCapture :: h
-        , rsCurrentTemplate :: Template -- the template we are currently running
+        , rsCurrentTemplate :: Template p -- the template we are currently running
         , rsCurrentBlockName :: Maybe Text -- the name of the innermost block we're currently in
         , rsIndentation :: Maybe [h] -- current indentation level, if any
         , rsAtLineStart :: Bool -- is the next output position the first column
+        , rsCurrentSourcePos :: p
         }
 
 -- | Hoist a 'RunState' onto a different output type.
 -- You don't normally need to use this directly; see 'hoistRun' and/or
 -- 'hoistContext'.
-hoistRunState :: Monad m => (h -> t) -> (t -> h) -> RunState m h -> RunState m t
+hoistRunState :: Monad m => (h -> t) -> (t -> h) -> RunState p m h -> RunState p m t
 hoistRunState fwd rev rs =
     RunState
         { rsScope = marshalGValEx (hoistRun fwd rev) (hoistRun rev fwd) <$> rsScope rs
@@ -343,24 +344,25 @@ hoistRunState fwd rev rs =
         , rsCurrentBlockName = rsCurrentBlockName rs
         , rsIndentation = fmap fwd <$> rsIndentation rs
         , rsAtLineStart = rsAtLineStart rs
+        , rsCurrentSourcePos = rsCurrentSourcePos rs
         }
 
 -- | Internal type alias for our template-runner monad stack.
-type Run m h = StateT (RunState m h) (ReaderT (GingerContext m h) m)
+type Run p m h = StateT (RunState p m h) (ReaderT (GingerContext p m h) m)
 
 -- | Lift a value from the host monad @m@ into the 'Run' monad.
-liftRun :: Monad m => m a -> Run m h a
+liftRun :: Monad m => m a -> Run p m h a
 liftRun = lift . lift
 
 -- | Lift a function from the host monad @m@ into the 'Run' monad.
-liftRun2 :: Monad m => (a -> m b) -> a -> Run m h b
+liftRun2 :: Monad m => (a -> m b) -> a -> Run p m h b
 liftRun2 f x = liftRun $ f x
 
 -- | Hoist a 'Run' action onto a different output type.
--- @hoistRun fwd rev action@ hoists the @action@ from @Run m h a@ to
--- @Run m t a@, applying @fwd@ and @rev@ to convert between the output
+-- @hoistRun fwd rev action@ hoists the @action@ from @Run p m h a@ to
+-- @Run p m t a@, applying @fwd@ and @rev@ to convert between the output
 -- types.
-hoistRun :: Monad m => (h -> t) -> (t -> h) -> Run m h a -> Run m t a
+hoistRun :: Monad m => (h -> t) -> (t -> h) -> Run p m h a -> Run p m t a
 hoistRun fwd rev action = do
     contextT <- ask
     let contextH = hoistContext rev fwd contextT
@@ -371,12 +373,12 @@ hoistRun fwd rev action = do
     put stateT'
     return x
 
-warn :: (Monad m) => Text -> Run m h ()
+warn :: (Monad m) => Text -> Run p m h ()
 warn msg = do
     warnFn <- asks contextWarn
     warnFn msg
 
-warnFromMaybe :: Monad m => Text -> a -> Maybe a -> Run m h a
+warnFromMaybe :: Monad m => Text -> a -> Maybe a -> Run p m h a
 warnFromMaybe msg d Nothing = warn msg >> return d
 warnFromMaybe _ d (Just x) = return x
 

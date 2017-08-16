@@ -10,10 +10,16 @@ module Text.Ginger.Parse
 , formatParserError
 , IncludeResolver
 , Source, SourceName
+, SourcePos
+, sourceLine
+, sourceColumn
+, sourceName
 )
 where
 
 import Text.Parsec ( ParseError
+                   , SourcePos
+                   , SourceName (..)
                    , sourceLine
                    , sourceColumn
                    , sourceName
@@ -27,6 +33,7 @@ import Text.Parsec ( ParseError
                    , digit
                    , getState, modifyState, putState
                    , (<?>)
+                   , getPosition
                    )
 import Text.Parsec.Error ( errorMessages
                          , errorPos
@@ -63,23 +70,17 @@ import Text.Printf ( printf )
 -- | Input type for the parser (source code).
 type Source = String
 
--- | A source identifier (typically a filename).
-type SourceName = String
-
 -- | Used to resolve includes. Ginger will call this function whenever it
 -- encounters an {% include %}, {% import %}, or {% extends %} directive.
 -- If the required source code is not available, the resolver should return
 -- @Nothing@, else @Just@ the source.
 type IncludeResolver m = SourceName -> m (Maybe Source)
 
-
 -- | Error information for Ginger parser errors.
 data ParserError =
     ParserError
         { peErrorMessage :: String -- ^ Human-readable error message
-        , peSourceName :: Maybe SourceName -- ^ Source name, if any
-        , peSourceLine :: Maybe Int -- ^ Line number, if available
-        , peSourceColumn :: Maybe Int -- ^ Column number, if available
+        , peSourcePosition :: Maybe SourcePos
         }
         deriving (Show, Generic)
 
@@ -89,15 +90,17 @@ instance Exception ParserError where
 formatParserError :: Maybe String -> ParserError -> String
 formatParserError tplSrc e =
     let sourceLocation = do
-            printf "%s:%i:%i\n"
-                <$> peSourceName e
-                <*> peSourceLine e
-                <*> peSourceColumn e
+            pos <- peSourcePosition e
+            return $ printf "%s:%i:%i\n"
+                (sourceName pos)
+                (sourceLine pos)
+                (sourceColumn pos)
         markerLines = do
             sourceLines <- lines <$> tplSrc
-            lineNum <- peSourceLine e
+            pos <- peSourcePosition e
+            let lineNum = sourceLine pos
             offendingLine <- listToMaybe . drop (pred lineNum) $ sourceLines
-            offendingColumn <- peSourceColumn e <|> Just 1
+            let offendingColumn = sourceColumn pos
             return . unlines $
                 [ offendingLine
                 , (replicate (pred offendingColumn) ' ') <> "^"
@@ -112,11 +115,7 @@ formatParserError tplSrc e =
 -- | Helper function to create a Ginger parser error from a Parsec error.
 fromParsecError :: ParseError -> ParserError
 fromParsecError e =
-    let pos = errorPos e
-        sourceFilename =
-            let sn = sourceName pos
-            in if null sn then Nothing else Just sn
-    in ParserError
+    ParserError
         (dropWhile (== '\n') .
             showErrorMessages
             "or"
@@ -125,20 +124,17 @@ fromParsecError e =
             "unexpected"
             "end of input"
             $ errorMessages e)
-        sourceFilename
-        (Just $ sourceLine pos)
-        (Just $ sourceColumn pos)
+        (Just $ errorPos e)
+
 -- | Parse Ginger source from a file.
-parseGingerFile :: Monad m => IncludeResolver m -> SourceName -> m (Either ParserError Template)
+parseGingerFile :: Monad m => IncludeResolver m -> SourceName -> m (Either ParserError (Template SourcePos))
 parseGingerFile resolve fn = do
     srcMay <- resolve fn
     case srcMay of
         Nothing -> return . Left $
             ParserError
                 { peErrorMessage = "Template source not found: " ++ fn
-                , peSourceName = Nothing
-                , peSourceLine = Nothing
-                , peSourceColumn = Nothing
+                , peSourcePosition = Nothing
                 }
         Just src -> parseGinger resolve (Just fn) src
 
@@ -151,7 +147,7 @@ data ParseContext m
 
 data ParseState
     = ParseState
-        { psBlocks :: HashMap VarName Block
+        { psBlocks :: HashMap VarName (Block SourcePos)
         , psStripIndent :: String
         }
 
@@ -163,7 +159,7 @@ defParseState =
         }
 
 -- | Parse Ginger source from memory.
-parseGinger :: Monad m => IncludeResolver m -> Maybe SourceName -> Source -> m (Either ParserError Template)
+parseGinger :: Monad m => IncludeResolver m -> Maybe SourceName -> Source -> m (Either ParserError (Template SourcePos))
 parseGinger resolve sn src = do
     result <- runReaderT (runParserT (templateP `before` eof) defParseState (fromMaybe "<<unknown>>" sn) src) (ParseContext resolve sn)
     case result of
@@ -178,12 +174,15 @@ ignore = (>> return ())
 getResolver :: Monad m => Parser m (IncludeResolver m)
 getResolver = asks pcResolve
 
-include :: Monad m => SourceName -> Parser m Statement
-include sourceName = PreprocessedIncludeS <$> includeTemplate sourceName
+include :: Monad m => SourceName -> Parser m (Statement SourcePos)
+include sourceName =
+  PreprocessedIncludeS
+    <$> getPosition
+    <*> includeTemplate sourceName
 
 -- include sourceName = templateBody <$> includeTemplate sourceName
 
-includeTemplate :: Monad m => SourceName -> Parser m Template
+includeTemplate :: Monad m => SourceName -> Parser m (Template SourcePos)
 includeTemplate sourceName = do
     resolver <- getResolver
     currentSource <- fromMaybe "" <$> asks pcCurrentSource
@@ -193,44 +192,57 @@ includeTemplate sourceName = do
         Right t -> return t
         Left err -> fail (show err)
 
-reduceStatements :: [Statement] -> Statement
-reduceStatements [] = NullS
-reduceStatements [x] = x
-reduceStatements xs = MultiS xs
+reduceStatements :: SourcePos -> [(Statement SourcePos)] -> (Statement SourcePos)
+reduceStatements pos [] = NullS pos
+reduceStatements pos [x] = x
+reduceStatements pos xs = MultiS pos xs
 
-templateP :: Monad m => Parser m Template
+templateP :: Monad m => Parser m (Template SourcePos)
 templateP = derivedTemplateP <|> baseTemplateP
 
-derivedTemplateP :: Monad m => Parser m Template
+derivedTemplateP :: Monad m => Parser m (Template SourcePos)
 derivedTemplateP = do
+    pos <- getPosition
     parentName <- try (spaces >> fancyTagP "extends" stringLiteralP)
     parentTemplate <- includeTemplate parentName
     topLevelBlocks <- HashMap.fromList <$> many blockP
     nestedBlocks <- psBlocks <$> getState
     let blocks = topLevelBlocks <> nestedBlocks
-    return Template { templateBody = NullS, templateParent = Just parentTemplate, templateBlocks = blocks }
+    return
+        Template
+            { templateBody = NullS pos
+            , templateParent = Just parentTemplate
+            , templateBlocks = blocks
+            }
 
-baseTemplateP :: Monad m => Parser m Template
+baseTemplateP :: Monad m => Parser m (Template SourcePos)
 baseTemplateP = do
     body <- statementsP
     blocks <- psBlocks <$> getState
-    return Template { templateBody = body, templateParent = Nothing, templateBlocks = blocks }
+    return
+        Template
+            { templateBody = body
+            , templateParent = Nothing
+            , templateBlocks = blocks
+            }
 
-isNullS NullS = True
+isNullS (NullS _) = True
 isNullS _ = False
 
-statementsP :: Monad m => Parser m Statement
-statementsP =
-    reduceStatements . filter (not . isNullS) <$> many (try statementP)
+statementsP :: Monad m => Parser m (Statement SourcePos)
+statementsP = do
+    pos <- getPosition
+    reduceStatements pos . filter (not . isNullS) <$> many (try statementP)
 
-scriptStatementsP :: Monad m => Parser m Statement
+scriptStatementsP :: Monad m => Parser m (Statement SourcePos)
 scriptStatementsP = do
     spacesOrComment
-    reduceStatements . filter (not . isNullS) <$>
+    pos <- getPosition
+    reduceStatements pos . filter (not . isNullS) <$>
         many (try scriptStatementP)
 
 
-scriptStatementBlockP :: Monad m => Parser m Statement
+scriptStatementBlockP :: Monad m => Parser m (Statement SourcePos)
 scriptStatementBlockP = do
     char '{'
     spacesOrComment
@@ -239,7 +251,7 @@ scriptStatementBlockP = do
     spacesOrComment
     return inner
 
-statementP :: Monad m => Parser m Statement
+statementP :: Monad m => Parser m (Statement SourcePos)
 statementP = interpolationStmtP
            <|> commentStmtP
            <|> ifStmtP
@@ -255,7 +267,7 @@ statementP = interpolationStmtP
            <|> scriptStmtP
            <|> literalStmtP
 
-scriptStatementP :: Monad m => Parser m Statement
+scriptStatementP :: Monad m => Parser m (Statement SourcePos)
 scriptStatementP = scriptStatementBlockP
                  <|> scriptEchoStmtP
                  <|> scriptIfStmtP
@@ -267,17 +279,19 @@ scriptStatementP = scriptStatementBlockP
                  <|> scriptScopeStmtP
                  <|> scriptExprStmtP
 
-interpolationStmtP :: Monad m => Parser m Statement
+interpolationStmtP :: Monad m => Parser m (Statement SourcePos)
 interpolationStmtP = do
+    pos <- getPosition
     try openInterpolationP
     spacesOrComment
     expr <- expressionP
     spacesOrComment
     closeInterpolationP
-    return $ InterpolationS expr
+    return $ InterpolationS pos expr
 
-scriptEchoStmtP :: Monad m => Parser m Statement
+scriptEchoStmtP :: Monad m => Parser m (Statement SourcePos)
 scriptEchoStmtP = do
+    pos <- getPosition
     try $ keyword "echo"
     spacesOrComment
     char '('
@@ -287,15 +301,16 @@ scriptEchoStmtP = do
     spacesOrComment
     char ';'
     spacesOrComment
-    return $ InterpolationS expr
+    return $ InterpolationS pos expr
 
-literalStmtP :: Monad m => Parser m Statement
+literalStmtP :: Monad m => Parser m (Statement SourcePos)
 literalStmtP = do
+    pos <- getPosition
     txt <- manyTill literalCharP endOfLiteralP
 
     case txt of
         [] -> unexpected "{{"
-        _ -> return . LiteralS . unsafeRawHtml . Text.pack $ txt
+        _ -> return . LiteralS pos . unsafeRawHtml . Text.pack $ txt
 
 literalCharP :: Monad m => Parser m Char
 literalCharP =
@@ -315,15 +330,16 @@ endOfLiteralP =
     (ignore . lookAhead $ openCommentP) <|>
     eof
 
-commentStmtP :: Monad m => Parser m Statement
+commentStmtP :: Monad m => Parser m (Statement SourcePos)
 commentStmtP = do
+    pos <- getPosition
     try openCommentP
     manyTill
         (   (noneOf "#" *> return ())
         <|> (try $ char '#' *> notFollowedBy (char '}'))
         )
         (try closeCommentP)
-    return NullS
+    return $ NullS pos
 
 scriptCommentP :: Monad m => Parser m ()
 scriptCommentP = do
@@ -336,46 +352,50 @@ spacesOrComment = do
     many $ scriptCommentP <|> (oneOf " \t\r\n" *> return ())
     return ()
 
-scriptExprStmtP :: Monad m => Parser m Statement
+scriptExprStmtP :: Monad m => Parser m (Statement SourcePos)
 scriptExprStmtP = do
+    pos <- getPosition
     expr <- try $ expressionP
     char ';'
     spacesOrComment
-    return $ ExpressionS expr
+    return $ ExpressionS pos expr
 
 endl :: Monad m => Parser m Char
 endl = char '\n' <|> (char '\r' >> char '\n')
 
-scriptStmtP :: Monad m => Parser m Statement
+scriptStmtP :: Monad m => Parser m (Statement SourcePos)
 scriptStmtP =
     between
         (try $ simpleTagP "script")
         (simpleTagP "endscript")
         scriptStatementsP
 
-ifStmtP :: Monad m => Parser m Statement
+ifStmtP :: Monad m => Parser m (Statement SourcePos)
 ifStmtP = do
+    pos <- getPosition
     condExpr <- fancyTagP "if" expressionP
     trueStmt <- statementsP
-    falseStmt <- elifBranchP <|> elseBranchP <|> return NullS
+    falseStmt <- elifBranchP <|> elseBranchP <|> (NullS <$> getPosition)
     simpleTagP "endif"
-    return $ IfS condExpr trueStmt falseStmt
+    return $ IfS pos condExpr trueStmt falseStmt
 
-elseBranchP :: Monad m => Parser m Statement
+elseBranchP :: Monad m => Parser m (Statement SourcePos)
 elseBranchP = do
     try $ simpleTagP "else"
     statementsP
 
-elifBranchP :: Monad m => Parser m Statement
+elifBranchP :: Monad m => Parser m (Statement SourcePos)
 elifBranchP = do
+    pos <- getPosition
     condExpr <- try $ fancyTagP "elif" expressionP
     trueStmt <- statementsP
-    falseStmt <- elifBranchP <|> elseBranchP <|> return NullS
+    falseStmt <- elifBranchP <|> elseBranchP <|> (NullS <$> getPosition)
     -- No endif here: the parent {% if %} owns that one.
-    return $ IfS condExpr trueStmt falseStmt
+    return $ IfS pos condExpr trueStmt falseStmt
 
-scriptIfStmtP :: Monad m => Parser m Statement
+scriptIfStmtP :: Monad m => Parser m (Statement SourcePos)
 scriptIfStmtP = do
+    pos <- getPosition
     try $ keyword "if"
     spacesOrComment
     char '('
@@ -385,17 +405,18 @@ scriptIfStmtP = do
     spacesOrComment
     trueStmt <- scriptStatementP
     spacesOrComment
-    falseStmt <- scriptElifP <|> scriptElseP <|> return NullS
-    return $ IfS condExpr trueStmt falseStmt
+    falseStmt <- scriptElifP <|> scriptElseP <|> (NullS <$> getPosition)
+    return $ IfS pos condExpr trueStmt falseStmt
 
-scriptElseP :: Monad m => Parser m Statement
+scriptElseP :: Monad m => Parser m (Statement SourcePos)
 scriptElseP = do
     try $ keyword "else"
     spacesOrComment
     scriptStatementP
 
-scriptElifP :: Monad m => Parser m Statement
+scriptElifP :: Monad m => Parser m (Statement SourcePos)
 scriptElifP = do
+    pos <- getPosition
     try $ keyword "elif"
     spacesOrComment
     char '('
@@ -406,30 +427,32 @@ scriptElifP = do
     spacesOrComment
     trueStmt <- scriptStatementP
     spacesOrComment
-    falseStmt <- scriptElifP <|> scriptElseP <|> return NullS
-    return $ IfS condExpr trueStmt falseStmt
+    falseStmt <- scriptElifP <|> scriptElseP <|> (NullS <$> getPosition)
+    return $ IfS pos condExpr trueStmt falseStmt
 
-switchStmtP :: Monad m => Parser m Statement
+switchStmtP :: Monad m => Parser m (Statement SourcePos)
 switchStmtP = do
+    pos <- getPosition
     pivotExpr <- try $ fancyTagP "switch" expressionP
     cases <- many switchCaseP
-    def <- option NullS $ switchDefaultP
+    def <- switchDefaultP <|> (NullS <$> getPosition)
     simpleTagP "endswitch"
-    return $ SwitchS pivotExpr cases def
+    return $ SwitchS pos pivotExpr cases def
 
-switchCaseP :: Monad m => Parser m (Expression, Statement)
+switchCaseP :: Monad m => Parser m ((Expression SourcePos), (Statement SourcePos))
 switchCaseP = do
     cmpExpr <- try $ fancyTagP "case" expressionP
     body <- statementsP
     simpleTagP "endcase"
     return (cmpExpr, body)
 
-switchDefaultP :: Monad m => Parser m Statement
+switchDefaultP :: Monad m => Parser m (Statement SourcePos)
 switchDefaultP = do
     try (simpleTagP "default") *> statementsP <* simpleTagP "enddefault"
 
-scriptSwitchStmtP :: Monad m => Parser m Statement
+scriptSwitchStmtP :: Monad m => Parser m (Statement SourcePos)
 scriptSwitchStmtP = do
+    pos <- getPosition
     try $ keyword "switch"
     spacesOrComment
     char '('
@@ -441,13 +464,13 @@ scriptSwitchStmtP = do
     char '{'
     spacesOrComment
     cases <- many scriptSwitchCaseP
-    def <- option NullS $ scriptSwitchDefaultP
+    def <- scriptSwitchDefaultP <|> (NullS <$> getPosition)
     spacesOrComment
     char '}'
     spacesOrComment
-    return $ SwitchS pivotExpr cases def
+    return $ SwitchS pos pivotExpr cases def
 
-scriptSwitchCaseP :: Monad m => Parser m (Expression, Statement)
+scriptSwitchCaseP :: Monad m => Parser m ((Expression SourcePos), (Statement SourcePos))
 scriptSwitchCaseP = do
     try $ keyword "case"
     spacesOrComment
@@ -459,7 +482,7 @@ scriptSwitchCaseP = do
     spacesOrComment
     return (cmpExpr, body)
 
-scriptSwitchDefaultP :: Monad m => Parser m Statement
+scriptSwitchDefaultP :: Monad m => Parser m (Statement SourcePos)
 scriptSwitchDefaultP = do
     try $ keyword "default"
     spacesOrComment
@@ -469,21 +492,24 @@ scriptSwitchDefaultP = do
     spacesOrComment
     return body
 
-setStmtP :: Monad m => Parser m Statement
-setStmtP = fancyTagP "set" setStmtInnerP
+setStmtP :: Monad m => Parser m (Statement SourcePos)
+setStmtP = do
+    pos <- getPosition
+    fancyTagP "set" (setStmtInnerP pos)
 
-setStmtInnerP :: Monad m => Parser m Statement
-setStmtInnerP = do
+setStmtInnerP :: Monad m => SourcePos -> Parser m (Statement SourcePos)
+setStmtInnerP pos = do
     name <- identifierP
     spacesOrComment
     char '='
     spacesOrComment
     val <- expressionP
     spacesOrComment
-    return $ SetVarS name val
+    return $ SetVarS pos name val
 
-scriptSetStmtP :: Monad m => Parser m Statement
+scriptSetStmtP :: Monad m => Parser m (Statement SourcePos)
 scriptSetStmtP = do
+    pos <- getPosition
     try $ keyword "set"
     spacesOrComment
     name <- identifierP
@@ -494,34 +520,37 @@ scriptSetStmtP = do
     spacesOrComment
     char ';'
     spacesOrComment
-    return $ SetVarS name val
+    return $ SetVarS pos name val
 
-defineBlock :: VarName -> Block -> ParseState -> ParseState
+defineBlock :: VarName -> Block SourcePos -> ParseState -> ParseState
 defineBlock name block s =
     s { psBlocks = HashMap.insert name block (psBlocks s) }
 
-blockStmtP :: Monad m => Parser m Statement
+blockStmtP :: Monad m => Parser m (Statement SourcePos)
 blockStmtP = do
+    pos <- getPosition
     (name, block) <- blockP
     modifyState (defineBlock name block)
-    return $ BlockRefS name
+    return $ BlockRefS pos name
 
-blockP :: Monad m => Parser m (VarName, Block)
+blockP :: Monad m => Parser m (VarName, (Block SourcePos))
 blockP = do
     name <- fancyTagP "block" identifierP
     body <- statementsP
     fancyTagP "endblock" (optional $ string (Text.unpack name) >> spacesOrComment)
     return (name, Block body)
 
-macroStmtP :: Monad m => Parser m Statement
+macroStmtP :: Monad m => Parser m (Statement SourcePos)
 macroStmtP = do
+    pos <- getPosition
     (name, args) <- try $ fancyTagP "macro" macroHeadP
     body <- statementsP
     fancyTagP "endmacro" (optional $ string (Text.unpack name) >> spacesOrComment)
-    return $ DefMacroS name (Macro args body)
+    return $ DefMacroS pos name (Macro args body)
 
-scriptMacroStmtP :: Monad m => Parser m Statement
+scriptMacroStmtP :: Monad m => Parser m (Statement SourcePos)
 scriptMacroStmtP = do
+    pos <- getPosition
     try $ keyword "macro"
     spacesOrComment
     name <- identifierP
@@ -530,7 +559,7 @@ scriptMacroStmtP = do
     spacesOrComment
     body <- scriptStatementP
     spacesOrComment
-    return $ DefMacroS name (Macro args body)
+    return $ DefMacroS pos name (Macro args body)
 
 macroHeadP :: Monad m => Parser m (VarName, [VarName])
 macroHeadP = do
@@ -549,18 +578,20 @@ macroHeadP = do
 -- {% set caller = __lambda %}
 -- {{ bar(baz) }}
 -- {% endscope %]
-callStmtP :: Monad m => Parser m Statement
+callStmtP :: Monad m => Parser m (Statement SourcePos)
 callStmtP = do
+    pos <- getPosition
     (callerArgs, call) <- try $ fancyTagP "call" callHeadP
     body <- statementsP
     simpleTagP "endcall"
     return (
-        ScopedS (
-            MultiS [ DefMacroS "caller" (Macro callerArgs body)
-                   , InterpolationS call
-                   ]))
+        ScopedS pos (
+            MultiS pos
+                [ DefMacroS pos "caller" (Macro callerArgs body)
+                , InterpolationS pos call
+                ]))
 
-callHeadP :: Monad m => Parser m ([Text], Expression)
+callHeadP :: Monad m => Parser m ([Text], (Expression SourcePos))
 callHeadP = do
     callerArgs <- option [] $ groupP "(" ")" identifierP
     spacesOrComment
@@ -568,16 +599,18 @@ callHeadP = do
     spacesOrComment
     return (callerArgs, call)
 
-scopeStmtP :: Monad m => Parser m Statement
+scopeStmtP :: Monad m => Parser m (Statement SourcePos)
 scopeStmtP =
-    ScopedS <$>
-        between
+    ScopedS
+        <$> getPosition
+        <*> between
             (try $ simpleTagP "scope")
             (simpleTagP "endscope")
             statementsP
 
-indentStmtP :: Monad m => Parser m Statement
+indentStmtP :: Monad m => Parser m (Statement SourcePos)
 indentStmtP = do
+    pos <- getPosition
     indentExpr <- try $ fancyTagP "indent" indentHeadP
     preIndent <- many (oneOf " \t")
     oldState <- getState
@@ -586,34 +619,37 @@ indentStmtP = do
     body <- statementsP
     putState oldState
     simpleTagP "endindent"
-    return $ IndentS indentExpr body
+    return $ IndentS pos indentExpr body
 
-indentHeadP :: Monad m => Parser m Expression
+indentHeadP :: Monad m => Parser m (Expression SourcePos)
 indentHeadP =
-    (expressionP <|> return (StringLiteralE "  ")) <* spacesOrComment
+    (expressionP <|> (StringLiteralE <$> getPosition <*> pure "  ")) <* spacesOrComment
 
-scriptScopeStmtP :: Monad m => Parser m Statement
+scriptScopeStmtP :: Monad m => Parser m (Statement SourcePos)
 scriptScopeStmtP = do
+    pos <- getPosition
     try $ keyword "scope"
     spacesOrComment
-    ScopedS <$> scriptStatementP
+    ScopedS pos <$> scriptStatementP
 
-forStmtP :: Monad m => Parser m Statement
+forStmtP :: Monad m => Parser m (Statement SourcePos)
 forStmtP = do
+    pos <- getPosition
     (iteree, varNameVal, varNameIndex) <- fancyTagP "for" forHeadP
     body <- statementsP
     elseBranchMay <- optionMaybe $ do
         try $ simpleTagP "else"
         statementsP
     simpleTagP "endfor"
-    let forLoop = ForS varNameIndex varNameVal iteree body
+    let forLoop = ForS pos varNameIndex varNameVal iteree body
     return $ maybe
         forLoop
-        (IfS iteree forLoop)
+        (IfS pos iteree forLoop)
         elseBranchMay
 
-scriptForStmtP :: Monad m => Parser m Statement
+scriptForStmtP :: Monad m => Parser m (Statement SourcePos)
 scriptForStmtP = do
+    pos <- getPosition
     try $ keyword "for"
     spacesOrComment
     char '('
@@ -626,18 +662,18 @@ scriptForStmtP = do
         try $ keyword "else"
         spacesOrComment
         scriptStatementP
-    let forLoop = ForS varNameIndex varNameVal iteree body
+    let forLoop = ForS pos varNameIndex varNameVal iteree body
     return $ maybe
         forLoop
-        (IfS iteree forLoop)
+        (IfS pos iteree forLoop)
         elseBranchMay
 
-includeP :: Monad m => Parser m Statement
+includeP :: Monad m => Parser m (Statement SourcePos)
 includeP = do
     sourceName <- fancyTagP "include" stringLiteralP
     include sourceName
 
-scriptIncludeP :: Monad m => Parser m Statement
+scriptIncludeP :: Monad m => Parser m (Statement SourcePos)
 scriptIncludeP = do
     try $ keyword "include"
     spacesOrComment
@@ -650,7 +686,7 @@ scriptIncludeP = do
     spacesOrComment
     include sourceName
 
-forHeadP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
+forHeadP :: Monad m => Parser m ((Expression SourcePos), VarName, Maybe VarName)
 forHeadP =
     (try forHeadInP <|> forHeadAsP) <* optional (keyword "recursive" >>spacesOrComment)
 
@@ -673,7 +709,7 @@ forSimpleIteratorP = do
     spacesOrComment
     return (varIdent, Nothing)
 
-forHeadInP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
+forHeadInP :: Monad m => Parser m ((Expression SourcePos), VarName, Maybe VarName)
 forHeadInP = do
     (varIdent, indexIdent) <- forIteratorP
     spacesOrComment
@@ -682,7 +718,7 @@ forHeadInP = do
     iteree <- expressionP
     return (iteree, varIdent, indexIdent)
 
-forHeadAsP :: Monad m => Parser m (Expression, VarName, Maybe VarName)
+forHeadAsP :: Monad m => Parser m ((Expression SourcePos), VarName, Maybe VarName)
 forHeadAsP = do
     iteree <- expressionP
     spacesOrComment
@@ -750,11 +786,12 @@ closeNWP c = ignore $ do
     string [ c, '}' ]
     optional . ignore $ literalNewlineP
 
-expressionP :: Monad m => Parser m Expression
+expressionP :: Monad m => Parser m (Expression SourcePos)
 expressionP = lambdaExprP <|> ternaryExprP
 
-lambdaExprP :: Monad m => Parser m Expression
+lambdaExprP :: Monad m => Parser m (Expression SourcePos)
 lambdaExprP = do
+    pos <- getPosition
     argNames <- try $ do
         char '('
         spacesOrComment
@@ -765,54 +802,57 @@ lambdaExprP = do
         spacesOrComment
         return argNames
     body <- expressionP
-    return $ LambdaE argNames body
+    return $ LambdaE pos argNames body
 
-operativeExprP :: forall m. Monad m => Parser m Expression -> [ (String, Text) ] -> Parser m Expression
+operativeExprP :: forall m. Monad m => Parser m (Expression SourcePos) -> [ (String, Text) ] -> Parser m (Expression SourcePos)
 operativeExprP operandP operators = do
+    pos0 <- getPosition
     lhs <- operandP
     spacesOrComment
-    tails <- many . try $ operativeTail
+    tails <- many . try $ operativeTail pos0
     return $ foldl (flip ($)) lhs tails
     where
         opChars :: [Char]
         opChars = nub . sort . concatMap fst $ operators
-        operativeTail :: Parser m (Expression -> Expression)
-        operativeTail = do
+        operativeTail :: SourcePos -> Parser m (Expression SourcePos -> Expression SourcePos)
+        operativeTail pos0 = do
+            pos <- getPosition
             funcName <-
                 foldl (<|>) (fail "operator")
                     [ try (string op >> notFollowedBy (oneOf opChars)) >> return fn | (op, fn) <- operators ]
             spacesOrComment
             rhs <- operandP
             spacesOrComment
-            return (\lhs -> CallE (VarE funcName) [(Nothing, lhs), (Nothing, rhs)])
+            return (\lhs -> CallE pos0 (VarE pos funcName) [(Nothing, lhs), (Nothing, rhs)])
 
-ternaryExprP :: Monad m => Parser m Expression
+ternaryExprP :: Monad m => Parser m (Expression SourcePos)
 ternaryExprP = do
+    pos <- getPosition
     expr1 <- booleanExprP
     spacesOrComment
-    cTernaryTailP expr1 <|> pyTernaryTailP expr1 <|> return expr1
+    cTernaryTailP pos expr1 <|> pyTernaryTailP pos expr1 <|> return expr1
 
-cTernaryTailP :: Monad m => Expression -> Parser m Expression
-cTernaryTailP condition = do
+cTernaryTailP :: Monad m => SourcePos -> (Expression SourcePos) -> Parser m (Expression SourcePos)
+cTernaryTailP pos condition = do
     char '?'
     spacesOrComment
     yesBranch <- expressionP
     char ':'
     spacesOrComment
     noBranch <- expressionP
-    return $ TernaryE condition yesBranch noBranch
+    return $ TernaryE pos condition yesBranch noBranch
 
-pyTernaryTailP :: Monad m => Expression -> Parser m Expression
-pyTernaryTailP yesBranch = do
+pyTernaryTailP :: Monad m => SourcePos -> (Expression SourcePos) -> Parser m (Expression SourcePos)
+pyTernaryTailP pos yesBranch = do
     keyword "if"
     spacesOrComment
     condition <- booleanExprP
     keyword "else"
     spacesOrComment
     noBranch <- expressionP
-    return $ TernaryE condition yesBranch noBranch
+    return $ TernaryE pos condition yesBranch noBranch
 
-booleanExprP :: Monad m => Parser m Expression
+booleanExprP :: Monad m => Parser m (Expression SourcePos)
 booleanExprP =
     operativeExprP
         comparativeExprP
@@ -820,7 +860,7 @@ booleanExprP =
         , ("&&", "all")
         ]
 
-comparativeExprP :: Monad m => Parser m Expression
+comparativeExprP :: Monad m => Parser m (Expression SourcePos)
 comparativeExprP =
     operativeExprP
         additiveExprP
@@ -832,7 +872,7 @@ comparativeExprP =
         , ("<", "less")
         ]
 
-additiveExprP :: Monad m => Parser m Expression
+additiveExprP :: Monad m => Parser m (Expression SourcePos)
 additiveExprP =
     operativeExprP
         multiplicativeExprP
@@ -841,7 +881,7 @@ additiveExprP =
         , ("~", "concat")
         ]
 
-multiplicativeExprP :: Monad m => Parser m Expression
+multiplicativeExprP :: Monad m => Parser m (Expression SourcePos)
 multiplicativeExprP =
     operativeExprP
         postfixExprP
@@ -851,72 +891,77 @@ multiplicativeExprP =
         , ("%", "modulo")
         ]
 
-postfixExprP :: Monad m => Parser m Expression
+postfixExprP :: Monad m => Parser m (Expression SourcePos)
 postfixExprP = do
+    pos <- getPosition
     base <- atomicExprP
     spacesOrComment
-    postfixes <- many . try $ postfixP `before`spacesOrComment
+    postfixes <- many . try $ postfixP pos `before`spacesOrComment
     return $ foldl (flip ($)) base postfixes
 
-postfixP :: Monad m => Parser m (Expression -> Expression)
-postfixP = dotPostfixP
-         <|> arrayAccessP
-         <|> funcCallP
-         <|> filterP
+postfixP :: Monad m => SourcePos -> Parser m ((Expression SourcePos) -> (Expression SourcePos))
+postfixP pos = dotPostfixP pos
+             <|> arrayAccessP
+             <|> funcCallP
+             <|> filterP
 
-dotPostfixP :: Monad m => Parser m (Expression -> Expression)
-dotPostfixP = do
+dotPostfixP :: Monad m => SourcePos -> Parser m ((Expression SourcePos) -> (Expression SourcePos))
+dotPostfixP pos = do
     char '.'
     spacesOrComment
-    i <- StringLiteralE <$> identifierP
-    return $ \e -> MemberLookupE e i
+    i <- StringLiteralE <$> getPosition <*> identifierP
+    return $ \e -> MemberLookupE pos e i
 
-arrayAccessP :: Monad m => Parser m (Expression -> Expression)
+arrayAccessP :: Monad m => Parser m ((Expression SourcePos) -> (Expression SourcePos))
 arrayAccessP = do
-    bracedP "[" "]" inner
+    pos <- getPosition
+    bracedP "[" "]" (inner pos)
     where
-        inner = try sliceInner <|> indexInner
-        sliceInner = do
-            offset <- option NullLiteralE (try expressionP)
+        inner pos = try (sliceInner pos) <|> indexInner pos
+        sliceInner pos = do
+            offset <- try expressionP <|> (NullLiteralE <$> getPosition)
             char ':'
-            length <- option NullLiteralE (try expressionP)
+            length <- try expressionP <|> (NullLiteralE <$> getPosition)
             return $ \e ->
                 CallE
-                    (VarE "slice")
+                    pos
+                    (VarE pos "slice")
                     [ (Nothing, e)
                     , (Nothing, offset)
                     , (Nothing, length)
                     ]
-        indexInner = do
+        indexInner pos = do
             i <- expressionP
-            return $ \e -> MemberLookupE e i
+            return $ \e -> MemberLookupE pos e i
 
-funcCallP :: Monad m => Parser m (Expression -> Expression)
+funcCallP :: Monad m => Parser m ((Expression SourcePos) -> (Expression SourcePos))
 funcCallP = do
+    pos <- getPosition
     args <- groupP "(" ")" funcArgP
-    return $ \e -> CallE e args
+    return $ \e -> CallE pos e args
 
-funcArgP :: Monad m => Parser m (Maybe Text, Expression)
+funcArgP :: Monad m => Parser m (Maybe Text, (Expression SourcePos))
 funcArgP = namedFuncArgP <|> positionalFuncArgP
 
-namedFuncArgP :: Monad m => Parser m (Maybe Text, Expression)
+namedFuncArgP :: Monad m => Parser m (Maybe Text, (Expression SourcePos))
 namedFuncArgP = do
     name <- try $ identifierP `before` between spacesOrComment spacesOrComment (string "=")
     expr <- expressionP
     return (Just name, expr)
 
-positionalFuncArgP :: Monad m => Parser m (Maybe Text, Expression)
+positionalFuncArgP :: Monad m => Parser m (Maybe Text, (Expression SourcePos))
 positionalFuncArgP = try $ (Nothing,) <$> expressionP
 
-filterP :: Monad m => Parser m (Expression -> Expression)
+filterP :: Monad m => Parser m ((Expression SourcePos) -> (Expression SourcePos))
 filterP = do
+    pos <- getPosition
     char '|'
     spacesOrComment
     func <- atomicExprP
     args <- option [] $ groupP "(" ")" funcArgP
-    return $ \e -> CallE func ((Nothing, e):args)
+    return $ \e -> CallE pos func ((Nothing, e):args)
 
-atomicExprP :: Monad m => Parser m Expression
+atomicExprP :: Monad m => Parser m (Expression SourcePos)
 atomicExprP = doExprP
             <|> parenthesizedExprP
             <|> objectExprP
@@ -925,28 +970,34 @@ atomicExprP = doExprP
             <|> numberLiteralExprP
             <|> varExprP
 
-parenthesizedExprP :: Monad m => Parser m Expression
+parenthesizedExprP :: Monad m => Parser m (Expression SourcePos)
 parenthesizedExprP =
     between
         (try . ignore $ char '(' >> spacesOrComment)
         (ignore $ char ')' >> spacesOrComment)
         expressionP
 
-doExprP :: Monad m => Parser m Expression
+doExprP :: Monad m => Parser m (Expression SourcePos)
 doExprP = do
+    pos <- getPosition
     try $ keyword "do"
     spacesOrComment
     stmt <- scriptStatementP
     spacesOrComment
-    return $ DoE stmt
+    return $ DoE pos stmt
 
-listExprP :: Monad m => Parser m Expression
-listExprP = ListE <$> groupP "[" "]" expressionP
+listExprP :: Monad m => Parser m (Expression SourcePos)
+listExprP =
+    ListE
+        <$> getPosition
+        <*> groupP "[" "]" expressionP
 
-objectExprP :: Monad m => Parser m Expression
-objectExprP = ObjectE <$> groupP "{" "}" expressionPairP
+objectExprP :: Monad m => Parser m (Expression SourcePos)
+objectExprP = ObjectE
+    <$> getPosition
+    <*> groupP "{" "}" expressionPairP
 
-expressionPairP :: Monad m => Parser m (Expression, Expression)
+expressionPairP :: Monad m => Parser m ((Expression SourcePos), (Expression SourcePos))
 expressionPairP = do
     a <- expressionP
     spacesOrComment
@@ -967,15 +1018,16 @@ bracedP obr cbr =
         (try . ignore $ string obr >> spacesOrComment)
         (ignore $ string cbr >> spacesOrComment)
 
-varExprP :: Monad m => Parser m Expression
+varExprP :: Monad m => Parser m (Expression SourcePos)
 varExprP = do
+    pos <- getPosition
     litName <- identifierP
     spacesOrComment
     return $ case litName of
-        "true" -> BoolLiteralE True
-        "false" -> BoolLiteralE False
-        "null" -> NullLiteralE
-        _ -> VarE litName
+        "true" -> BoolLiteralE pos True
+        "false" -> BoolLiteralE pos False
+        "null" -> NullLiteralE pos
+        _ -> VarE pos litName
 
 identifierP :: Monad m => Parser m Text
 identifierP =
@@ -987,9 +1039,11 @@ identifierP =
 identCharP :: Monad m => Parser m Char
 identCharP = oneOf (['a'..'z'] ++ ['A'..'Z'] ++ ['_'] ++ ['0'..'9'])
 
-stringLiteralExprP :: Monad m => Parser m Expression
+stringLiteralExprP :: Monad m => Parser m (Expression SourcePos)
 stringLiteralExprP =
-    StringLiteralE . Text.pack <$> stringLiteralP
+    StringLiteralE
+      <$> getPosition
+      <*> (Text.pack <$> stringLiteralP)
 
 stringLiteralP :: Monad m => Parser m String
 stringLiteralP = do
@@ -1012,13 +1066,14 @@ stringCharP = do
                 _ -> return c2
         _ -> return c1
 
-numberLiteralExprP :: Monad m => Parser m Expression
+numberLiteralExprP :: Monad m => Parser m (Expression SourcePos)
 numberLiteralExprP = do
+    pos <- getPosition
     str <- numberLiteralP
     let nMay :: Maybe Scientific
         nMay = readMay str
     case nMay of
-        Just n -> return . NumberLiteralE $ n
+        Just n -> return . NumberLiteralE pos $ n
         Nothing -> fail $ "Failed to parse " ++ str ++ " as a number"
 
 numberLiteralP :: Monad m => Parser m String

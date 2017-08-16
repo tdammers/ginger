@@ -80,10 +80,10 @@ import Data.Foldable (asum)
 tshow :: Show a => a -> Text
 tshow = Text.pack . show
 
-gfnRawHtml :: Monad m => Function (Run m h)
+gfnRawHtml :: Monad m => Function (Run p m h)
 gfnRawHtml = unaryFunc (toGVal . unsafeRawHtml . asText)
 
-gfnUrlEncode :: Monad m => Function (Run m h)
+gfnUrlEncode :: Monad m => Function (Run p m h)
 gfnUrlEncode =
     unaryFunc
         ( toGVal
@@ -95,34 +95,34 @@ gfnUrlEncode =
         . asText
         )
 
-gfnDefault :: Monad m => Function (Run m h)
+gfnDefault :: Monad m => Function (Run p m h)
 gfnDefault [] = return def
 gfnDefault ((_, x):xs)
     | asBoolean x = return x
     | otherwise = gfnDefault xs
 
-gfnEscape :: Monad m => Function (Run m h)
+gfnEscape :: Monad m => Function (Run p m h)
 gfnEscape = return . toGVal . html . mconcat . fmap (asText . snd)
 
-gfnAny :: Monad m => Function (Run m h)
+gfnAny :: Monad m => Function (Run p m h)
 gfnAny xs = return . toGVal $ Prelude.any (asBoolean . snd) xs
 
-gfnAll :: Monad m => Function (Run m h)
+gfnAll :: Monad m => Function (Run p m h)
 gfnAll xs = return . toGVal $ Prelude.all (asBoolean . snd) xs
 
-gfnEquals :: Monad m => Function (Run m h)
+gfnEquals :: Monad m => Function (Run p m h)
 gfnEquals [] = return $ toGVal True
 gfnEquals [x] = return $ toGVal True
 gfnEquals (x:xs) =
     return . toGVal $ Prelude.all ((snd x `looseEquals`) . snd) xs
 
-gfnNEquals :: Monad m => Function (Run m h)
+gfnNEquals :: Monad m => Function (Run p m h)
 gfnNEquals [] = return $ toGVal True
 gfnNEquals [x] = return $ toGVal True
 gfnNEquals (x:xs) =
     return . toGVal $ Prelude.any (not . (snd x `looseEquals`) . snd) xs
 
-gfnContains :: Monad m => Function (Run m h)
+gfnContains :: Monad m => Function (Run p m h)
 gfnContains [] = return $ toGVal False
 gfnContains (list:elems) = do
     rawList <- warnFromMaybe (tshow list <> " is not a list") [] . asList . snd $ list
@@ -131,7 +131,7 @@ gfnContains (list:elems) = do
         es `areInList` xs = Prelude.all (`isInList` xs) es
     return . toGVal $ rawElems `areInList` rawList
 
-looseEquals :: GVal (Run m h) -> GVal (Run m h) -> Bool
+looseEquals :: GVal (Run p m h) -> GVal (Run p m h) -> Bool
 looseEquals a b
     | isJust (asFunction a) || isJust (asFunction b) = False
     | isJust (asList a) /= isJust (asList b) = False
@@ -142,44 +142,44 @@ looseEquals a b
     | isNull a || isNull b = asBoolean a == asBoolean b
     | otherwise = asText a == asText b
 
-gfnLess :: Monad m => Function (Run m h)
+gfnLess :: Monad m => Function (Run p m h)
 gfnLess [] = return . toGVal $ False
 gfnLess xs' =
     let xs = fmap snd xs'
     in return . toGVal $
         Prelude.all (== Just True) (Prelude.zipWith less xs (Prelude.tail xs))
 
-gfnGreater :: Monad m => Function (Run m h)
+gfnGreater :: Monad m => Function (Run p m h)
 gfnGreater [] = return . toGVal $ False
 gfnGreater xs' =
     let xs = fmap snd xs'
     in return . toGVal $
         Prelude.all (== Just True) (Prelude.zipWith greater xs (Prelude.tail xs))
 
-gfnLessEquals :: Monad m => Function (Run m h)
+gfnLessEquals :: Monad m => Function (Run p m h)
 gfnLessEquals [] = return . toGVal $ False
 gfnLessEquals xs' =
     let xs = fmap snd xs'
     in return . toGVal $
         Prelude.all (== Just True) (Prelude.zipWith lessEq xs (Prelude.tail xs))
 
-gfnGreaterEquals :: Monad m => Function (Run m h)
+gfnGreaterEquals :: Monad m => Function (Run p m h)
 gfnGreaterEquals [] = return . toGVal $ False
 gfnGreaterEquals xs' =
     let xs = fmap snd xs'
     in return . toGVal $
         Prelude.all (== Just True) (Prelude.zipWith greaterEq xs (Prelude.tail xs))
 
-less :: Monad m => GVal (Run m h) -> GVal (Run m h) -> Maybe Bool
+less :: Monad m => GVal (Run p m h) -> GVal (Run p m h) -> Maybe Bool
 less a b = (<) <$> asNumber a <*> asNumber b
 
-greater :: Monad m => GVal (Run m h) -> GVal (Run m h) -> Maybe Bool
+greater :: Monad m => GVal (Run p m h) -> GVal (Run p m h) -> Maybe Bool
 greater a b = (>) <$> asNumber a <*> asNumber b
 
-lessEq :: Monad m => GVal (Run m h) -> GVal (Run m h) -> Maybe Bool
+lessEq :: Monad m => GVal (Run p m h) -> GVal (Run p m h) -> Maybe Bool
 lessEq a b = (<=) <$> asNumber a <*> asNumber b
 
-greaterEq :: Monad m => GVal (Run m h) -> GVal (Run m h) -> Maybe Bool
+greaterEq :: Monad m => GVal (Run p m h) -> GVal (Run p m h) -> Maybe Bool
 greaterEq a b = (>=) <$> asNumber a <*> asNumber b
 
 difference :: Prelude.Num a => [a] -> a
@@ -201,14 +201,14 @@ modulo [] = 0
 capitalize :: Text -> Text
 capitalize txt = Text.toUpper (Text.take 1 txt) <> Text.drop 1 txt
 
-gfnCenter :: Monad m => Function (Run m h)
+gfnCenter :: Monad m => Function (Run p m h)
 gfnCenter [] = gfnCenter [(Nothing, toGVal ("" :: Text))]
 gfnCenter [x] = gfnCenter [x, (Nothing, toGVal (80 :: Int))]
 gfnCenter [x,y] = gfnCenter [x, y, (Nothing, toGVal (" " :: Text))]
 gfnCenter ((_, s):(_, w):(_, pad):_) =
     return . toGVal $ center (asText s) (fromMaybe 80 $ Prelude.truncate <$> asNumber w) (asText pad)
 
-gfnSlice :: Monad m => Function (Run m h)
+gfnSlice :: Monad m => Function (Run p m h)
 gfnSlice args =
     let argValues =
             extractArgsDefL
@@ -246,7 +246,7 @@ gfnSlice args =
                             slice (Text.unpack $ asText slicee) startInt lengthInt
         _ -> fail "Invalid arguments to 'slice'"
 
-gfnReplace :: Monad m => Function (Run m h)
+gfnReplace :: Monad m => Function (Run p m h)
 gfnReplace args =
     let argValues =
             extractArgsDefL
@@ -263,7 +263,7 @@ gfnReplace args =
             return . toGVal $ Text.replace search replace str
         _ -> fail "Invalid arguments to 'replace'"
 
-gfnMap :: Monad m => Function (Run m h)
+gfnMap :: Monad m => Function (Run p m h)
 gfnMap args = do
     let parsedArgs = extractArgsDefL
             [ ("collection", def)
@@ -296,7 +296,7 @@ gfnMap args = do
             toGVal <$> mapM (mapFunction . (:[]) . (Nothing,)) items
             
 
-gfnSort :: Monad m => Function (Run m h)
+gfnSort :: Monad m => Function (Run p m h)
 gfnSort args = do
     let parsedArgs = extractArgsDefL
             [ ("sortee", def)
@@ -312,19 +312,19 @@ gfnSort args = do
                    )
         _ ->
             fail "Invalid args to sort()"
-    let -- extractByFunc :: Maybe ((Text, GVal (Run m h)) -> Run m h (GVal (Run m h)))
+    let -- extractByFunc :: Maybe ((Text, GVal (Run p m h)) -> Run p m h (GVal (Run p m h)))
         extractByFunc = do
             f <- asFunction sortKey
             return $ \g ->
                 f [(Nothing, snd g)]
 
-    let -- extractByPath :: Maybe ((Text, GVal (Run m h)) -> Run m h (GVal (Run m h)))
+    let -- extractByPath :: Maybe ((Text, GVal (Run p m h)) -> Run p m h (GVal (Run p m h)))
         extractByPath = do
             keys <- asList sortKey
             return $ \g ->
                 return $ List.foldl' (flip (lookupLooseDef def)) (snd g) keys
 
-        extractByKey :: Monad m => Maybe ((Text, a) -> Run m h (GVal (Run m h)))
+        extractByKey :: Monad m => Maybe ((Text, a) -> Run p m h (GVal (Run p m h)))
         extractByKey =
             if asText sortKey == "__key"
                 then Just $ return . toGVal . fst
@@ -384,7 +384,7 @@ center str width pad =
         repsR = Prelude.succ charsR `div` Text.length pad
         paddingR = Text.take charsR . Text.replicate repsR $ pad
 
-gfnFileSizeFormat :: Monad m => Function (Run m h)
+gfnFileSizeFormat :: Monad m => Function (Run p m h)
 gfnFileSizeFormat [(_, sizeG)] =
     gfnFileSizeFormat [(Nothing, sizeG), (Nothing, def)]
 gfnFileSizeFormat [(_, sizeG), (_, binaryG)] = do
@@ -426,7 +426,7 @@ formatFileSize binary size =
                 else formatScientific Fixed (Just 1) dividedSize
     in formattedSize ++ " " ++ unitName
 
-gfnPrintf :: Monad m => Function (Run m h)
+gfnPrintf :: Monad m => Function (Run p m h)
 gfnPrintf [] = do
     warn "No format string provided to printf"
     return def
@@ -511,7 +511,7 @@ gvalToTZ g =
 parseTZ :: String -> Maybe TimeZone
 parseTZ = parseTimeM True defaultTimeLocale "%z"
 
-gfnDateFormat :: Monad m => Function (Run m h)
+gfnDateFormat :: Monad m => Function (Run p m h)
 gfnDateFormat args =
     let extracted =
             extractArgsDefL
@@ -565,7 +565,7 @@ gfnDateFormat args =
         convertTZ Nothing = id
         convertTZ (Just tz) = utcToZonedTime tz . zonedTimeToUTC
 
-getTimeLocale :: Monad m => GVal (Run m h) -> Run m h TimeLocale
+getTimeLocale :: Monad m => GVal (Run p m h) -> Run p m h TimeLocale
 getTimeLocale localeName = do
     toFunction <$> getVar "getlocale" >>= \case
         Nothing ->
@@ -577,7 +577,7 @@ getTimeLocale localeName = do
             fromMaybe defaultTimeLocale . fromGVal <$> getlocale args
 
 
-gfnFilter :: Monad m => Function (Run m h)
+gfnFilter :: Monad m => Function (Run p m h)
 gfnFilter [] = return def
 gfnFilter [(_, xs)] = return xs
 gfnFilter ((_, xs):(_, p):args) = do
@@ -591,7 +591,7 @@ printfG :: String -> [GVal m] -> String
 printfG fmt args = printfa fmt (fmap P args)
 
 
-gfnDictsort :: Monad m => Function (Run m h)
+gfnDictsort :: Monad m => Function (Run p m h)
 gfnDictsort args =
     let extracted =
             extractArgsDefL

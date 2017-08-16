@@ -22,7 +22,7 @@ withLocalState a = do
 
 -- | Helper function to run a Scope action with a temporary scope, reverting
 -- to the old scope after the action has finished.
-withLocalScope :: (Monad m) => Run m h a -> Run m h a
+withLocalScope :: (Monad m) => Run p m h a -> Run p m h a
 withLocalScope a = do
     scope <- gets rsScope
     r <- a
@@ -31,17 +31,17 @@ withLocalScope a = do
 
 -- | Override the encoder used for converting 'GVal's to the output type.
 -- This can be used for things like temporarily disabling HTML encoding.
-withEncoder :: (ContextEncodable h, Monad m) => (GVal (Run m h) -> h) -> Run m h a -> Run m h a
+withEncoder :: (ContextEncodable h, Monad m) => (GVal (Run p m h) -> h) -> Run p m h a -> Run p m h a
 withEncoder encoder =
     local (\context -> context { contextEncode = encode })
 
-setVar :: Monad m => VarName -> GVal (Run m h) -> Run m h ()
+setVar :: Monad m => VarName -> GVal (Run p m h) -> Run p m h ()
 setVar name val = do
     vars <- gets rsScope
     let vars' = HashMap.insert name val vars
     modify (\s -> s { rsScope = vars' })
 
-getVar :: Monad m => VarName -> Run m h (GVal (Run m h))
+getVar :: Monad m => VarName -> Run p m h (GVal (Run p m h))
 getVar key = do
     vars <- gets rsScope
     case HashMap.lookup key vars of
@@ -51,12 +51,12 @@ getVar key = do
             l <- asks contextLookup
             l key
 
-clearCapture :: (Monoid h, Monad m) => Run m h ()
+clearCapture :: (Monoid h, Monad m) => Run p m h ()
 clearCapture = modify (\s -> s { rsCapture = mempty })
 
-appendCapture :: (Monoid h, Monad m) => h -> Run m h ()
+appendCapture :: (Monoid h, Monad m) => h -> Run p m h ()
 appendCapture h = modify (\s -> s { rsCapture = rsCapture s <> h })
 
-fetchCapture :: Monad m => Run m h h
+fetchCapture :: Monad m => Run p m h h
 fetchCapture = gets rsCapture
 

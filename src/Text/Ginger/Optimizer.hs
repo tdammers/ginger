@@ -2,6 +2,7 @@
 {-#LANGUAGE FlexibleInstances #-}
 {-#LANGUAGE MultiParamTypeClasses #-}
 {-#LANGUAGE OverloadedStrings #-}
+{-#LANGUAGE ScopedTypeVariables #-}
 -- | A syntax tree optimizer
 module Text.Ginger.Optimizer
 ( Optimizable (..) )
@@ -24,19 +25,19 @@ import qualified Data.Aeson as JSON
 class Optimizable a where
     optimize :: a -> a
 
-instance Optimizable Template where
+instance Optimizable (Template a) where
     optimize = optimizeTemplate
 
-instance Optimizable Statement where
+instance Optimizable (Statement a) where
     optimize = optimizeStatement
 
-instance Optimizable Block where
+instance Optimizable (Block a) where
     optimize = optimizeBlock
 
-instance Optimizable Macro where
+instance Optimizable (Macro a) where
     optimize = optimizeMacro
 
-instance Optimizable Expression where
+instance Optimizable (Expression a) where
     optimize = optimizeExpression
 
 optimizeTemplate t =
@@ -46,26 +47,26 @@ optimizeTemplate t =
       }
 
 {-
-    = MultiS [Statement] -- ^ A sequence of multiple statements
-    | ScopedS Statement -- ^ Run wrapped statement in a local scope
-    | LiteralS Html -- ^ Literal output (anything outside of any tag)
-    | InterpolationS Expression -- ^ {{ expression }}
-    | IfS Expression Statement Statement -- ^ {% if expression %}statement{% else %}statement{% endif %}
-    | ForS (Maybe VarName) VarName Expression Statement -- ^ {% for index, varname in expression %}statement{% endfor %}
-    | SetVarS VarName Expression -- ^ {% set varname = expr %}
-    | DefMacroS VarName Macro -- ^ {% macro varname %}statements{% endmacro %}
-    | BlockRefS VarName
-    | PreprocessedIncludeS Template -- ^ {% include "template" %}
-    | NullS -- ^ The do-nothing statement (NOP)
+    = MultiS p [Statement a] -- ^ A sequence of multiple statements
+    | ScopedS p Statement a -- ^ Run wrapped statement in a local scope
+    | LiteralS p Html -- ^ Literal output (anything outside of any tag)
+    | InterpolationS p Expression a -- ^ {{ expression }}
+    | IfS p Expression a Statement a Statement a -- ^ {% if expression %}statement{% else %}statement{% endif %}
+    | ForS p (Maybe VarName) VarName Expression a Statement a -- ^ {% for index, varname in expression %}statement{% endfor %}
+    | SetVarS p VarName Expression a -- ^ {% set varname = expr %}
+    | DefMacroS p VarName Macro a -- ^ {% macro varname %}statements{% endmacro %}
+    | BlockRefS p VarName
+    | PreprocessedIncludeS p Template a -- ^ {% include "template" %}
+    | NullS p -- ^ The do-nothing statement (NOP)
 -}
-optimizeStatement (MultiS items) =
+optimizeStatement (MultiS p items) =
     case optimizeStatementList items of
-        [] -> NullS
+        [] -> NullS p
         [x] -> x
-        xs -> MultiS xs
-optimizeStatement (InterpolationS e) =
-    InterpolationS (optimize e)
-optimizeStatement s@(IfS c t f) =
+        xs -> MultiS p xs
+optimizeStatement (InterpolationS p e) =
+    InterpolationS p (optimize e)
+optimizeStatement s@(IfS p c t f) =
     let c' = optimize c
         t' = optimize t
         f' = optimize f
@@ -85,32 +86,32 @@ optimizeStatementList =
     cullNulls .
     fmap optimize
 
-cullNulls :: [Statement] -> [Statement]
+cullNulls :: [Statement a] -> [Statement a]
 cullNulls = filter (not . isNullS)
     where
-        isNullS NullS = True
+        isNullS (NullS _) = True
         isNullS _ = False
 
-mergeLiterals :: [Statement] -> [Statement]
+mergeLiterals :: [Statement a] -> [Statement a]
 mergeLiterals [] = []
 mergeLiterals [x] = [x]
-mergeLiterals (x@(LiteralS a):y@(LiteralS b):xs) = mergeLiterals $ (LiteralS $ a <> b):xs
+mergeLiterals (x@(LiteralS p1 a):y@(LiteralS p2 b):xs) = mergeLiterals $ (LiteralS p1 $ a <> b):xs
 mergeLiterals (x:xs) = x:mergeLiterals xs
 
 
 {-
-data Expression
-    = StringLiteralE Text -- ^ String literal expression: "foobar"
-    | NumberLiteralE Scientific -- ^ Numeric literal expression: 123.4
-    | BoolLiteralE Bool -- ^ Boolean literal expression: true
-    | NullLiteralE -- ^ Literal null
-    | VarE VarName -- ^ Variable reference: foobar
-    | ListE [Expression] -- ^ List construct: [ expr, expr, expr ]
-    | ObjectE [(Expression, Expression)] -- ^ Object construct: { expr: expr, expr: expr, ... }
-    | MemberLookupE Expression Expression -- ^ foo[bar] (also dot access)
-    | CallE Expression [(Maybe Text, Expression)] -- ^ foo(bar=baz, quux)
-    | LambdaE [Text] Expression -- ^ (foo, bar) -> expr
-    | TernaryE Expression Expression Expression -- ^ expr ? expr : expr
+data Expression a
+    = StringLiteralE p Text -- ^ String literal expression: "foobar"
+    | NumberLiteralE p Scientific -- ^ Numeric literal expression: 123.4
+    | BoolLiteralE p Bool -- ^ Boolean literal expression: true
+    | NullLiteralE p -- ^ Literal null
+    | VarE p VarName -- ^ Variable reference: foobar
+    | ListE p [Expression a] -- ^ List construct: [ expr, expr, expr ]
+    | ObjectE p [(Expression a, Expression a)] -- ^ Object construct: { expr: expr, expr: expr, ... }
+    | MemberLookupE p Expression a Expression a -- ^ foo[bar] (also dot access)
+    | CallE p Expression a [(Maybe Text, Expression a)] -- ^ foo(bar=baz, quux)
+    | LambdaE p [Text] Expression a -- ^ (foo, bar) -> expr
+    | TernaryE p Expression a Expression a Expression a -- ^ expr ? expr : expr
     deriving (Show)
 -}
 
@@ -125,21 +126,21 @@ instance Monoid Purity where
     mempty = Pure
     mappend = bothPure
 
-pureExpression :: Expression -> Purity
-pureExpression (StringLiteralE _) = Pure
-pureExpression (NumberLiteralE _) = Pure
-pureExpression NullLiteralE = Pure
-pureExpression (ListE items) = mconcat . map pureExpression $ items
-pureExpression (ObjectE pairs) =
+pureExpression :: Expression a -> Purity
+pureExpression (StringLiteralE p _) = Pure
+pureExpression (NumberLiteralE p _) = Pure
+pureExpression (NullLiteralE p) = Pure
+pureExpression (ListE p items) = mconcat . map pureExpression $ items
+pureExpression (ObjectE p pairs) =
     mconcat [ bothPure (pureExpression k) (pureExpression v)
             | (k, v) <- pairs
             ]
-pureExpression (LambdaE args body) = pureExpression body
-pureExpression (TernaryE cond yes no) =
+pureExpression (LambdaE _ args body) = pureExpression body
+pureExpression (TernaryE _ cond yes no) =
     pureExpression cond <> pureExpression yes <> pureExpression no
-pureExpression (MemberLookupE k v) =
+pureExpression (MemberLookupE _ k v) =
     pureExpression k <> pureExpression v
-pureExpression (CallE (VarE name) args) =
+pureExpression (CallE _ (VarE _ name) args) =
     pureFunction name <> mconcat (map (pureExpression . snd) args)
 pureExpression _ = Impure
 
@@ -191,34 +192,35 @@ pureFunctionNames =
     , "urlencode"
     ]
 
-optimizeExpression :: Expression -> Expression
+optimizeExpression :: Expression a -> Expression a
 optimizeExpression = preEvalExpression . expandConstExpressions . optimizeSubexpressions
 
-preEvalExpression :: Expression -> Expression
+preEvalExpression :: Expression a -> Expression a
 preEvalExpression e = fromMaybe e $ do
-    compileTimeEval e >>= gvalToExpression
+    compileTimeEval e >>= gvalToExpression (annotation e)
 
-gvalToExpression :: GVal m -> Maybe Expression
-gvalToExpression g =
+gvalToExpression :: forall a m
+                  . a -> GVal m -> Maybe (Expression a)
+gvalToExpression p g =
     (jsonLiteral =<< asJSON g) <|>
-    (ObjectE <$> (recurseDict =<< asDictItems g)) <|>
-    (ListE <$> (mapM gvalToExpression =<< asList g))
+    (ObjectE p <$> (recurseDict =<< asDictItems g)) <|>
+    (ListE p <$> (mapM (gvalToExpression p) =<< asList g))
     where
-        jsonLiteral :: JSON.Value -> Maybe Expression
-        jsonLiteral (JSON.Bool b) = Just (BoolLiteralE b)
-        jsonLiteral (JSON.String s) = Just (StringLiteralE s)
-        jsonLiteral (JSON.Null) = Just NullLiteralE
-        jsonLiteral (JSON.Number n) = Just (NumberLiteralE n)
+        jsonLiteral :: JSON.Value -> Maybe (Expression a)
+        jsonLiteral (JSON.Bool b) = Just (BoolLiteralE p b)
+        jsonLiteral (JSON.String s) = Just (StringLiteralE p s)
+        jsonLiteral (JSON.Null) = Just (NullLiteralE p)
+        jsonLiteral (JSON.Number n) = Just (NumberLiteralE p n)
         jsonLiteral _ = Nothing
-        recurseDict :: [(Text, GVal m)] -> Maybe [(Expression, Expression)]
+        recurseDict :: [(Text, GVal m)] -> Maybe [(Expression a, Expression a)]
         recurseDict = mapM $ \(key, val) -> do
-            let key' = StringLiteralE key
-            val' <- gvalToExpression val
+            let key' = StringLiteralE p key
+            val' <- gvalToExpression p val
             return (key', val')
 
 
-expandConstExpressions :: Expression -> Expression
-expandConstExpressions e@(TernaryE c t f) =
+expandConstExpressions :: Expression a -> Expression a
+expandConstExpressions e@(TernaryE p c t f) =
     case compileTimeEval c of
         Just gv -> case asBoolean gv of
             True -> optimizeExpression t
@@ -226,31 +228,32 @@ expandConstExpressions e@(TernaryE c t f) =
         _ -> e
 expandConstExpressions e = e
 
-optimizeSubexpressions (ListE xs) = ListE (map optimize xs)
-optimizeSubexpressions (ObjectE xs) = ObjectE [ (optimize k, optimize v) | (k, v) <- xs ]
-optimizeSubexpressions (MemberLookupE k m) = MemberLookupE (optimize k) (optimize m)
-optimizeSubexpressions (CallE f args) = CallE (optimize f) [(n, optimize v) | (n, v) <- args]
-optimizeSubexpressions (LambdaE args body) = LambdaE args (optimize body)
-optimizeSubexpressions (TernaryE c t f) = TernaryE (optimize c) (optimize t) (optimize f)
+optimizeSubexpressions (ListE p xs) = ListE p (map optimize xs)
+optimizeSubexpressions (ObjectE p xs) = ObjectE p [ (optimize k, optimize v) | (k, v) <- xs ]
+optimizeSubexpressions (MemberLookupE p k m) = MemberLookupE p (optimize k) (optimize m)
+optimizeSubexpressions (CallE p f args) = CallE p (optimize f) [(n, optimize v) | (n, v) <- args]
+optimizeSubexpressions (LambdaE p args body) = LambdaE p args (optimize body)
+optimizeSubexpressions (TernaryE p c t f) = TernaryE p (optimize c) (optimize t) (optimize f)
 optimizeSubexpressions e = e
 
-isConstExpression :: Expression -> Bool
-isConstExpression (StringLiteralE _) = True
-isConstExpression (BoolLiteralE _) = True
-isConstExpression NullLiteralE = True
-isConstExpression (ListE xs) = all isConstExpression xs
-isConstExpression (ObjectE xs) = all (\(k,v) -> isConstExpression k && isConstExpression v) xs
-isConstExpression (MemberLookupE k m) = isConstExpression k && isConstExpression m
+isConstExpression :: Expression a -> Bool
+isConstExpression (StringLiteralE p _) = True
+isConstExpression (BoolLiteralE p _) = True
+isConstExpression (NullLiteralE p) = True
+isConstExpression (ListE p xs) = all isConstExpression xs
+isConstExpression (ObjectE p xs) = all (\(k,v) -> isConstExpression k && isConstExpression v) xs
+isConstExpression (MemberLookupE p k m) = isConstExpression k && isConstExpression m
 isConstExpression e = False
 
-compileTimeEval :: Expression -> Maybe (GVal Identity)
-compileTimeEval (StringLiteralE s) = Just . toGVal $ s
-compileTimeEval (NumberLiteralE n) = Just . toGVal $ n
-compileTimeEval (BoolLiteralE b) = Just . toGVal $ b
-compileTimeEval NullLiteralE = Just def
+compileTimeEval :: Expression a -> Maybe (GVal Identity)
+compileTimeEval (StringLiteralE p s) = Just . toGVal $ s
+compileTimeEval (NumberLiteralE p n) = Just . toGVal $ n
+compileTimeEval (BoolLiteralE p b) = Just . toGVal $ b
+compileTimeEval (NullLiteralE p) = Just def
 compileTimeEval e = case pureExpression e of
     Pure -> do
-        let tpl = Template (InterpolationS e) HashMap.empty Nothing
+        let p = annotation e
+        let tpl = Template (InterpolationS p e) HashMap.empty Nothing
         Just . toGVal . runCT $ tpl
     Impure -> Nothing
 
@@ -264,10 +267,10 @@ collectedToGVal :: Collected -> GVal m
 collectedToGVal (Collected []) = def
 collectedToGVal (Collected (x:_)) = marshalGVal x
 
-runCT :: Template -> Collected
+runCT :: Template a -> Collected
 runCT = runGinger ctContext
 
-ctContext :: GingerContext (Writer Collected) Collected
+ctContext :: GingerContext p (Writer Collected) Collected
 ctContext = makeContext' ctLookup ctEncode Nothing
 
 ctLookup :: VarName -> GVal m
