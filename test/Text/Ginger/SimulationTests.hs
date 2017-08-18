@@ -38,8 +38,12 @@ simulationTests = testGroup "Simulation"
             [] [] "- {%- set x=1 -%} -" "--"
         ]
     , testGroup "Literals"
-        [ testCase "String: \"foobar\"" $ mkTestHtml
-            [] [] "{{ \"foobar\" }}" "foobar"
+        [ testGroup "Strings"
+            [ testCase "String: \"foobar\"" $ mkTestHtml
+                [] [] "{{ \"foobar\" }}" "foobar"
+            , testCase "String: \"\\r\\n\\t\\b\"" $ mkTestHtml
+                [] [] "{{ \"\\r\\n\\t\\b\" }}" "\r\n\t\b"
+            ]
         , testGroup "Numbers"
             [ testCase "123" $ mkTestHtml
                 [] [] "{{ 123 }}" "123"
@@ -204,6 +208,25 @@ simulationTests = testGroup "Simulation"
                 "{% try %}{{ dictsort(1, 2, 3, 4, 5) }}{% catch 'SomeOtherError' as exception %}This is wrong{% catch * as exception %}Caught: {{ exception.what }}{% endtry %}"
                 "Caught: ArgumentsError"
         ]
+    , testGroup "Switch"
+        [ testCase "switch 1 of 1, 2, default" $ do
+            mkTestHtml [] []
+                ( "{% switch 1 %}\n" ++
+                  "{% case 1 %}One{% endcase %}\n" ++
+                  "{% case 2 %}Two{% endcase %}\n" ++
+                  "{% default %}Default{% enddefault %}\n" ++
+                  "{% endswitch %}\n"
+                )
+                "One"
+        , testCase "switch 1 of 1, 2" $ do
+            mkTestHtml [] []
+                ( "{% switch 1 %}\n" ++
+                  "{% case 1 %}One{% endcase %}\n" ++
+                  "{% case 2 %}Two{% endcase %}\n" ++
+                  "{% endswitch %}\n"
+                )
+                "One"
+        ]
     , testGroup "Comparisons"
         [ testCase "if 1 == 1 then \"yes\" else \"no\"" $ do
             mkTestHtml [] [] "{% if (1 == 1) %}yes{% else %}no{% endif %}" "yes"
@@ -297,6 +320,14 @@ simulationTests = testGroup "Simulation"
             mkTestHtml [] []
                 "{{ \"this is the end of the world\"|capitalize }}"
                 "This is the end of the world"
+        , testCase "\"upper\"" $ do
+            mkTestHtml [] []
+                "{{ \"this is the end of the world\"|upper }}"
+                "THIS IS THE END OF THE WORLD"
+        , testCase "\"lower\"" $ do
+            mkTestHtml [] []
+                "{{ \"This is the END OF THE WORLD\"|lower }}"
+                "this is the end of the world"
         , testGroup "\"center\""
             [ testCase "extra space" $ do
                 mkTestHtml [] []
@@ -481,6 +512,20 @@ simulationTests = testGroup "Simulation"
                 mkTestHtml [] []
                     "{{ \"%s - %s\"|format('Hello?', 'Foo!') }}"
                     "Hello? - Foo!"
+            ]
+        , testGroup "\"map\""
+            [ testCase "map function over list" $ do
+                mkTestHtml [] []
+                    "{{ map(['FOO', 'BAR'], lower) }}"
+                    "foobar"
+            , testCase "map function over dictionary" $ do
+                mkTestHtml [] []
+                    "{{ map({'foo': 'bar'}, upper)['foo'] }}"
+                    "BAR"
+            , testCase "map to extract attribute" $ do
+                mkTestHtml [] []
+                    "{{ map([{'name':'foo'}, {'name': 'bar'}], attribute='name') }}"
+                    "foobar"
             ]
         , testGroup "\"not-equals\""
             [ testCase "all equal" $ do
@@ -741,6 +786,126 @@ simulationTests = testGroup "Simulation"
         , testCase "after exiting local scope" $ do
             mkTestHtml [] [] "{% set bedazzle = \"no\" %}{% scope %}{% set bedazzle = \"ya\" %}{% endscope %}{{ bedazzle }}" "no"
         ]
+    , testGroup "Indentation"
+        [ testCase "stripping leading spaces" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% indent %}"
+                    , "  aaaaa"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "aaaaa"
+                    , "aaaaa"
+                    ])
+        , testCase "explicit indent string" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% indent %}"
+                    , "    aaaaa"
+                    , "{% indent '    ' %}"
+                    , "    aaaaa"
+                    , "{% endindent %}"
+                    , "    aaaaa"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "aaaaa"
+                    , "    aaaaa"
+                    , "aaaaa"
+                    ])
+        , testCase "implicit indent string" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% indent %}"
+                    , "    aaaaa"
+                    , "{% indent %}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    , "    aaaaa"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "aaaaa"
+                    , "  aaaaa"
+                    , "aaaaa"
+                    ])
+        , testCase "explicit non-whitespace indent string" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% indent %}"
+                    , "    aaaaa"
+                    , "{% indent '--- ' %}"
+                    , "    aaaaa"
+                    , "{% endindent %}"
+                    , "    aaaaa"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "aaaaa"
+                    , "--- aaaaa"
+                    , "aaaaa"
+                    ])
+        , testCase "explicit indent string from more complex expression" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% indent %}"
+                    , "  aaaaa"
+                    , "{% indent (17 + 4) ~ ' '%}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "aaaaa"
+                    , "21 aaaaa"
+                    , "aaaaa"
+                    ])
+        , testCase "discarding level-0 indents" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% indent 'nope' %}"
+                    , "  aaaaa"
+                    , "{% indent %}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    , "  aaaaa"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "aaaaa"
+                    , "  aaaaa"
+                    , "aaaaa"
+                    ])
+        , testCase "indentation levels inherited at runtime (dynamic)" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{%- macro foobar() %}"
+                    , "{% indent '  ' %}"
+                    , "<div>"
+                    , "{% indent '  ' %}"
+                    , "<h1>Hello!</h1>"
+                    , "{% endindent %}"
+                    , "</div>"
+                    , "{% endindent %}"
+                    , "{% endmacro -%}"
+                    , ""
+                    , "{% indent '' %}"
+                    , "<body>"
+                    , "{{ foobar() }}"
+                    , "</body>"
+                    , "{% endindent %}"
+                    ])
+                (Text.unlines
+                    [ "<body>"
+                    , "  <div>"
+                    , "    <h1>Hello!</h1>"
+                    , "  </div>"
+                    , "</body>"
+                    ])
+        ]
     , testGroup "Macros"
         [ testCase "simple" $ do
             mkTestHtml [] []
@@ -814,6 +979,198 @@ simulationTests = testGroup "Simulation"
                 "{{ '<>' }}{{ 1 }}{{ {'foo': true} }}"
                 "[\"<>\",1,{\"foo\":true}]"
         ]
+    , testGroup "Script mode"
+        [ testCase "empty script block" $
+            mkTestHtml
+                []
+                []
+                "{% script %}{% endscript %}"
+                ""
+        , testGroup "comments"
+            [ testCase "simple" $
+                mkTestHtml
+                    []
+                    []
+                    "{% script %}  # this is a comment\n{% endscript %}"
+                    ""
+            , testCase "multiple" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "23; # this is a comment"
+                        , " ## this is a comment, too"
+                        , "{% endscript %}"
+                        ])
+                    ""
+            , testCase "inside expressions" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "23 # this is a comment"
+                        , " ## this is a comment, too"
+                        , " ;"
+                        , "{% endscript %}"
+                        ])
+                    ""
+            ]
+        , testCase "echo" $
+            mkTestHtml
+                []
+                []
+                "{% script %}echo('Hi!');{% endscript %}"
+                "Hi!"
+        , testCase "expression statement" $
+            mkTestHtml
+                []
+                []
+                "{% script %}12 + 15;{% endscript %}"
+                ""
+        , testCase "grouped statements" $
+            mkTestHtml
+                []
+                []
+                "{% script %}{ \n 1; 2; 3; 4; }{% endscript %}"
+                ""
+        , testCase "if" $
+            mkTestHtml
+                []
+                []
+                "{% script %}if (true) { echo('Hi!'); }{% endscript %}"
+                "Hi!"
+        , testCase "if/else" $
+            mkTestHtml
+                []
+                []
+                "{% script %}if (false) echo ('nope'); else { echo('Hi!'); }{% endscript %}"
+                "Hi!"
+        , testCase "switch" $
+            mkTestHtml
+                []
+                []
+                "{% script %}switch ('hi') { case 'hi': echo('Hello'); case 'no': echo('Nope'); default: echo('Default'); }{% endscript %}"
+                "Hello"
+        , testCase "for" $
+            mkTestHtml
+                []
+                []
+                "{% script %}for (i in [1,2,3]) echo(i);{% endscript %}"
+                "123"
+        , testCase "for/else (loop)" $
+            mkTestHtml
+                []
+                []
+                "{% script %}for (i in [1,2,3]) echo(i); else echo('none');{% endscript %}"
+                "123"
+        , testCase "for/else (recover)" $
+            mkTestHtml
+                []
+                []
+                "{% script %}for (i in null) echo(i); else echo('none');{% endscript %}"
+                "none"
+        , testCase "set" $
+            mkTestHtml
+                []
+                []
+                "{% script %}set a = 'Hi' ~ '!'; echo(a);{% endscript %}"
+                "Hi!"
+        , testCase "include" $ do
+            mkTestHtml [] [("./features-included.html", "This is an included template")]
+                "{% script %}include('features-included.html');{% endscript %}"
+                "This is an included template"
+        , testCase "macro" $ do
+            mkTestHtml [] []
+                (unlines
+                    [ "{% script %}"
+                    , "macro greet(name) {"
+                    , "echo('Hello, ');"
+                    , "echo(name);"
+                    , "}"
+                    , ""
+                    , "echo(greet('tobias'));"
+                    , "{% endscript %}"
+                    ])
+                "Hello, tobias"
+        , testGroup "Script statment blocks"
+            [ testCase "baseline" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "set bedazzle = 'no';"
+                        , "echo(bedazzle);"
+                        , "{% endscript %}"
+                        ])
+                    "no"
+            , testCase "inside local scope" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "set bedazzle = 'no';"
+                        , "{"
+                        , "    set bedazzle = 'ya';"
+                        , "    echo(bedazzle);"
+                        , "}"
+                        , "{% endscript %}"
+                        ])
+                    "ya"
+            , testCase "after exiting block" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "set bedazzle = 'no';"
+                        , "{"
+                        , "    set bedazzle = 'ya';"
+                        , "}"
+                        , "echo(bedazzle);"
+                        , "{% endscript %}"
+                        ])
+                    "ya"
+            ]
+        , testGroup "Explicit Local Scopes"
+            [ testCase "baseline" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "set bedazzle = 'no';"
+                        , "echo(bedazzle);"
+                        , "{% endscript %}"
+                        ])
+                    "no"
+            , testCase "inside local scope" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "set bedazzle = 'no';"
+                        , "scope {"
+                        , "    set bedazzle = 'ya';"
+                        , "    echo(bedazzle);"
+                        , "}"
+                        , "{% endscript %}"
+                        ])
+                    "ya"
+            , testCase "after exiting local scope" $ do
+                mkTestHtml [] []
+                    (unlines
+                        [ "{% script %}"
+                        , "set bedazzle = 'no';"
+                        , "scope {"
+                        , "    set bedazzle = 'ya';"
+                        , "}"
+                        , "echo(bedazzle);"
+                        , "{% endscript %}"
+                        ])
+                    "no"
+            ]
+        ]
+    , testGroup "do expressions"
+        [ testCase "single statement" $ do
+            mkTestHtml [] []
+                "{{ do 'hello'; }}"
+                "hello"
+        , testCase "statement block" $ do
+            mkTestHtml [] []
+                "{{ do { 'hello'; 'world'; } }}"
+                "world"
+        ]
     ]
 
 mkTestHtml :: [(VarName, GVal (Run IO Html))]
@@ -836,7 +1193,7 @@ mkTestJSON :: [(VarName, GVal (Run IO [JSON.Value]))]
            -> Text
            -> Assertion
 mkTestJSON = mkTest
-    (\l w -> makeContextM' l w toJSONSingleton) encodeText
+    (\l w -> makeContextM' l w toJSONSingleton Nothing) encodeText
     where
         toJSONSingleton = (:[]) . JSON.toJSON
 

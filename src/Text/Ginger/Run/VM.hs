@@ -7,7 +7,7 @@ import Text.Ginger.AST
 import Text.Ginger.GVal
 import Data.Monoid ( (<>) )
 import Control.Monad.State (MonadState (..), get, gets, modify)
-import Control.Monad.Reader (asks)
+import Control.Monad.Reader (asks, local)
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 
@@ -28,6 +28,12 @@ withLocalScope a = do
     r <- a
     modify (\s -> s { rsScope = scope })
     return r
+
+-- | Override the encoder used for converting 'GVal's to the output type.
+-- This can be used for things like temporarily disabling HTML encoding.
+withEncoder :: (ContextEncodable h, Monad m) => (GVal (Run m h) -> h) -> Run m h a -> Run m h a
+withEncoder encoder =
+    local (\context -> context { contextEncode = encode })
 
 setVar :: Monad m => VarName -> GVal (Run m h) -> Run m h ()
 setVar name val = do

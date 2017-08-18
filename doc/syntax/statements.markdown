@@ -78,6 +78,67 @@ exactly where the `include` is written.
   value from inside the scope while inside, but revert to the value from
   outside after leaving the scope
 
+# `indent`
+
+`{% indent %}...{% endindent %}` creates an indentation scope using the default
+indent (two spaces)
+
+`{% indent expr %}...{% endindent %}` interprets `expr` as an indent and
+creates a matching indentation scope.
+
+Indentation blocks can be nested.
+
+Existing indentation in the template source is removed inside `{% indent %}`
+blocks, based on the indentation of the first line after the opening
+`{% indent %}` tag. After that first line, all subsequent lines that begin with
+the same indent will have it stripped, while any additional whitespace will be
+kept, as will whitespace sequences that differ from the first line.
+
+After that, indentation blocks add one level of indentation, except for the
+outermost one, which serves just to establish the indentation context in the
+first place.
+
+Indentation blocks cover all line endings in the output, regardless of whether
+they come from literal output (bare text), interpolations, macro invocations,
+or includes.
+
+Indentation level is determined from the runtime context, so if you put an
+indentation block inside a macro and call it from another indentation block,
+the two will nest as if you had written the macro body directly into the
+calling context. This means that the following:
+
+```ginger
+{%- macro foobar %}
+{% indent '' %}
+<div>
+{% indent '  ' %}
+<h1>Hello!</h1>
+{% endindent %}
+</div>
+{% endindent %}
+{% endmacro -%}
+
+
+{% indent %}
+<body>
+{{ foobar() }}
+</body>
+{% endindent }
+```
+
+...will render as:
+
+```html
+<body>
+  <div>
+    <h1>Hello!</h1>
+  </div>
+</body>
+```
+
+Thus, `{% indent %}` allows authors to write reusable template code that
+produces correct indentation.
+
 # `macro`
 
 `{% macro name(arg0,...) %}...{% endmacro %}` defines a macro named `name`.
@@ -285,3 +346,13 @@ non-function as a filter.
 
 - `what`: Exception type
 - `message`: Human-readable error message
+
+# `script`
+
+The `{% script %}` statement introduces a Script Mode Block. Inside a script
+block, Ginger uses an alternate syntax that is more similar to an imperative
+programming language like C or JavaScript, and less similar to a regular
+template language. Most of the statements are still available, but the syntax
+is different: for example, `{% for i in items %}{{ item }}{% endfor %}` becomes
+`for (i in items) { echo(item); }`. For full details, see [Script
+Mode](script.html).

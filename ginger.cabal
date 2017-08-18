@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                ginger
-version:             0.3.6.0
+version:             0.5.3.0
 synopsis:            An implementation of the Jinja2 template language in Haskell
 description:         Ginger is Jinja, minus the most blatant pythonisms. Wants
                      to be feature complete, but isn't quite there yet.
@@ -14,8 +14,11 @@ maintainer:          tdammers@gmail.com
 -- copyright:
 category:            Text
 build-type:          Simple
--- extra-source-files:
+extra-source-files:  README.md
+                  ,  CHANGELOG.md
+data-files: test/fixtures/*.json
 cabal-version:       >=1.10
+bug-reports:         https://github.com/tdammers/ginger/issues
 
 library
   exposed-modules: Text.Ginger
@@ -31,7 +34,7 @@ library
   other-modules: Text.Ginger.Run.Type
                , Text.Ginger.Run.Builtins
   -- other-extensions:
-  build-depends: base >=4.5 && <5
+  build-depends: base >=4.8 && <5
                , aeson
                , bytestring
                , data-default >= 0.5
@@ -42,7 +45,7 @@ library
                , safe >= 0.3
                , scientific >= 0.3
                , text
-               , time
+               , time >= 0.1.6.0
                , transformers >= 0.3
                , unordered-containers >= 0.2.5
                , utf8-string

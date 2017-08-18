@@ -166,3 +166,14 @@ This creates a function value which, when called, binds arguments to the
 argument names `argName0` through `argNameN`, and evaluates `expression` in
 that context.
 
+# Do expressions
+
+A `do` expression lifts statements into expressions, that it, it allows you to
+execute a statement (or a block of statements) and use its return value as the
+value of the expression. Inside the `do` block, statements are written in
+[Script Mode Syntax](script.html).
+
+    {% set result = do { echo "hello"; "Said hello"; } %}
+
+This will first print "hello", and then return the string "Said hello", which
+is then assigned to the variable `result`.

@@ -261,6 +261,39 @@ gfnReplace args =
             return . toGVal $ Text.replace search replace str
         _ -> throwError $ ArgumentsError "replace" "expected: (str, search, replace)"
 
+gfnMap :: Monad m => Function (Run m h)
+gfnMap args = do
+    let parsedArgs = extractArgsDefL
+            [ ("collection", def)
+            , ("function", def)
+            , ("attribute", def)
+            ]
+            args
+    (dictMay, listMay, functionMay, attributeMay) <- case parsedArgs of
+        Right [collection, function, attribute] ->
+            return ( asDictItems collection
+                   , asList collection
+                   , asFunction function
+                   , Just (asText attribute)
+                   )
+        _ ->
+            fail "Invalid args to map()"
+    mapFunction <- case (functionMay, attributeMay) of
+        (Just f, _) -> return f
+        (Nothing, Just key) -> return $ \case
+            (_, item):_ ->
+                return $ lookupLooseDef def (toGVal key) item
+            _ -> 
+                return def
+        _ -> fail "You have to pass a function or an attribute"
+    case (dictMay, listMay) of
+        (Just items, _) ->
+            dict <$> forM items
+                (\(key, value) -> (key,) <$> mapFunction [(Nothing, value)])
+        (Nothing, Just items) ->
+            toGVal <$> mapM (mapFunction . (:[]) . (Nothing,)) items
+            
+
 gfnSort :: Monad m => Function (Run m h)
 gfnSort args = do
     let parsedArgs = extractArgsDefL
