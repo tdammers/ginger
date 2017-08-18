@@ -171,6 +171,43 @@ simulationTests = testGroup "Simulation"
         , testCase "if false then \"yes\" else if true then \"maybe\" else \"no\"" $ do
             mkTestHtml [] [] "{% if false %}yes{% elif true %}maybe{% else %}no{% endif %}" "maybe"
         ]
+    , testGroup "Exceptions"
+        [ testCase "try/catch, no exception" $ do
+            mkTestHtml
+                [] []
+                "{% try %}Hello{% catch %}World{% endtry %}"
+                "Hello"
+        , testCase "try/finally, no exception" $ do
+            mkTestHtml
+                [] []
+                "{% try %}Hello{% finally %} world{% endtry %}"
+                "Hello world"
+        , testCase "try/catch, trigger arguments exception" $ do
+            mkTestHtml
+                [] []
+                "{% try %}{{ dictsort(1, 2, 3, 4, 5) }}{% catch * as exception %}Caught: {{ exception.what }}{% endtry %}"
+                "Caught: ArgumentsError"
+        , testCase "try/finally, trigger arguments exception" $ do
+            mkTestHtml
+                [] []
+                "{% try %}{{ dictsort(1, 2, 3, 4, 5) }} Nope!{% finally %}All clear{% endtry %}"
+                "All clear"
+        , testCase "try/catch, catch selectively (string syntax)" $ do
+            mkTestHtml
+                [] []
+                "{% try %}{{ dictsort(1, 2, 3, 4, 5) }}{% catch * as exception %}Caught: {{ exception.what }}{% endtry %}"
+                "Caught: ArgumentsError"
+        , testCase "try/catch, catch selectively (identifier syntax)" $ do
+            mkTestHtml
+                [] []
+                "{% try %}{{ dictsort(1, 2, 3, 4, 5) }}{% catch 'ArgumentsError' as exception %}Caught: {{ exception.what }}{% endtry %}"
+                "Caught: ArgumentsError"
+        , testCase "try/catch, skip non-matching catches" $ do
+            mkTestHtml
+                [] []
+                "{% try %}{{ dictsort(1, 2, 3, 4, 5) }}{% catch 'SomeOtherError' as exception %}This is wrong{% catch * as exception %}Caught: {{ exception.what }}{% endtry %}"
+                "Caught: ArgumentsError"
+        ]
     , testGroup "Switch"
         [ testCase "switch 1 of 1, 2, default" $ do
             mkTestHtml [] []

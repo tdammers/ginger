@@ -89,7 +89,8 @@ import Text.Ginger.Run.FuncUtils
 import Text.Ginger.Run.VM
 import Text.Printf
 import Text.PrintfA
-import Text.Ginger.Parse (parseGinger)
+import Text.Ginger.Parse (parseGinger, ParserError)
+import Control.Monad.Except (runExceptT, throwError, catchError)
 
 import Data.Text (Text)
 import Data.String (fromString)
@@ -177,7 +178,10 @@ easyRenderM :: ( Monad m
                , ToGVal (Run p m h) v
                , ToGVal (Run p m h) h
                )
-            => (h -> m ()) -> v -> Template p -> m (GVal (Run p m h))
+            => (h -> m ())
+            -> v
+            -> Template p
+            -> m (Either RuntimeError (GVal (Run p m h)))
 easyRenderM emit context template =
     runGingerT (easyContext emit context) template
 
@@ -204,14 +208,16 @@ runGinger :: (ToGVal (Run p (Writer h) h) h, Monoid h)
           => GingerContext p (Writer h) h
           -> Template p
           -> h
-runGinger context template = execWriter $ runGingerT context template
+runGinger context template =
+    execWriter $ runGingerT context template
 
 -- | Monadically run a Ginger template. The @m@ parameter is the carrier monad.
 runGingerT :: (ToGVal (Run p m h) h, Monoid h, Monad m, Applicative m, Functor m)
            => GingerContext p m h
            -> Template p
-           -> m (GVal (Run p m h))
-runGingerT context tpl = runReaderT (evalStateT (runTemplate tpl) (defRunState tpl)) context
+           -> m (Either RuntimeError (GVal (Run p m h)))
+runGingerT context tpl =
+    runReaderT (evalStateT (runExceptT (runTemplate tpl)) (defRunState tpl)) context
 
 -- | Find the effective base template of an inheritance chain
 baseTemplate :: Template p -> Template p
@@ -224,7 +230,8 @@ baseTemplate t =
 runTemplate :: (ToGVal (Run p m h) h, Monoid h, Monad m, Applicative m, Functor m)
             => Template p
             -> Run p m h (GVal (Run p m h))
-runTemplate = runStatement . templateBody . baseTemplate
+runTemplate =
+    runStatement . templateBody . baseTemplate
 
 -- | Run an action within a different template context.
 withTemplate :: (Monad m, Applicative m, Functor m)
@@ -277,7 +284,7 @@ lookupBlock blockName = do
     tpl <- gets rsCurrentTemplate
     let blockMay = resolveBlock blockName tpl
     case blockMay of
-        Nothing -> fail $ "Block " <> Text.unpack blockName <> " not defined"
+        Nothing -> throwError $ UndefinedBlockError blockName
         Just block -> return block
     where
         resolveBlock :: VarName -> Template p -> Maybe (Block p)
@@ -391,7 +398,7 @@ runStatement' (ForS _ varNameIndex varNameValue itereeExpr body) = do
                                  . fmap snd
                                  $ args
                 loop :: [(Maybe Text, GVal (Run p m h))] -> Run p m h (GVal (Run p m h))
-                loop [] = fail "Invalid call to `loop`; at least one argument is required"
+                loop [] = throwError $ ArgumentsError "loop" "at least one argument is required"
                 loop ((_, loopee):_) = go (Prelude.succ recursionDepth) loopee
                 iteration :: (Int, (GVal (Run p m h), GVal (Run p m h)))
                           -> Run p m h (GVal (Run p m h))
@@ -421,6 +428,24 @@ runStatement' (ForS _ varNameIndex varNameValue itereeExpr body) = do
 
 runStatement' (PreprocessedIncludeS _ tpl) =
     withTemplate tpl $ runTemplate tpl
+
+runStatement' (TryCatchS _ tryS catchesS finallyS) = do
+    result <- (runStatement tryS) `catchError` handle catchesS
+    runStatement finallyS
+    return result
+    where
+        handle [] e = return def
+        handle ((Catch whatMay varNameMay catchS):catches) e = do
+            let what = runtimeErrorWhat e
+            if whatMay == Just what || whatMay == Nothing
+                then
+                    withLocalScope $ do
+                        case varNameMay of
+                            Nothing -> return ()
+                            Just varName -> setVar varName (toGVal e)
+                        runStatement catchS
+                else
+                    handle catches e
 
 -- | Deeply magical function that converts a 'Macro' into a Function.
 macroToGVal :: forall m h p
@@ -574,7 +599,7 @@ gfnEval args =
                 ]
                 args
     in case extracted of
-        Left _ -> fail "Invalid arguments to 'dictsort'"
+        Left _ -> throwError $ ArgumentsError "eval" "expected: (src, context)"
         Right [gSrc, gContext] -> do
             result' <- parseGinger
                 (Prelude.const . return $ Nothing) -- include resolver
@@ -583,7 +608,7 @@ gfnEval args =
             pos <- gets rsCurrentSourcePos
             let result = fmap (Prelude.const pos) <$> result'
             tpl <- case result of
-                Left err -> fail $ "Error in evaluated code: " ++ show err
+                Left err -> throwError $ EvalParseError err
                 Right t -> return t
             let localLookup varName = return $
                     lookupLooseDef def (toGVal varName) gContext

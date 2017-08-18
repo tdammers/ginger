@@ -24,6 +24,8 @@ module Text.Ginger.Run.Type
 , liftRun2
 , Run (..)
 , RunState (..)
+, RuntimeError (..)
+, runtimeErrorWhat
 -- * The Newlines type
 -- | Required for handling indentation
 , Newlines (..)
@@ -63,9 +65,12 @@ import qualified Data.List as List
 import Text.Ginger.AST
 import Text.Ginger.Html
 import Text.Ginger.GVal
+import Text.Ginger.Parse (ParserError (..), sourceLine, sourceColumn, sourceName)
 import Text.Printf
 import Text.PrintfA
 import Data.Scientific (formatScientific)
+import Control.Monad.Except (ExceptT (..))
+import Data.Default (Default (..), def)
 
 import Data.Char (isSpace)
 import Data.Text (Text)
@@ -77,6 +82,7 @@ import Control.Monad.Identity
 import Control.Monad.Writer
 import Control.Monad.Reader
 import Control.Monad.State
+import Control.Monad.Except
 import Control.Applicative
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
@@ -347,12 +353,69 @@ hoistRunState fwd rev rs =
         , rsCurrentSourcePos = rsCurrentSourcePos rs
         }
 
+data RuntimeError = RuntimeError Text -- ^ Generic runtime error
+                  | UndefinedBlockError Text -- ^ Tried to use a block that isn't defined
+                  | ArgumentsError -- ^ Invalid arguments to function
+                        Text -- ^ name of function being called
+                        Text -- ^ explanation
+                  | EvalParseError ParserError
+                  | NotAFunctionError
+        deriving (Show)
+
+instance Default RuntimeError where
+    def = RuntimeError ""
+
+instance ToGVal m RuntimeError where
+    toGVal = runtimeErrorToGVal
+
+runtimeErrorWhat :: RuntimeError -> Text
+runtimeErrorWhat (ArgumentsError funcName explanation) = "ArgumentsError"
+runtimeErrorWhat (EvalParseError e) = "EvalParseError"
+runtimeErrorWhat (RuntimeError msg) = "RuntimeError"
+runtimeErrorWhat (UndefinedBlockError blockName) = "UndefinedBlockError"
+runtimeErrorWhat NotAFunctionError = "NotAFunctionError"
+
+runtimeErrorToGVal :: RuntimeError -> GVal m
+runtimeErrorToGVal (RuntimeError msg) =
+    rteGVal "RuntimeError"
+        msg []
+runtimeErrorToGVal (UndefinedBlockError blockName) =
+    rteGVal "UndefinedBlockError"
+        ("undefined block: '" <> blockName <> "'")
+        [ "block" ~> blockName
+        ]
+runtimeErrorToGVal (ArgumentsError funcName explanation) =
+    rteGVal "ArgumentsError"
+        ("invalid arguments to function '" <> funcName <> "': " <> explanation)
+        [ "explanation" ~> explanation
+        , "function" ~> funcName
+        ]
+runtimeErrorToGVal (EvalParseError e) =
+    rteGVal "EvalParseError"
+        ("error parsing eval()-ed code: " <> Text.pack (peErrorMessage e))
+        [ "errorMessage" ~> peErrorMessage e
+        , "source" ~> (sourceName <$> peSourcePosition e)
+        , "line" ~> (sourceLine <$> peSourcePosition e)
+        , "col" ~> (sourceColumn <$> peSourcePosition e)
+        ]
+runtimeErrorToGVal NotAFunctionError =
+    rteGVal "NotAFunctionError"
+        ("attempted to call something that is not a function")
+        []
+
+rteGVal :: Text -> Text -> [(Text, GVal m)] -> GVal m
+rteGVal what msg extra =
+    (dict $
+        [ "what" ~> what
+        , "message" ~> msg
+        ] ++ extra) { asText = msg }
+
 -- | Internal type alias for our template-runner monad stack.
-type Run p m h = StateT (RunState p m h) (ReaderT (GingerContext p m h) m)
+type Run p m h = ExceptT RuntimeError (StateT (RunState p m h) (ReaderT (GingerContext p m h) m))
 
 -- | Lift a value from the host monad @m@ into the 'Run' monad.
 liftRun :: Monad m => m a -> Run p m h a
-liftRun = lift . lift
+liftRun = lift . lift . lift
 
 -- | Lift a function from the host monad @m@ into the 'Run' monad.
 liftRun2 :: Monad m => (a -> m b) -> a -> Run p m h b
@@ -368,10 +431,10 @@ hoistRun fwd rev action = do
     let contextH = hoistContext rev fwd contextT
     stateT <- get
     let stateH = hoistRunState rev fwd stateT
-    (x, stateH') <- lift . lift $ runReaderT (runStateT action stateH) contextH
+    (x, stateH') <- lift . lift . lift $ runReaderT (runStateT (runExceptT action) stateH) contextH
     let stateT' = hoistRunState fwd rev stateH'
     put stateT'
-    return x
+    Prelude.either throwError return x
 
 warn :: (Monad m) => Text -> Run p m h ()
 warn msg = do
@@ -381,4 +444,3 @@ warn msg = do
 warnFromMaybe :: Monad m => Text -> a -> Maybe a -> Run p m h a
 warnFromMaybe msg d Nothing = warn msg >> return d
 warnFromMaybe _ d (Just x) = return x
-

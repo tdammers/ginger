@@ -49,6 +49,7 @@ data Statement a
     | BlockRefS a VarName
     | PreprocessedIncludeS a (Template a) -- ^ {% include "template" %}
     | NullS a -- ^ The do-nothing statement (NOP)
+    | TryCatchS a (Statement a) [CatchBlock a] (Statement a) -- ^ Try / catch / finally
     deriving (Show, Functor)
 
 stmtAnnotation (MultiS a _) = a
@@ -65,6 +66,16 @@ stmtAnnotation (DefMacroS a _ _) = a
 stmtAnnotation (BlockRefS a _) = a
 stmtAnnotation (PreprocessedIncludeS a _) = a
 stmtAnnotation (NullS a) = a
+stmtAnnotation (TryCatchS a _ _ _) = a
+
+-- | A @catch@ block
+data CatchBlock a =
+    Catch
+        { catchWhat :: Maybe Text
+        , catchCaptureAs :: Maybe VarName
+        , catchBody :: Statement a
+        }
+        deriving (Show, Functor)
 
 -- | Expressions, building blocks for the expression minilanguage.
 data Expression a

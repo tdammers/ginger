@@ -51,6 +51,7 @@ import Control.Monad.Identity
 import Control.Monad.Writer
 import Control.Monad.Reader
 import Control.Monad.State
+import Control.Monad.Except (throwError)
 import Control.Applicative
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
@@ -244,7 +245,7 @@ gfnSlice args =
                     Nothing ->
                         return . toGVal . Text.pack $
                             slice (Text.unpack $ asText slicee) startInt lengthInt
-        _ -> fail "Invalid arguments to 'slice'"
+        _ -> throwError $ ArgumentsError "slice" "expected: (slicee, start=0, length=null)"
 
 gfnReplace :: Monad m => Function (Run p m h)
 gfnReplace args =
@@ -261,7 +262,7 @@ gfnReplace args =
                 search = asText searchG
                 replace = asText replaceG
             return . toGVal $ Text.replace search replace str
-        _ -> fail "Invalid arguments to 'replace'"
+        _ -> throwError $ ArgumentsError "replace" "expected: (str, search, replace)"
 
 gfnMap :: Monad m => Function (Run p m h)
 gfnMap args = do
@@ -310,8 +311,7 @@ gfnSort args = do
                    , sortKey
                    , asBoolean reverseG
                    )
-        _ ->
-            fail "Invalid args to sort()"
+        _ -> throwError $ ArgumentsError "sort" "expected: (sortee, by, reverse)"
     let -- extractByFunc :: Maybe ((Text, GVal (Run p m h)) -> Run p m h (GVal (Run p m h)))
         extractByFunc = do
             f <- asFunction sortKey
@@ -559,7 +559,7 @@ gfnDateFormat args =
                     return . toGVal $ formatTime locale fmt . convertTZ tzMay <$> dateMay
                 Nothing -> do
                     return . toGVal $ convertTZ tzMay <$> dateMay
-        _ -> fail "Invalid arguments to 'date'"
+        _ -> throwError $ ArgumentsError "date" "expected: (date, format, tz=null, locale=null)"
     where
         convertTZ :: Maybe TimeZone -> ZonedTime -> ZonedTime
         convertTZ Nothing = id
@@ -581,7 +581,7 @@ gfnFilter :: Monad m => Function (Run p m h)
 gfnFilter [] = return def
 gfnFilter [(_, xs)] = return xs
 gfnFilter ((_, xs):(_, p):args) = do
-    pfnG <- maybe (fail "Not a function") return (asFunction p)
+    pfnG <- maybe (throwError NotAFunctionError) return (asFunction p)
     let pfn x = asBoolean <$> pfnG ((Nothing, x):args)
         xsl = fromMaybe [] (asList xs)
     filtered <- filterM pfn xsl
@@ -607,10 +607,14 @@ gfnDictsort args =
                 "key" -> return True
                 "value" -> return False
                 "val" -> return False
-                x -> fail $ "Invalid value for 'dictsort()' argument 'by': " ++ show x
+                x -> throwError $ ArgumentsError "dictsort"
+                        ( "argument 'by' must be one of 'key', 'value', 'val', " <>
+                          "but found '" <>
+                          x <> "'"
+                        )
             let items = fromMaybe [] $ asDictItems gDict
             let projection =
                     (if caseSensitive then id else Text.toUpper) .
                     (if sortByKey then fst else (asText . snd))
             return . orderedDict . List.sortOn projection $ items
-        _ -> fail "Invalid arguments to 'dictsort'"
+        _ -> throwError $ ArgumentsError "dictsort" "expected: (dict, case_sensitive=false, by=null)"

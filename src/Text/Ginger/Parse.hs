@@ -254,6 +254,7 @@ scriptStatementBlockP = do
 statementP :: Monad m => Parser m (Statement SourcePos)
 statementP = interpolationStmtP
            <|> commentStmtP
+           <|> tryCatchStmtP
            <|> ifStmtP
            <|> switchStmtP
            <|> setStmtP
@@ -429,6 +430,55 @@ scriptElifP = do
     spacesOrComment
     falseStmt <- scriptElifP <|> scriptElseP <|> (NullS <$> getPosition)
     return $ IfS pos condExpr trueStmt falseStmt
+
+tryCatchStmtP :: Monad m => Parser m (Statement SourcePos)
+tryCatchStmtP = do
+    pos <- getPosition
+    try $ simpleTagP "try"
+    tryS <- statementsP
+    catchesS <- many catchBranchP
+    finallyS <- finallyBranchP <|> (NullS <$> getPosition)
+    simpleTagP "endtry"
+    return $ TryCatchS pos tryS catchesS finallyS
+
+catchBranchP :: Monad m => Parser m (CatchBlock SourcePos)
+catchBranchP = do
+    (what, captureName) <- try $
+        fancyTagP "catch" (try catchHeaderP <|> return (Nothing, Nothing))
+    body <- statementsP
+    return $ Catch what captureName body
+
+suchThat :: Monad m => (a -> Bool) -> Parser m a -> Parser m a
+suchThat p action = do
+    val <- action
+    if p val then return val else fail "Requirement not met"
+
+catchHeaderP :: Monad m => Parser m (Maybe Text, Maybe VarName)
+catchHeaderP = do
+    spaces
+    what <- catchWhatP
+    spaces
+    captureName <- catchCaptureP
+    return $ (what, captureName)
+
+catchWhatP :: Monad m => Parser m (Maybe Text)
+catchWhatP =
+    (Nothing <$ char '*') <|>
+    (Just . Text.pack <$> try stringLiteralP) <|>
+    (Just <$> try identifierP)
+
+catchCaptureP :: Monad m => Parser m (Maybe VarName)
+catchCaptureP = optionMaybe $ do
+    try (string "as" >> notFollowedBy identCharP)
+    spaces
+    identifierP
+
+finallyBranchP :: Monad m => Parser m (Statement SourcePos)
+finallyBranchP = do
+    try $ simpleTagP "finally"
+    statementsP
+
+-- TODO: try/catch/finally in script mode
 
 switchStmtP :: Monad m => Parser m (Statement SourcePos)
 switchStmtP = do
