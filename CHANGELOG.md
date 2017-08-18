@@ -1,3 +1,13 @@
+## 0.6.0.0
+
+- Exceptions / exception handling.
+
+## 0.5.3.0
+
+- Marshalling and hoisting: it is now possible to fully marshal `GVal`s between
+  arbitrary carrier monads, as long as suitable conversion functions are
+  provided.
+
 ## 0.5.2.0
 
 - Added map(), upper(), lower() functions
