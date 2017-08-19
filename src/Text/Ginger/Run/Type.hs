@@ -355,9 +355,8 @@ hoistRunState fwd rev rs =
 
 data RuntimeError = RuntimeError Text -- ^ Generic runtime error
                   | UndefinedBlockError Text -- ^ Tried to use a block that isn't defined
-                  | ArgumentsError -- ^ Invalid arguments to function
-                        Text -- ^ name of function being called
-                        Text -- ^ explanation
+                  -- r Invalid arguments to function (function name, explanation)
+                  | ArgumentsError Text Text
                   | EvalParseError ParserError
                   | NotAFunctionError
         deriving (Show)
