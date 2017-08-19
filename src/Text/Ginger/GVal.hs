@@ -280,6 +280,9 @@ class ToGVal m a where
 instance ToGVal m (GVal m) where
     toGVal = id
 
+instance ToGVal m () where
+    toGVal = const def
+
 -- | 'Nothing' becomes NULL, 'Just' unwraps.
 instance ToGVal m v => ToGVal m (Maybe v) where
     toGVal Nothing = def { asJSON = Just JSON.Null }

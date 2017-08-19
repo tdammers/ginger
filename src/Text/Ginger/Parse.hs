@@ -2,6 +2,8 @@
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE ScopedTypeVariables #-}
 {-#LANGUAGE DeriveGeneric #-}
+{-#LANGUAGE FlexibleInstances #-}
+{-#LANGUAGE MultiParamTypeClasses #-}
 -- | Ginger parser.
 module Text.Ginger.Parse
 ( parseGinger
@@ -41,6 +43,7 @@ import Text.Parsec.Error ( errorMessages
                          )
 import Text.Ginger.AST
 import Text.Ginger.Html ( unsafeRawHtml )
+import Text.Ginger.GVal (GVal, ToGVal (..), dict, (~>))
 
 import Control.Monad (when)
 import Control.Monad.Reader ( ReaderT
@@ -75,6 +78,13 @@ type Source = String
 -- If the required source code is not available, the resolver should return
 -- @Nothing@, else @Just@ the source.
 type IncludeResolver m = SourceName -> m (Maybe Source)
+
+instance ToGVal m SourcePos where
+    toGVal p =
+        dict [ "name" ~> sourceName p
+             , "line" ~> sourceLine p
+             , "column" ~> sourceColumn p
+             ]
 
 -- | Error information for Ginger parser errors.
 data ParserError =

@@ -113,7 +113,13 @@ import Debug.Trace (trace)
 import Data.List (lookup, zipWith, unzip)
 import Data.Aeson as JSON
 
-defaultScope :: forall m h p. (Monoid h, Monad m, ToGVal (Run p m h) h) => [(Text, GVal (Run p m h))]
+defaultScope :: forall m h p
+              . ( Monoid h
+                , Monad m
+                , ToGVal (Run p m h) h
+                , ToGVal (Run p m h) p
+                )
+             => [(Text, GVal (Run p m h))]
 defaultScope =
     [ ("raw", fromFunction gfnRawHtml)
     , ("abs", fromFunction . unaryNumericFunc 0 $ Prelude.abs)
@@ -165,6 +171,7 @@ defaultScope =
     , ("urlencode", fromFunction gfnUrlEncode)
     , ("upper", fromFunction . variadicStringFunc $ mconcat . Prelude.map Text.toUpper)
     , ("lower", fromFunction . variadicStringFunc $ mconcat . Prelude.map Text.toLower)
+    , ("throw", fromFunction gfnThrow)
     ]
 
 -- | Simplified interface to render a ginger template \"into\" a monad.
@@ -177,11 +184,12 @@ easyRenderM :: ( Monad m
                , Monoid h
                , ToGVal (Run p m h) v
                , ToGVal (Run p m h) h
+               , ToGVal (Run p m h) p
                )
             => (h -> m ())
             -> v
             -> Template p
-            -> m (Either RuntimeError (GVal (Run p m h)))
+            -> m (Either (RuntimeError p) (GVal (Run p m h)))
 easyRenderM emit context template =
     runGingerT (easyContext emit context) template
 
@@ -194,6 +202,7 @@ easyRender :: ( ContextEncodable h
               , Monoid h
               , ToGVal (Run p (Writer h) h) v
               , ToGVal (Run p (Writer h) h) h
+              , ToGVal (Run p (Writer h) h) p
               )
            => v
            -> Template p
@@ -204,7 +213,10 @@ easyRender context template =
 -- | Purely expand a Ginger template. The underlying carrier monad is 'Writer'
 -- 'h', which is used to collect the output and render it into a 'h'
 -- value.
-runGinger :: (ToGVal (Run p (Writer h) h) h, Monoid h)
+runGinger :: ( ToGVal (Run p (Writer h) h) h
+             , ToGVal (Run p (Writer h) h) p
+             , Monoid h
+             )
           => GingerContext p (Writer h) h
           -> Template p
           -> h
@@ -212,10 +224,16 @@ runGinger context template =
     execWriter $ runGingerT context template
 
 -- | Monadically run a Ginger template. The @m@ parameter is the carrier monad.
-runGingerT :: (ToGVal (Run p m h) h, Monoid h, Monad m, Applicative m, Functor m)
+runGingerT :: ( ToGVal (Run p m h) h
+              , ToGVal (Run p m h) p
+              , Monoid h
+              , Monad m
+              , Applicative m
+              , Functor m
+              )
            => GingerContext p m h
            -> Template p
-           -> m (Either RuntimeError (GVal (Run p m h)))
+           -> m (Either (RuntimeError p) (GVal (Run p m h)))
 runGingerT context tpl =
     runReaderT (evalStateT (runExceptT (runTemplate tpl)) (defRunState tpl)) context
 
@@ -227,7 +245,13 @@ baseTemplate t =
         Just p -> baseTemplate p
 
 -- | Run a template.
-runTemplate :: (ToGVal (Run p m h) h, Monoid h, Monad m, Applicative m, Functor m)
+runTemplate :: ( ToGVal (Run p m h) h
+               , ToGVal (Run p m h) p
+               , Monoid h
+               , Monad m
+               , Applicative m
+               , Functor m
+               )
             => Template p
             -> Run p m h (GVal (Run p m h))
 runTemplate =
@@ -258,33 +282,12 @@ withBlockName blockName a = do
     modify (\s -> s { rsCurrentBlockName = oldBlockName })
     return result
 
-setSourcePos :: (Monad m, Applicative m, Functor m)
-             => p
-             -> Run p m h ()
-setSourcePos pos =
-  modify (\s -> s { rsCurrentSourcePos = pos })
-
-getSourcePos :: (Monad m, Applicative m, Functor m)
-             => Run p m h p
-getSourcePos = gets rsCurrentSourcePos
-
--- | @withSourcePos pos action@ runs @action@ in a context where the
--- current source location is set to @pos@. The original source position is
--- restored when @action@ finishes.
-withSourcePos :: (Monad m, Applicative m, Functor m)
-              => p
-              -> Run p m h a
-              -> Run p m h a
-withSourcePos pos a = do
-  oldPos <- getSourcePos
-  setSourcePos pos *> a <* setSourcePos oldPos
-
 lookupBlock :: (Monad m, Applicative m, Functor m) => VarName -> Run p m h (Block p)
 lookupBlock blockName = do
     tpl <- gets rsCurrentTemplate
     let blockMay = resolveBlock blockName tpl
     case blockMay of
-        Nothing -> throwError $ UndefinedBlockError blockName
+        Nothing -> throwHere $ UndefinedBlockError blockName
         Just block -> return block
     where
         resolveBlock :: VarName -> Template p -> Maybe (Block p)
@@ -298,6 +301,7 @@ lookupBlock blockName = do
 -- | Run one statement.
 runStatement :: forall m h p
               . ( ToGVal (Run p m h) h
+                , ToGVal (Run p m h) p
                 , Monoid h
                 , Monad m
                 , Functor m
@@ -311,6 +315,7 @@ runStatement stmt =
 
 runStatement' :: forall m h p
               . ( ToGVal (Run p m h) h
+                , ToGVal (Run p m h) p
                 , Monoid h
                 , Monad m
                 , Functor m
@@ -398,7 +403,7 @@ runStatement' (ForS _ varNameIndex varNameValue itereeExpr body) = do
                                  . fmap snd
                                  $ args
                 loop :: [(Maybe Text, GVal (Run p m h))] -> Run p m h (GVal (Run p m h))
-                loop [] = throwError $ ArgumentsError "loop" "at least one argument is required"
+                loop [] = throwHere $ ArgumentsError "loop" "at least one argument is required"
                 loop ((_, loopee):_) = go (Prelude.succ recursionDepth) loopee
                 iteration :: (Int, (GVal (Run p m h), GVal (Run p m h)))
                           -> Run p m h (GVal (Run p m h))
@@ -450,6 +455,7 @@ runStatement' (TryCatchS _ tryS catchesS finallyS) = do
 -- | Deeply magical function that converts a 'Macro' into a Function.
 macroToGVal :: forall m h p
              . ( ToGVal (Run p m h) h
+               , ToGVal (Run p m h) p
                , Monoid h
                , Functor m
                , Monad m
@@ -575,7 +581,11 @@ decreaseIndent (Just []) = Nothing
 decreaseIndent (Just (x:xs)) = Just xs
 
 defRunState :: forall m h p
-             . (ToGVal (Run p m h) h, Monoid h, Monad m)
+             . ( ToGVal (Run p m h) h
+               , ToGVal (Run p m h) p
+               , Monoid h
+               , Monad m
+               )
             => Template p
             -> RunState p m h
 defRunState tpl =
@@ -589,7 +599,20 @@ defRunState tpl =
         , rsCurrentSourcePos = annotation tpl
         }
 
-gfnEval :: (Monad m, Monoid h, ToGVal (Run p m h) h)
+gfnThrow :: ( Monad m
+            , Monoid h
+            , ToGVal (Run p m h) h
+            , ToGVal (Run p m h) p
+            )
+         => Function (Run p m h)
+gfnThrow args =
+    throwHere (RuntimeError . mconcat . fmap (asText . snd) $ args)
+
+gfnEval :: ( Monad m
+           , Monoid h
+           , ToGVal (Run p m h) h
+           , ToGVal (Run p m h) p
+           )
         => Function (Run p m h)
 gfnEval args =
     let extracted =
@@ -599,7 +622,7 @@ gfnEval args =
                 ]
                 args
     in case extracted of
-        Left _ -> throwError $ ArgumentsError "eval" "expected: (src, context)"
+        Left _ -> throwHere $ ArgumentsError "eval" "expected: (src, context)"
         Right [gSrc, gContext] -> do
             result' <- parseGinger
                 (Prelude.const . return $ Nothing) -- include resolver
@@ -608,7 +631,7 @@ gfnEval args =
             pos <- gets rsCurrentSourcePos
             let result = fmap (Prelude.const pos) <$> result'
             tpl <- case result of
-                Left err -> throwError $ EvalParseError err
+                Left err -> throwHere $ EvalParseError err
                 Right t -> return t
             let localLookup varName = return $
                     lookupLooseDef def (toGVal varName) gContext

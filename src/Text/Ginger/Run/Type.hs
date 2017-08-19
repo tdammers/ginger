@@ -36,6 +36,9 @@ module Text.Ginger.Run.Type
 , hoistRunState
 , warn
 , warnFromMaybe
+, throwHere
+, withSourcePos
+, getSourcePos
 )
 where
 
@@ -353,64 +356,97 @@ hoistRunState fwd rev rs =
         , rsCurrentSourcePos = rsCurrentSourcePos rs
         }
 
-data RuntimeError = RuntimeError Text -- ^ Generic runtime error
-                  | UndefinedBlockError Text -- ^ Tried to use a block that isn't defined
-                  -- r Invalid arguments to function (function name, explanation)
-                  | ArgumentsError Text Text
-                  | EvalParseError ParserError
-                  | NotAFunctionError
+data RuntimeError p = RuntimeError Text -- ^ Generic runtime error
+                    | UndefinedBlockError Text -- ^ Tried to use a block that isn't defined
+                    -- | Invalid arguments to function (function name, explanation)
+                    | ArgumentsError Text Text
+                    | EvalParseError ParserError
+                    | NotAFunctionError
+                    | RuntimeErrorAt p (RuntimeError p)
         deriving (Show)
 
-instance Default RuntimeError where
+instance Default (RuntimeError p) where
     def = RuntimeError ""
 
-instance ToGVal m RuntimeError where
+instance ToGVal m p => ToGVal m (RuntimeError p) where
     toGVal = runtimeErrorToGVal
 
-runtimeErrorWhat :: RuntimeError -> Text
+runtimeErrorWhat :: RuntimeError p -> Text
 runtimeErrorWhat (ArgumentsError funcName explanation) = "ArgumentsError"
 runtimeErrorWhat (EvalParseError e) = "EvalParseError"
 runtimeErrorWhat (RuntimeError msg) = "RuntimeError"
 runtimeErrorWhat (UndefinedBlockError blockName) = "UndefinedBlockError"
 runtimeErrorWhat NotAFunctionError = "NotAFunctionError"
+runtimeErrorWhat (RuntimeErrorAt _ e) = runtimeErrorWhat e
 
-runtimeErrorToGVal :: RuntimeError -> GVal m
-runtimeErrorToGVal (RuntimeError msg) =
-    rteGVal "RuntimeError"
-        msg []
-runtimeErrorToGVal (UndefinedBlockError blockName) =
-    rteGVal "UndefinedBlockError"
-        ("undefined block: '" <> blockName <> "'")
+runtimeErrorMessage :: RuntimeError p -> Text
+runtimeErrorMessage (ArgumentsError funcName explanation) =
+    "invalid arguments to function '" <> funcName <> "': " <> explanation
+runtimeErrorMessage (EvalParseError e) =
+    "Parser error in eval()-ed code: " <> Text.pack (peErrorMessage e)
+runtimeErrorMessage (RuntimeError msg) =
+    msg
+runtimeErrorMessage (UndefinedBlockError blockName) =
+    "undefined block: '" <> blockName <> "'"
+runtimeErrorMessage NotAFunctionError =
+    "attempted to call something that is not a function"
+runtimeErrorMessage (RuntimeErrorAt _ e) =
+    runtimeErrorMessage e
+
+runtimeErrorWhere :: RuntimeError p -> [p]
+runtimeErrorWhere (RuntimeErrorAt p e) = p:runtimeErrorWhere e
+runtimeErrorWhere _ = []
+
+runtimeErrorToGVal :: forall m p. ToGVal m p => RuntimeError p -> GVal m
+runtimeErrorToGVal e =
+    let (callStack, props) = runtimeErrorToGValRaw e
+        props' = (("callStack" :: Text) ~> callStack):props
+    in (dict props') { asText = runtimeErrorMessage e }
+
+runtimeErrorToGValRaw :: RuntimeError p -> ([p], [(Text, GVal m)])
+runtimeErrorToGValRaw (RuntimeError msg) =
+    ( []
+    , rteGVal "RuntimeError" []
+    )
+runtimeErrorToGValRaw (UndefinedBlockError blockName) =
+    ( []
+    , rteGVal "UndefinedBlockError"
         [ "block" ~> blockName
         ]
-runtimeErrorToGVal (ArgumentsError funcName explanation) =
-    rteGVal "ArgumentsError"
-        ("invalid arguments to function '" <> funcName <> "': " <> explanation)
+    )
+runtimeErrorToGValRaw (ArgumentsError funcName explanation) =
+    ( []
+    , rteGVal "ArgumentsError"
         [ "explanation" ~> explanation
         , "function" ~> funcName
         ]
-runtimeErrorToGVal (EvalParseError e) =
-    rteGVal "EvalParseError"
-        ("error parsing eval()-ed code: " <> Text.pack (peErrorMessage e))
+    )
+runtimeErrorToGValRaw (EvalParseError e) =
+    ( []
+    , rteGVal "EvalParseError"
         [ "errorMessage" ~> peErrorMessage e
-        , "source" ~> (sourceName <$> peSourcePosition e)
-        , "line" ~> (sourceLine <$> peSourcePosition e)
-        , "col" ~> (sourceColumn <$> peSourcePosition e)
+        -- , "sourcePosition" ~> peSourcePosition e
         ]
-runtimeErrorToGVal NotAFunctionError =
-    rteGVal "NotAFunctionError"
-        ("attempted to call something that is not a function")
+    )
+runtimeErrorToGValRaw NotAFunctionError =
+    ( []
+    , rteGVal "NotAFunctionError"
         []
+    )
 
-rteGVal :: Text -> Text -> [(Text, GVal m)] -> GVal m
-rteGVal what msg extra =
-    (dict $
-        [ "what" ~> what
-        , "message" ~> msg
-        ] ++ extra) { asText = msg }
+runtimeErrorToGValRaw (RuntimeErrorAt p e) =
+    let (callStack, inner) = runtimeErrorToGValRaw e
+    in (p:callStack, inner)
+
+rteGVal :: Text -> [(Text, GVal m)] -> [(Text, GVal m)]
+rteGVal what extra =
+    ( [ "what" ~> what
+      ]
+      ++ extra
+    )
 
 -- | Internal type alias for our template-runner monad stack.
-type Run p m h = ExceptT RuntimeError (StateT (RunState p m h) (ReaderT (GingerContext p m h) m))
+type Run p m h = ExceptT (RuntimeError p) (StateT (RunState p m h) (ReaderT (GingerContext p m h) m))
 
 -- | Lift a value from the host monad @m@ into the 'Run' monad.
 liftRun :: Monad m => m a -> Run p m h a
@@ -443,3 +479,30 @@ warn msg = do
 warnFromMaybe :: Monad m => Text -> a -> Maybe a -> Run p m h a
 warnFromMaybe msg d Nothing = warn msg >> return d
 warnFromMaybe _ d (Just x) = return x
+
+setSourcePos :: (Monad m, Applicative m, Functor m)
+             => p
+             -> Run p m h ()
+setSourcePos pos =
+  modify (\s -> s { rsCurrentSourcePos = pos })
+
+getSourcePos :: (Monad m, Applicative m, Functor m)
+             => Run p m h p
+getSourcePos = gets rsCurrentSourcePos
+
+throwHere :: Monad m => RuntimeError p -> Run p m h a
+throwHere err = do
+    pos <- getSourcePos
+    throwError $ RuntimeErrorAt pos err
+
+-- | @withSourcePos pos action@ runs @action@ in a context where the
+-- current source location is set to @pos@. The original source position is
+-- restored when @action@ finishes.
+withSourcePos :: (Monad m, Applicative m, Functor m)
+              => p
+              -> Run p m h a
+              -> Run p m h a
+withSourcePos pos a = do
+  oldPos <- getSourcePos
+  setSourcePos pos *> a <* setSourcePos oldPos
+

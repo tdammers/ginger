@@ -3,6 +3,7 @@
 {-#LANGUAGE MultiParamTypeClasses #-}
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE ScopedTypeVariables #-}
+{-#LANGUAGE FlexibleContexts #-}
 -- | A syntax tree optimizer
 module Text.Ginger.Optimizer
 ( Optimizable (..) )
@@ -245,15 +246,20 @@ isConstExpression (ObjectE p xs) = all (\(k,v) -> isConstExpression k && isConst
 isConstExpression (MemberLookupE p k m) = isConstExpression k && isConstExpression m
 isConstExpression e = False
 
-compileTimeEval :: Expression a -> Maybe (GVal Identity)
+compileTimeEval :: Expression p -> Maybe (GVal Identity)
 compileTimeEval (StringLiteralE p s) = Just . toGVal $ s
 compileTimeEval (NumberLiteralE p n) = Just . toGVal $ n
 compileTimeEval (BoolLiteralE p b) = Just . toGVal $ b
 compileTimeEval (NullLiteralE p) = Just def
 compileTimeEval e = case pureExpression e of
     Pure -> do
-        let p = annotation e
-        let tpl = Template (InterpolationS p e) HashMap.empty Nothing
+        let tpl =
+              -- We're erasing source code positions here,
+              -- because we don't have any use for them anyway.
+              Template
+                  (InterpolationS () (fmap (const ()) e))
+                  HashMap.empty
+                  Nothing
         Just . toGVal . runCT $ tpl
     Impure -> Nothing
 
@@ -267,10 +273,10 @@ collectedToGVal :: Collected -> GVal m
 collectedToGVal (Collected []) = def
 collectedToGVal (Collected (x:_)) = marshalGVal x
 
-runCT :: Template a -> Collected
+runCT :: Template () -> Collected
 runCT = runGinger ctContext
 
-ctContext :: GingerContext p (Writer Collected) Collected
+ctContext :: GingerContext () (Writer Collected) Collected
 ctContext = makeContext' ctLookup ctEncode Nothing
 
 ctLookup :: VarName -> GVal m
