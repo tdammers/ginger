@@ -617,4 +617,4 @@ gfnDictsort args =
                     (if caseSensitive then id else Text.toUpper) .
                     (if sortByKey then fst else (asText . snd))
             return . orderedDict . List.sortOn projection $ items
-        _ -> throwError $ ArgumentsError "dictsort" "expected: (dict, case_sensitive=false, by=null)"
+        _ -> throwHere $ ArgumentsError "dictsort" "expected: (dict, case_sensitive=false, by=null)"
