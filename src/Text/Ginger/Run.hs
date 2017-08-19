@@ -45,7 +45,7 @@ module Text.Ginger.Run
 , makeContextTextExM
 -- * The context type
 , GingerContext
--- * The Run p monad
+-- * The Run monad
 , Run, liftRun, liftRun2
 -- * Helper functions for interpreting argument lists
 , extractArgs, extractArgsT, extractArgsL, extractArgsDefL
@@ -391,7 +391,7 @@ runStatement' (ForS _ varNameIndex varNameValue itereeExpr body) = do
                 else case asList iteree of
                   Just items -> return $ Prelude.zip (Prelude.map toGVal ([0..] :: [Int])) items
                   Nothing -> do
-                    warn $ tshow iteree <> " is neither a list nor a dictionary"
+                    warn $ TypeError ["list", "dictionary"] (Just $ tshow iteree)
                     return []
             let numItems :: Int
                 numItems = Prelude.length iterPairs
@@ -403,7 +403,7 @@ runStatement' (ForS _ varNameIndex varNameValue itereeExpr body) = do
                                  . fmap snd
                                  $ args
                 loop :: [(Maybe Text, GVal (Run p m h))] -> Run p m h (GVal (Run p m h))
-                loop [] = throwHere $ ArgumentsError "loop" "at least one argument is required"
+                loop [] = throwHere $ ArgumentsError (Just "loop") "at least one argument is required"
                 loop ((_, loopee):_) = go (Prelude.succ recursionDepth) loopee
                 iteration :: (Int, (GVal (Run p m h), GVal (Run p m h)))
                           -> Run p m h (GVal (Run p m h))
@@ -505,7 +505,7 @@ runExpression' (ObjectE _ xs) = do
 runExpression' (MemberLookupE _ baseExpr indexExpr) = do
     base <- runExpression baseExpr
     index <- runExpression indexExpr
-    warnFromMaybe ("No value at index " <> tshow (asText index)) def $
+    warnFromMaybe (IndexError $ tshow (asText index)) def $
         lookupLoose index base
 runExpression' (CallE _ funcE argsEs) = do
     args <- forM argsEs $
@@ -514,7 +514,7 @@ runExpression' (CallE _ funcE argsEs) = do
     let func = toFunction e
     case func of
         Nothing -> do
-            warn $ tshow e <> " is not a function"
+            warn NotAFunctionError
             return def
         Just f -> f args
 runExpression' (LambdaE _ argNames body) = do
@@ -622,7 +622,7 @@ gfnEval args =
                 ]
                 args
     in case extracted of
-        Left _ -> throwHere $ ArgumentsError "eval" "expected: (src, context)"
+        Left _ -> throwHere $ ArgumentsError (Just "eval") "expected: (src, context)"
         Right [gSrc, gContext] -> do
             result' <- parseGinger
                 (Prelude.const . return $ Nothing) -- include resolver

@@ -62,12 +62,12 @@ import Data.List (lookup, zipWith, unzip)
 
 unaryFunc :: forall m h p. (Monad m) => (GVal (Run p m h) -> GVal (Run p m h)) -> Function (Run p m h)
 unaryFunc f [] = do
-    warn $ "Expected at least one argument"
+    warn $ ArgumentsError Nothing "expected at least one argument"
     return def
 unaryFunc f ((_, x):[]) =
     return (f x)
 unaryFunc f ((_, x):xs) = do
-    warn $ "Expected exactly one argument"
+    warn $ ArgumentsError Nothing "expected exactly one argument"
     return (f x)
 
 ignoreArgNames :: ([a] -> b) -> ([(c, a)] -> b)

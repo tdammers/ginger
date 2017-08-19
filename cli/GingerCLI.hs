@@ -89,7 +89,7 @@ main = do
                     makeContextHtmlExM
                         contextLookup
                         (putStr . Text.unpack . htmlSource)
-                        (hPutStrLn stderr . Text.unpack)
+                        (hPutStrLn stderr . show)
             runGingerT context t >>= either (hPutStrLn stderr . show) (putStr . show)
 
 printParserError :: Maybe String -> ParserError -> IO ()

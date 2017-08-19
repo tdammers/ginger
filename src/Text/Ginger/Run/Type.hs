@@ -104,7 +104,7 @@ data GingerContext p m h
     = GingerContext
         { contextLookup :: VarName -> Run p m h (GVal (Run p m h))
         , contextWrite :: h -> Run p m h ()
-        , contextWarn :: Text -> Run p m h ()
+        , contextWarn :: RuntimeError p -> Run p m h ()
         , contextEncode :: GVal (Run p m h) -> h
         , contextNewlines :: Maybe (Newlines h)
         }
@@ -147,7 +147,7 @@ easyContext emit context =
 
 easyContextEx :: (Monad m, ContextEncodable h, ToGVal (Run p m h) v)
               => (h -> m ())
-              -> (Text -> m ())
+              -> (RuntimeError p -> m ())
               -> v
               -> GingerContext p m h
 easyContextEx emit warn context =
@@ -197,7 +197,7 @@ makeContextM' lookupFn writeFn encodeFn newlines =
 makeContextExM' :: (Monad m, Functor m)
              => (VarName -> Run p m h (GVal (Run p m h)))
              -> (h -> m ())
-             -> (Text -> m ())
+             -> (RuntimeError p -> m ())
              -> (GVal (Run p m h) -> h)
              -> Maybe (Newlines h)
              -> GingerContext p m h
@@ -260,7 +260,7 @@ makeContextHtmlM l w = makeContextM' l w toHtml (Just htmlNewlines)
 makeContextHtmlExM :: (Monad m, Functor m)
                  => (VarName -> Run p m Html (GVal (Run p m Html)))
                  -> (Html -> m ())
-                 -> (Text -> m ())
+                 -> (RuntimeError p -> m ())
                  -> GingerContext p m Html
 makeContextHtmlExM l w warn = makeContextExM' l w warn toHtml (Just htmlNewlines)
 
@@ -277,7 +277,7 @@ makeContextTextM l w = makeContextM' l w asText (Just textNewlines)
 makeContextTextExM :: (Monad m, Functor m)
                  => (VarName -> Run p m Text (GVal (Run p m Text)))
                  -> (Text -> m ())
-                 -> (Text -> m ())
+                 -> (RuntimeError p -> m ())
                  -> GingerContext p m Text
 makeContextTextExM l w warn = makeContextExM' l w warn asText (Just textNewlines)
 
@@ -359,7 +359,11 @@ hoistRunState fwd rev rs =
 data RuntimeError p = RuntimeError Text -- ^ Generic runtime error
                     | UndefinedBlockError Text -- ^ Tried to use a block that isn't defined
                     -- | Invalid arguments to function (function name, explanation)
-                    | ArgumentsError Text Text
+                    | ArgumentsError (Maybe Text) Text
+                    -- | Wrong type, expected one of...
+                    | TypeError [Text] (Maybe Text)
+                    -- | Invalid index
+                    | IndexError Text
                     | EvalParseError ParserError
                     | NotAFunctionError
                     | RuntimeErrorAt p (RuntimeError p)
@@ -377,13 +381,28 @@ runtimeErrorWhat (EvalParseError e) = "EvalParseError"
 runtimeErrorWhat (RuntimeError msg) = "RuntimeError"
 runtimeErrorWhat (UndefinedBlockError blockName) = "UndefinedBlockError"
 runtimeErrorWhat NotAFunctionError = "NotAFunctionError"
+runtimeErrorWhat (IndexError _) = "IndexError"
+runtimeErrorWhat (TypeError _ _) = "TypeError"
 runtimeErrorWhat (RuntimeErrorAt _ e) = runtimeErrorWhat e
 
 runtimeErrorMessage :: RuntimeError p -> Text
-runtimeErrorMessage (ArgumentsError funcName explanation) =
+runtimeErrorMessage (ArgumentsError Nothing explanation) =
+    "invalid arguments: " <> explanation
+runtimeErrorMessage (ArgumentsError (Just funcName) explanation) =
     "invalid arguments to function '" <> funcName <> "': " <> explanation
+runtimeErrorMessage (TypeError expected actual) =
+    "wrong type"
+    <> case expected of
+        [] -> ""
+        [x] -> ", expected " <> x
+        xs -> ", expected " <> (mconcat . List.intersperse " or " $ xs)
+    <> case actual of
+        Nothing -> ""
+        Just x -> ", found " <> x
+runtimeErrorMessage (IndexError i) =
+    "invalid index " <> i
 runtimeErrorMessage (EvalParseError e) =
-    "Parser error in eval()-ed code: " <> Text.pack (peErrorMessage e)
+    "parser error in eval()-ed code: " <> Text.pack (peErrorMessage e)
 runtimeErrorMessage (RuntimeError msg) =
     msg
 runtimeErrorMessage (UndefinedBlockError blockName) =
@@ -419,6 +438,19 @@ runtimeErrorToGValRaw (ArgumentsError funcName explanation) =
     , rteGVal "ArgumentsError"
         [ "explanation" ~> explanation
         , "function" ~> funcName
+        ]
+    )
+runtimeErrorToGValRaw (TypeError expected Nothing) =
+    ( []
+    , rteGVal "ArgumentsError"
+        [ "expected" ~> expected
+        ]
+    )
+runtimeErrorToGValRaw (TypeError expected (Just actual)) =
+    ( []
+    , rteGVal "ArgumentsError"
+        [ "expected" ~> expected
+        , "actual" ~> actual
         ]
     )
 runtimeErrorToGValRaw (EvalParseError e) =
@@ -471,13 +503,14 @@ hoistRun fwd rev action = do
     put stateT'
     Prelude.either throwError return x
 
-warn :: (Monad m) => Text -> Run p m h ()
-warn msg = do
+warn :: (Monad m) => RuntimeError p -> Run p m h ()
+warn err = do
+    pos <- getSourcePos
     warnFn <- asks contextWarn
-    warnFn msg
+    warnFn $ RuntimeErrorAt pos err
 
-warnFromMaybe :: Monad m => Text -> a -> Maybe a -> Run p m h a
-warnFromMaybe msg d Nothing = warn msg >> return d
+warnFromMaybe :: Monad m => RuntimeError p -> a -> Maybe a -> Run p m h a
+warnFromMaybe err d Nothing = warn err >> return d
 warnFromMaybe _ d (Just x) = return x
 
 setSourcePos :: (Monad m, Applicative m, Functor m)

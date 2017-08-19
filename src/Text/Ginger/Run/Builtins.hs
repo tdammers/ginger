@@ -126,7 +126,7 @@ gfnNEquals (x:xs) =
 gfnContains :: Monad m => Function (Run p m h)
 gfnContains [] = return $ toGVal False
 gfnContains (list:elems) = do
-    rawList <- warnFromMaybe (tshow list <> " is not a list") [] . asList . snd $ list
+    rawList <- warnFromMaybe (TypeError ["list"] (Just $ tshow list)) [] . asList . snd $ list
     let rawElems = fmap snd elems
         e `isInList` xs = Prelude.any (looseEquals e) xs
         es `areInList` xs = Prelude.all (`isInList` xs) es
@@ -245,7 +245,7 @@ gfnSlice args =
                     Nothing ->
                         return . toGVal . Text.pack $
                             slice (Text.unpack $ asText slicee) startInt lengthInt
-        _ -> throwError $ ArgumentsError "slice" "expected: (slicee, start=0, length=null)"
+        _ -> throwHere $ ArgumentsError (Just "slice") "expected: (slicee, start=0, length=null)"
 
 gfnReplace :: Monad m => Function (Run p m h)
 gfnReplace args =
@@ -262,7 +262,7 @@ gfnReplace args =
                 search = asText searchG
                 replace = asText replaceG
             return . toGVal $ Text.replace search replace str
-        _ -> throwError $ ArgumentsError "replace" "expected: (str, search, replace)"
+        _ -> throwHere $ ArgumentsError (Just "replace") "expected: (str, search, replace)"
 
 gfnMap :: Monad m => Function (Run p m h)
 gfnMap args = do
@@ -311,7 +311,7 @@ gfnSort args = do
                    , sortKey
                    , asBoolean reverseG
                    )
-        _ -> throwError $ ArgumentsError "sort" "expected: (sortee, by, reverse)"
+        _ -> throwHere $ ArgumentsError (Just "sort") "expected: (sortee, by, reverse)"
     let -- extractByFunc :: Maybe ((Text, GVal (Run p m h)) -> Run p m h (GVal (Run p m h)))
         extractByFunc = do
             f <- asFunction sortKey
@@ -428,7 +428,7 @@ formatFileSize binary size =
 
 gfnPrintf :: Monad m => Function (Run p m h)
 gfnPrintf [] = do
-    warn "No format string provided to printf"
+    warn $ ArgumentsError (Just "printf") "No format string provided"
     return def
 gfnPrintf [(_, fmtStrG)] = return fmtStrG
 gfnPrintf ((_, fmtStrG):args) = do
@@ -559,7 +559,7 @@ gfnDateFormat args =
                     return . toGVal $ formatTime locale fmt . convertTZ tzMay <$> dateMay
                 Nothing -> do
                     return . toGVal $ convertTZ tzMay <$> dateMay
-        _ -> throwError $ ArgumentsError "date" "expected: (date, format, tz=null, locale=null)"
+        _ -> throwHere $ ArgumentsError (Just "date") "expected: (date, format, tz=null, locale=null)"
     where
         convertTZ :: Maybe TimeZone -> ZonedTime -> ZonedTime
         convertTZ Nothing = id
@@ -607,7 +607,7 @@ gfnDictsort args =
                 "key" -> return True
                 "value" -> return False
                 "val" -> return False
-                x -> throwError $ ArgumentsError "dictsort"
+                x -> throwError $ ArgumentsError (Just "dictsort")
                         ( "argument 'by' must be one of 'key', 'value', 'val', " <>
                           "but found '" <>
                           x <> "'"
@@ -617,4 +617,4 @@ gfnDictsort args =
                     (if caseSensitive then id else Text.toUpper) .
                     (if sortByKey then fst else (asText . snd))
             return . orderedDict . List.sortOn projection $ items
-        _ -> throwHere $ ArgumentsError "dictsort" "expected: (dict, case_sensitive=false, by=null)"
+        _ -> throwHere $ ArgumentsError (Just "dictsort") "expected: (dict, case_sensitive=false, by=null)"
