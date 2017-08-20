@@ -537,5 +537,7 @@ withSourcePos :: (Monad m, Applicative m, Functor m)
               -> Run p m h a
 withSourcePos pos a = do
   oldPos <- getSourcePos
-  setSourcePos pos *> a <* setSourcePos oldPos
+  catchError
+    (setSourcePos pos *> a <* setSourcePos oldPos)
+    (\err -> throwError $ RuntimeErrorAt oldPos err)
 
