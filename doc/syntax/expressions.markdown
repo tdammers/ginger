@@ -168,7 +168,7 @@ that context.
 
 # Do expressions
 
-A `do` expression lifts statements into expressions, that it, it allows you to
+A `do` expression lifts statements into expressions, that is, it allows you to
 execute a statement (or a block of statements) and use its return value as the
 value of the expression. Inside the `do` block, statements are written in
 [Script Mode Syntax](script.html).
