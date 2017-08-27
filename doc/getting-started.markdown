@@ -115,7 +115,7 @@ nullResolver = const $ return Nothing
 -- use 'Identity' here.
 template :: Template 
 template = either error id . runIdentity $
-  parseGinger nullResolver "Hello, {{ name }}, welcome in {{ location }}!"
+  parseGinger nullResolver Nothing "Hello, {{ name }}, welcome in {{ location }}!"
 
 main = do
   let output = easyRender context template
