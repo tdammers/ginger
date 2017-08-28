@@ -8,9 +8,11 @@ The easiest way to use Ginger in Haskell projects is through cabal:
 cabal install ginger
 ```
 
-Stack is also supported; ginger is not in stackage, but adding it as an extra
-dependency will work fine. Alternatively, you can also hook the git repository
-into `stack.yml`.
+Stack is also supported; ginger is in Stackage, so it should install just fine.
+You may find that the version in Stackage lags a bit behind, due to the way
+Stackage's LTS releases work. You may want to add Ginger as an `extra-deps`
+entry, or even hook the git repository into `stack.yml`. Please refer to
+`stack` documentation for details.
 
 # A Basic Template
 
