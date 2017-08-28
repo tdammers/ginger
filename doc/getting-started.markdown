@@ -114,7 +114,7 @@ nullResolver = const $ return Nothing
 -- includes would normally go through some sort of monadic API like 'IO'), we
 -- use 'Identity' here.
 template :: Template 
-template = either error id . runIdentity $
+template = either (error . show) id . runIdentity $
   parseGinger nullResolver Nothing "Hello, {{ name }}, welcome in {{ location }}!"
 
 main = do
