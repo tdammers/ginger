@@ -1,3 +1,11 @@
+## 0.6.0.2
+
+- Documentation fixes
+
+## 0.6.0.1
+
+- Haddock documentation fix
+
 ## 0.6.0.0
 
 - Exceptions / exception handling.
