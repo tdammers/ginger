@@ -37,10 +37,10 @@ loadFileMay fn =
 decodeFile :: (JSON.FromJSON v) => FilePath -> IO (Maybe v)
 decodeFile fn = JSON.decode <$> (openFile fn ReadMode >>= LBS.hGetContents)
 
-printF :: GVal (Run IO Html)
+printF :: GVal (Run p IO Html)
 printF = fromFunction $ go
     where
-        go :: [(Maybe Text, GVal (Run IO Html))] -> Run IO Html (GVal (Run IO Html))
+        go :: [(Maybe Text, GVal (Run p IO Html))] -> Run p IO Html (GVal (Run p IO Html))
         go args = forM_ args printArg >> return def
         printArg (Nothing, v) = liftRun . putStrLn . Text.unpack . asText $ v
         printArg (Just x, _) = return ()
@@ -58,7 +58,7 @@ main = do
 
     let scopeLookup key = toGVal (scope >>= HashMap.lookup key)
         resolve = loadFileMay
-    let contextLookup :: Text -> Run IO Html (GVal (Run IO Html))
+    let contextLookup :: Text -> Run p IO Html (GVal (Run p IO Html))
         contextLookup key =
             case key of
                 "print" -> return printF
@@ -74,16 +74,22 @@ main = do
 
     case tpl of
         Left err -> do
-            tplSource <- case src of
-                            Just s -> return (Just s)
-                            Nothing -> do
-                                let s = peSourceName err
-                                case s of
-                                    Nothing -> return Nothing
-                                    Just sn -> Just <$> loadFile sn
+            tplSource <-
+                case src of
+                    Just s ->
+                        return (Just s)
+                    Nothing -> do
+                        let s = sourceName <$> peSourcePosition err
+                        case s of
+                            Nothing -> return Nothing
+                            Just sn -> Just <$> loadFile sn
             printParserError tplSource err
         Right t -> do
-            let context = makeContextHtmlM contextLookup (putStr . Text.unpack . htmlSource)
+            let context =
+                    makeContextHtmlExM
+                        contextLookup
+                        (putStrLn . Text.unpack . htmlSource)
+                        (hPutStrLn stderr . show)
             runGingerT context t >>= either (hPutStrLn stderr . show) (putStr . show)
 
 printParserError :: Maybe String -> ParserError -> IO ()
@@ -91,14 +97,12 @@ printParserError srcMay = putStrLn . formatParserError srcMay
 
 displayParserError :: String -> ParserError -> IO ()
 displayParserError src pe = do
-    case (peSourceLine pe, peSourceColumn pe) of
-        (Just l, cMay) -> do
-            let ln = Prelude.take 1 . Prelude.drop (l - 1) . Prelude.lines $ src
+    case peSourcePosition pe of
+        Just pos -> do
+            let ln = Prelude.take 1 . Prelude.drop (sourceLine pos - 1) . Prelude.lines $ src
             case ln of
                 [] -> return ()
                 x:_ -> do
                     putStrLn x
-                    case cMay of
-                        Just c -> putStrLn $ Prelude.replicate (c - 1) ' ' ++ "^"
-                        _ -> return ()
+                    putStrLn $ Prelude.replicate (sourceColumn pos - 1) ' ' ++ "^"
         _ -> return ()

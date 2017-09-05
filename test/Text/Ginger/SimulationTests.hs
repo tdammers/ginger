@@ -86,7 +86,7 @@ simulationTests = testGroup "Simulation"
         -- assert that the IORef contains what we expect.
         [ testCase "print(\"Hello\")" $ do
             buf <- newIORef ""
-            let printF :: Function (Run IO Html)
+            let printF :: Function (Run SourcePos IO Html)
                 printF = \xs -> do
                     liftIO . writeIORef buf . mconcat . map (asText . snd) $ xs
                     return def
@@ -96,7 +96,7 @@ simulationTests = testGroup "Simulation"
             assertEqual "" actual expected
         , testCase "\"Hello\"|print" $ do
             buf <- newIORef ""
-            let printF :: Function (Run IO Html)
+            let printF :: Function (Run SourcePos IO Html)
                 printF = \xs -> do
                     liftIO . writeIORef buf . mconcat . map (asText . snd) $ xs
                     return def
@@ -1173,21 +1173,21 @@ simulationTests = testGroup "Simulation"
         ]
     ]
 
-mkTestHtml :: [(VarName, GVal (Run IO Html))]
+mkTestHtml :: [(VarName, GVal (Run SourcePos IO Html))]
            -> [(FilePath, String)]
            -> String
            -> Text
            -> Assertion
 mkTestHtml = mkTest makeContextHtmlM htmlSource
 
-mkTestText :: [(VarName, GVal (Run IO Text))]
+mkTestText :: [(VarName, GVal (Run SourcePos IO Text))]
            -> [(FilePath, String)]
            -> String
            -> Text
            -> Assertion
 mkTestText = mkTest makeContextTextM id
 
-mkTestJSON :: [(VarName, GVal (Run IO [JSON.Value]))]
+mkTestJSON :: [(VarName, GVal (Run SourcePos IO [JSON.Value]))]
            -> [(FilePath, String)]
            -> String
            -> Text
@@ -1200,10 +1200,10 @@ mkTestJSON = mkTest
 encodeText :: JSON.ToJSON a => a -> Text
 encodeText = Text.pack . LUTF8.toString . JSON.encode
 
-mkTest :: (Monoid a, ToGVal (Run IO a) a)
-       => ((VarName -> Run IO a (GVal (Run IO a))) -> (a -> IO ()) -> GingerContext IO a) -- ^ mkContextM flavor
+mkTest :: (Monoid a, ToGVal (Run SourcePos IO a) a)
+       => ((VarName -> Run SourcePos IO a (GVal (Run SourcePos IO a))) -> (a -> IO ()) -> GingerContext SourcePos IO a) -- ^ mkContextM flavor
        -> (a -> Text) -- ^ Convert a to Text for output
-       -> [(VarName, GVal (Run IO a))] -- ^ Context dictionary
+       -> [(VarName, GVal (Run SourcePos IO a))] -- ^ Context dictionary
        -> [(FilePath, String)] -- ^ Lookup table for includes
        -> String -- ^ Template source
        -> Text -- ^ Expected output

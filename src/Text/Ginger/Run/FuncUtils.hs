@@ -60,21 +60,27 @@ import Debug.Trace (trace)
 import Data.Maybe (isNothing)
 import Data.List (lookup, zipWith, unzip)
 
-unaryFunc :: forall m h. (Monad m) => (GVal (Run m h) -> GVal (Run m h)) -> Function (Run m h)
-unaryFunc f [] = return def
-unaryFunc f ((_, x):[]) = return (f x)
+unaryFunc :: forall m h p. (Monad m) => (GVal (Run p m h) -> GVal (Run p m h)) -> Function (Run p m h)
+unaryFunc f [] = do
+    warn $ ArgumentsError Nothing "expected at least one argument"
+    return def
+unaryFunc f ((_, x):[]) =
+    return (f x)
+unaryFunc f ((_, x):xs) = do
+    warn $ ArgumentsError Nothing "expected exactly one argument"
+    return (f x)
 
 ignoreArgNames :: ([a] -> b) -> ([(c, a)] -> b)
 ignoreArgNames f args = f (Prelude.map snd args)
 
-variadicNumericFunc :: Monad m => Scientific -> ([Scientific] -> Scientific) -> [(Maybe Text, GVal (Run m h))] -> Run m h (GVal (Run m h))
+variadicNumericFunc :: Monad m => Scientific -> ([Scientific] -> Scientific) -> [(Maybe Text, GVal (Run p m h))] -> Run p m h (GVal (Run p m h))
 variadicNumericFunc zero f args =
     return . toGVal . f $ args'
     where
         args' :: [Scientific]
         args' = Prelude.map (fromMaybe zero . asNumber . snd) args
 
-unaryNumericFunc :: Monad m => Scientific -> (Scientific -> Scientific) -> [(Maybe Text, GVal (Run m h))] -> Run m h (GVal (Run m h))
+unaryNumericFunc :: Monad m => Scientific -> (Scientific -> Scientific) -> [(Maybe Text, GVal (Run p m h))] -> Run p m h (GVal (Run p m h))
 unaryNumericFunc zero f args =
     return . toGVal . f $ args'
     where
@@ -83,7 +89,7 @@ unaryNumericFunc zero f args =
                     [] -> 0
                     (arg:_) -> fromMaybe zero . asNumber . snd $ arg
 
-variadicStringFunc :: Monad m => ([Text] -> Text) -> [(Maybe Text, GVal (Run m h))] -> Run m h (GVal (Run m h))
+variadicStringFunc :: Monad m => ([Text] -> Text) -> [(Maybe Text, GVal (Run p m h))] -> Run p m h (GVal (Run p m h))
 variadicStringFunc f args =
     return . toGVal . f $ args'
     where

@@ -1,5 +1,6 @@
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE FlexibleContexts #-}
+{-#LANGUAGE FlexibleInstances #-}
 module Text.Ginger.PropertyTests
 where
 
@@ -61,13 +62,13 @@ instance Arbitrary ZonedTime where
     arbitrary =
         ZonedTime <$> arbitrary <*> arbitrary
 
-instance Arbitrary Statement where
+instance Arbitrary (Statement ()) where
     arbitrary = arbitraryStatement 2
 
 arbitrarySimpleStatement = oneof
-        [ return NullS
-        , ScopedS <$> arbitrary
-        , LiteralS <$> arbitrary
+        [ return (NullS ())
+        , ScopedS () <$> arbitrary
+        , LiteralS () <$> arbitrary
         -- , InterpolationS <$> arbitrary
         -- , IfS <$> arbitrary <*> arbitrary <*> arbitrary
         -- , ForS <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
@@ -77,14 +78,14 @@ arbitrarySimpleStatement = oneof
         -- , PreprocessedIncludeS <$> arbitrary
         ]
 
-arbitraryStatement :: Int -> Gen Statement
+arbitraryStatement :: Int -> Gen (Statement ())
 arbitraryStatement 0 = arbitrarySimpleStatement
 arbitraryStatement n = oneof
     [ arbitrarySimpleStatement
-    , MultiS <$> resize 5 (listOf $ arbitraryStatement (pred n))
+    , MultiS () <$> resize 5 (listOf $ arbitraryStatement (pred n))
     ]
 
-instance Arbitrary Template where
+instance Arbitrary (Template ()) where
     arbitrary =
         Template <$> arbitrary <*> return HashMap.empty <*> return Nothing
 
@@ -135,7 +136,7 @@ roundTripGValP :: (Eq a, ToGVal Identity a, FromGVal Identity a)
                => a -> Bool
 roundTripGValP = roundTripGValExP (==)
 
-expand :: Template -> IO (Either String Text)
+expand :: Template () -> IO (Either String Text)
 expand tpl =
     mapLeft (const "ERROR" :: SomeException -> String) <$>
         try (return $ runGinger (makeContextText (const def)) tpl)
