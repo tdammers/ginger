@@ -894,7 +894,7 @@ simulationTests = testGroup "Simulation"
                     , ""
                     , "{% indent '' %}"
                     , "<body>"
-                    , "{{ foobar() }}"
+                    , "{{ foobar() -}}"
                     , "</body>"
                     , "{% endindent %}"
                     ])

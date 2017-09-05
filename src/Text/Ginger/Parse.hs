@@ -815,7 +815,9 @@ openTagP :: Monad m => Parser m ()
 openTagP = openP '%'
 
 closeTagP :: Monad m => Parser m ()
-closeTagP = closeP '%'
+closeTagP = do
+    closeP '%'
+    ignore . optional $ literalNewlineP
 
 openP :: Monad m => Char -> Parser m ()
 openP c = try (openWP c) <|> try (openNWP c)
@@ -844,7 +846,6 @@ closeNWP :: Monad m => Char -> Parser m ()
 closeNWP c = ignore $ do
     spacesOrComment
     string [ c, '}' ]
-    optional . ignore $ literalNewlineP
 
 expressionP :: Monad m => Parser m (Expression SourcePos)
 expressionP = lambdaExprP <|> ternaryExprP
