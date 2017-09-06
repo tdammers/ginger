@@ -8,7 +8,11 @@
 module Text.Ginger.Parse
 ( parseGinger
 , parseGingerFile
+, parseGinger'
+, parseGingerFile'
 , ParserError (..)
+, ParserOptions (..)
+, mkParserOptions
 , formatParserError
 , IncludeResolver
 , Source, SourceName
@@ -191,6 +195,7 @@ data ParserOptions m
     = ParserOptions
         { poIncludeResolver :: IncludeResolver m
         , poSourceName :: Maybe SourceName
+        , poKeepTrailingNewline :: Bool
         }
 
 mkParserOptions :: Monad m => IncludeResolver m -> ParserOptions m
@@ -198,6 +203,7 @@ mkParserOptions resolver =
     ParserOptions
         { poIncludeResolver = resolver
         , poSourceName = Nothing
+        , poKeepTrailingNewline = False
         }
 
 data ParseState
@@ -854,7 +860,10 @@ openTagP = openP '%'
 closeTagP :: Monad m => Parser m ()
 closeTagP = do
     closeP '%'
-    ignore . optional $ literalNewlineP
+    keepTrailingNewline <- asks poKeepTrailingNewline
+    when
+        (not keepTrailingNewline)
+        (ignore . optional $ literalNewlineP)
 
 openP :: Monad m => Char -> Parser m ()
 openP c = try (openWP c) <|> try (openNWP c)

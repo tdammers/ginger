@@ -37,6 +37,15 @@ simulationTests = testGroup "Simulation"
         , testCase "flow" $ mkTestHtml
             [] [] "- {%- set x=1 -%} -" "--"
         ]
+    , testGroup "Trailing newlines"
+        [ testCase "eaten after blocks" $ mkTestHtml
+            [] [] "{% if true %}\nHello!\n{% endif %}\n" "Hello!\n"
+        , testCase "not eaten after interpolations" $ mkTestHtml
+            [] [] "{{'---'}}\nHello!\n{{'---'}}\n" "---\nHello!\n---\n"
+        , testCase "not eaten after blocks when keepTrailingNewline is on" $
+            mkTestHtmlOpts (\o -> o { poKeepTrailingNewline = True })
+            [] [] "{% if true %}\nHello!\n{% endif %}\n" "\nHello!\n\n"
+        ]
     , testGroup "Literals"
         [ testGroup "Strings"
             [ testCase "String: \"foobar\"" $ mkTestHtml
@@ -1178,21 +1187,29 @@ mkTestHtml :: [(VarName, GVal (Run SourcePos IO Html))]
            -> String
            -> Text
            -> Assertion
-mkTestHtml = mkTest makeContextHtmlM htmlSource
+mkTestHtml = mkTest id makeContextHtmlM htmlSource
+
+mkTestHtmlOpts :: (ParserOptions IO -> ParserOptions IO)
+               -> [(VarName, GVal (Run SourcePos IO Html))]
+               -> [(FilePath, String)]
+               -> String
+               -> Text
+               -> Assertion
+mkTestHtmlOpts setOptions = mkTest setOptions makeContextHtmlM htmlSource
 
 mkTestText :: [(VarName, GVal (Run SourcePos IO Text))]
            -> [(FilePath, String)]
            -> String
            -> Text
            -> Assertion
-mkTestText = mkTest makeContextTextM id
+mkTestText = mkTest id makeContextTextM id
 
 mkTestJSON :: [(VarName, GVal (Run SourcePos IO [JSON.Value]))]
            -> [(FilePath, String)]
            -> String
            -> Text
            -> Assertion
-mkTestJSON = mkTest
+mkTestJSON = mkTest id
     (\l w -> makeContextM' l w toJSONSingleton Nothing) encodeText
     where
         toJSONSingleton = (:[]) . JSON.toJSON
@@ -1201,16 +1218,18 @@ encodeText :: JSON.ToJSON a => a -> Text
 encodeText = Text.pack . LUTF8.toString . JSON.encode
 
 mkTest :: (Monoid a, ToGVal (Run SourcePos IO a) a)
-       => ((VarName -> Run SourcePos IO a (GVal (Run SourcePos IO a))) -> (a -> IO ()) -> GingerContext SourcePos IO a) -- ^ mkContextM flavor
+       => (ParserOptions IO -> ParserOptions IO)
+       -> ((VarName -> Run SourcePos IO a (GVal (Run SourcePos IO a))) -> (a -> IO ()) -> GingerContext SourcePos IO a) -- ^ mkContextM flavor
        -> (a -> Text) -- ^ Convert a to Text for output
        -> [(VarName, GVal (Run SourcePos IO a))] -- ^ Context dictionary
        -> [(FilePath, String)] -- ^ Lookup table for includes
        -> String -- ^ Template source
        -> Text -- ^ Expected output
        -> Assertion
-mkTest mContext valToText contextDict includeLookup src expected = do
+mkTest setOptions mContext valToText contextDict includeLookup src expected = do
     let resolver srcName = return $ lookup srcName includeLookup
-    template <- either (fail . show) return =<< parseGinger resolver Nothing src
+    let options = setOptions (mkParserOptions resolver)
+    template <- either (fail . show) return =<< parseGinger' options src
     output <- newIORef mempty
     let write h = modifyIORef output (<> h)
     let context = mContext
