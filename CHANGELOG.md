@@ -1,3 +1,9 @@
+## 0.7.0.0
+
+- `keepTrailingNewlines` option
+- Ability to pass parser options into parseGinger
+- Runtime warnings
+
 ## 0.6.0.2
 
 - Documentation fixes
