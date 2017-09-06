@@ -141,26 +141,26 @@ parseGingerFile :: forall m. Monad m => IncludeResolver m -> SourceName -> m (Ei
 parseGingerFile resolver sourceName =
     parseGingerFile' opts sourceName
     where
-        opts :: ParseContext m
+        opts :: ParserOptions m
         opts =
-            (mkParseContext resolver)
-                { pcCurrentSource = Just sourceName }
+            (mkParserOptions resolver)
+                { poSourceName = Just sourceName }
 
 -- | Parse Ginger source from memory.
 parseGinger :: forall m. Monad m => IncludeResolver m -> Maybe SourceName -> Source -> m (Either ParserError (Template SourcePos))
 parseGinger resolver sourceName source =
     parseGinger' opts source
     where
-        opts :: ParseContext m
+        opts :: ParserOptions m
         opts =
-            (mkParseContext resolver)
-                { pcCurrentSource = sourceName }
+            (mkParserOptions resolver)
+                { poSourceName = sourceName }
 
 -- | Parse Ginger source from a file.
-parseGingerFile' :: Monad m => ParseContext m -> SourceName -> m (Either ParserError (Template SourcePos))
+parseGingerFile' :: Monad m => ParserOptions m -> SourceName -> m (Either ParserError (Template SourcePos))
 parseGingerFile' opts' fn = do
-    let opts = opts' { pcCurrentSource = Just fn }
-    let resolve = pcResolve opts
+    let opts = opts' { poSourceName = Just fn }
+    let resolve = poIncludeResolver opts
     srcMay <- resolve fn
     case srcMay of
         Nothing -> return . Left $
@@ -171,14 +171,14 @@ parseGingerFile' opts' fn = do
         Just src -> parseGinger' opts src
 
 -- | Parse Ginger source from memory.
-parseGinger' :: Monad m => ParseContext m -> Source -> m (Either ParserError (Template SourcePos))
+parseGinger' :: Monad m => ParserOptions m -> Source -> m (Either ParserError (Template SourcePos))
 parseGinger' opts src = do
     result <-
         runReaderT
             ( runParserT
                 (templateP `before` eof)
                 defParseState
-                (fromMaybe "<<unknown>>" $ pcCurrentSource opts)
+                (fromMaybe "<<unknown>>" $ poSourceName opts)
                 src
             )
             opts
@@ -187,17 +187,17 @@ parseGinger' opts src = do
         Left e -> return . Left $ fromParsecError e
 
 
-data ParseContext m
-    = ParseContext
-        { pcResolve :: IncludeResolver m
-        , pcCurrentSource :: Maybe SourceName
+data ParserOptions m
+    = ParserOptions
+        { poIncludeResolver :: IncludeResolver m
+        , poSourceName :: Maybe SourceName
         }
 
-mkParseContext :: Monad m => IncludeResolver m -> ParseContext m
-mkParseContext resolver =
-    ParseContext
-        { pcResolve = resolver
-        , pcCurrentSource = Nothing
+mkParserOptions :: Monad m => IncludeResolver m -> ParserOptions m
+mkParserOptions resolver =
+    ParserOptions
+        { poIncludeResolver = resolver
+        , poSourceName = Nothing
         }
 
 data ParseState
@@ -213,13 +213,13 @@ defParseState =
         , psStripIndent = ""
         }
 
-type Parser m a = ParsecT String ParseState (ReaderT (ParseContext m) m) a
+type Parser m a = ParsecT String ParseState (ReaderT (ParserOptions m) m) a
 
 ignore :: Monad m => m a -> m ()
 ignore = (>> return ())
 
 getResolver :: Monad m => Parser m (IncludeResolver m)
-getResolver = asks pcResolve
+getResolver = asks poIncludeResolver
 
 include :: Monad m => SourceName -> Parser m (Statement SourcePos)
 include sourceName =
@@ -232,7 +232,7 @@ include sourceName =
 includeTemplate :: Monad m => SourceName -> Parser m (Template SourcePos)
 includeTemplate sourceName = do
     resolver <- getResolver
-    currentSource <- fromMaybe "" <$> asks pcCurrentSource
+    currentSource <- fromMaybe "" <$> asks poSourceName
     let includeSourceName = takeDirectory currentSource </> sourceName
     pres <- lift . lift $ parseGingerFile resolver includeSourceName
     case pres of
