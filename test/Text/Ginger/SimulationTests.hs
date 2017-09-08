@@ -782,6 +782,11 @@ simulationTests = testGroup "Simulation"
             mkTestHtml [] [("./features-included.html", "Hello, {{ user }}!")]
                 "{% set user='world' %}{% include 'features-included.html' %}"
                 "Hello, world!"
+        , testCase "not eaten after blocks in included template when keepTrailingNewline is on" $
+            mkTestHtmlOpts (\o -> o { poKeepTrailingNewline = True })
+                [] [("./features-included.html", "Hello, {% if true %}\n{{ user }}{% endif %}\n!")]
+                "{% set user='world' %}{% include 'features-included.html' %}"
+                "Hello, \nworld\n!"
         , testCase "include referencing an included variable" $ do
             mkTestHtml [] [("./features-included.html", "{% set user = 'foobar' %}")]
                 "{% include 'features-included.html' %}Hello, {{ user }}!"

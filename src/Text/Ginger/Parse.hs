@@ -240,7 +240,8 @@ includeTemplate sourceName = do
     resolver <- getResolver
     currentSource <- fromMaybe "" <$> asks poSourceName
     let includeSourceName = takeDirectory currentSource </> sourceName
-    pres <- lift . lift $ parseGingerFile resolver includeSourceName
+    opts <- ask
+    pres <- lift . lift $ parseGingerFile' opts includeSourceName
     case pres of
         Right t -> return t
         Left err -> fail (show err)
