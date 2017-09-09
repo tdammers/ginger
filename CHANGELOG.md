@@ -1,3 +1,8 @@
+## 0.7.1.0
+
+- `StripBlocks` and `LTrimBlocks` options
+- `+` tag modifier to override whitespace stripping
+
 ## 0.7.0.0
 
 - `keepTrailingNewlines` option
