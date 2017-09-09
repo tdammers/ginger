@@ -196,6 +196,8 @@ data ParserOptions m
         { poIncludeResolver :: IncludeResolver m
         , poSourceName :: Maybe SourceName
         , poKeepTrailingNewline :: Bool
+        , poLStripBlocks :: Bool
+        , poTrimBlocks :: Bool
         }
 
 mkParserOptions :: Monad m => IncludeResolver m -> ParserOptions m
@@ -204,6 +206,8 @@ mkParserOptions resolver =
         { poIncludeResolver = resolver
         , poSourceName = Nothing
         , poKeepTrailingNewline = False
+        , poLStripBlocks = False
+        , poTrimBlocks = False
         }
 
 data ParseState
@@ -223,6 +227,21 @@ type Parser m a = ParsecT String ParseState (ReaderT (ParserOptions m) m) a
 
 ignore :: Monad m => m a -> m ()
 ignore = (>> return ())
+
+ifFlag :: Monad m => (ParserOptions m -> Bool) -> Parser m () -> Parser m () -> Parser m ()
+ifFlag flag yes no = do
+    cond <- asks flag
+    if cond then yes else no
+
+whenFlag :: Monad m => (ParserOptions m -> Bool) -> Parser m () -> Parser m ()
+whenFlag flag yes = do
+    cond <- asks flag
+    when cond yes
+
+unlessFlag :: Monad m => (ParserOptions m -> Bool) -> Parser m () -> Parser m ()
+unlessFlag flag no = do
+    cond <- asks flag
+    when (not cond) no
 
 getResolver :: Monad m => Parser m (IncludeResolver m)
 getResolver = asks poIncludeResolver
@@ -861,13 +880,14 @@ openTagP = openP '%'
 closeTagP :: Monad m => Parser m ()
 closeTagP = do
     closeP '%'
-    keepTrailingNewline <- asks poKeepTrailingNewline
-    when
-        (not keepTrailingNewline)
+
+    unlessFlag poKeepTrailingNewline
         (ignore . optional $ literalNewlineP)
 
 openP :: Monad m => Char -> Parser m ()
-openP c = try (openWP c) <|> try (openNWP c)
+openP c = try (openWP c)
+        <|> try (openFWP c)
+        <|> try (openNWP c)
 
 openWP :: Monad m => Char -> Parser m ()
 openWP c = ignore $ do
@@ -875,13 +895,23 @@ openWP c = ignore $ do
     string [ '{', c, '-' ]
     spacesOrComment
 
+openFWP :: Monad m => Char -> Parser m ()
+openFWP c = ignore $ do
+    string [ '{', c, '+' ]
+    spacesOrComment
+
+
 openNWP :: Monad m => Char -> Parser m ()
 openNWP c = ignore $ do
+    whenFlag poLStripBlocks spaces
     string [ '{', c ]
+    notFollowedBy $ oneOf "+-"
     spacesOrComment
 
 closeP :: Monad m => Char -> Parser m ()
-closeP c = try (closeWP c) <|> try (closeNWP c)
+closeP c = try (closeWP c)
+         <|> try (closeFWP c)
+         <|> try (closeNWP c)
 
 closeWP :: Monad m => Char -> Parser m ()
 closeWP c = ignore $ do
@@ -889,10 +919,16 @@ closeWP c = ignore $ do
     string [ '-', c, '}' ]
     spaces
 
+closeFWP :: Monad m => Char -> Parser m ()
+closeFWP c = ignore $ do
+    spacesOrComment
+    string [ '+', c, '}' ]
+
 closeNWP :: Monad m => Char -> Parser m ()
 closeNWP c = ignore $ do
     spacesOrComment
     string [ c, '}' ]
+    whenFlag poTrimBlocks spaces
 
 expressionP :: Monad m => Parser m (Expression SourcePos)
 expressionP = lambdaExprP <|> ternaryExprP

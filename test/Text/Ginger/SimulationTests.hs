@@ -29,13 +29,52 @@ simulationTests = testGroup "Simulation"
         [ testCase "Comment does not appear in output" $ mkTestHtml
             [] [] "- {# Comments #} -" "-  -"
         ]
-    , testGroup "Dashed limiters eat whitespace"
+    , testGroup "Dashed delimiters eat whitespace"
         [ testCase "comments" $ mkTestHtml
             [] [] "- {#- Comment -#} -" "--"
         , testCase "interpolations" $ mkTestHtml
             [] [] "- {{- '' -}} -" "--"
         , testCase "flow" $ mkTestHtml
             [] [] "- {%- set x=1 -%} -" "--"
+        ]
+    , testGroup "Default delimiters eat whitespace with LStripBlocks"
+        [ testCase "comments" $ mkTestHtmlOpts
+            (\o -> o { poLStripBlocks = True })
+            [] [] "- {# Comment #}" "-"
+        , testCase "interpolations" $ mkTestHtmlOpts
+            (\o -> o { poLStripBlocks = True })
+            [] [] "- {{ '' }}" "-"
+        , testCase "flow" $ mkTestHtmlOpts
+            (\o -> o { poLStripBlocks = True })
+            [] [] "- {% set x=1 %}" "-"
+        , testCase "interpolations, left-only" $ mkTestHtmlOpts
+            (\o -> o { poLStripBlocks = True })
+            [] [] "- {{ 'a' }} -" "-a -"
+        ]
+    , testGroup "Default delimiters eat whitespace with TrimBlocks"
+        [ testCase "comments" $ mkTestHtmlOpts
+            (\o -> o { poTrimBlocks = True })
+            [] [] "{# Comment #} -" "-"
+        , testCase "interpolations" $ mkTestHtmlOpts
+            (\o -> o { poTrimBlocks = True })
+            [] [] "{{ '' }} -" "-"
+        , testCase "flow" $ mkTestHtmlOpts
+            (\o -> o { poTrimBlocks = True })
+            [] [] "{% set x=1 %} -" "-"
+        , testCase "interpolations, right-only" $ mkTestHtmlOpts
+            (\o -> o { poTrimBlocks = True })
+            [] [] "- {{ 'a' }} -" "- a-"
+        ]
+    , testGroup "Plussed delimiters override LStrip/TrimBlocks"
+        [ testCase "comments" $ mkTestHtmlOpts
+            (\o -> o { poTrimBlocks = True, poLStripBlocks = True })
+            [] [] "- {#+ Comment +#} -" "-  -"
+        , testCase "interpolations" $ mkTestHtmlOpts
+            (\o -> o { poTrimBlocks = True, poLStripBlocks = True })
+            [] [] "- {{+ '' +}} -" "-  -"
+        , testCase "flow" $ mkTestHtmlOpts
+            (\o -> o { poTrimBlocks = True, poLStripBlocks = True })
+            [] [] "- {%+ set x=1 +%} -" "-  -"
         ]
     , testGroup "Trailing newlines"
         [ testCase "eaten after blocks" $ mkTestHtml
