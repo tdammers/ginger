@@ -295,7 +295,7 @@ simulationTests = testGroup "Simulation"
         , testCase "AND (neither)" $ do
             mkTestHtml [] [] "{% if 0 && 0 %}yes{% else %}no{% endif %}" "no"
         ]
-    , testGroup "Boolean AND"
+    , testGroup "Boolean OR"
         [ testCase "OR (both)" $ do
             mkTestHtml [] [] "{% if 1 || 2 %}yes{% else %}no{% endif %}" "yes"
         , testCase "OR (only one)" $ do
@@ -634,11 +634,11 @@ simulationTests = testGroup "Simulation"
         -- TODO
         -- \"printf\"
         , testGroup "\"printf\""
-            [ testCase "%s, passed as int" $ do
+            [ testCase "%i, passed as int" $ do
                 mkTestHtml [] []
                     "{{ printf(\"%i\", 1) }}"
                     "1"
-            , testCase "%s, passed as string" $ do
+            , testCase "%i, passed as string" $ do
                 mkTestHtml [] []
                     "{{ printf(\"%i\", \"1\") }}"
                     "1"
