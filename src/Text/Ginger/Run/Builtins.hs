@@ -46,6 +46,7 @@ import Data.Text (Text)
 import Data.String (fromString)
 import qualified Data.Text as Text
 import qualified Data.ByteString.UTF8 as UTF8
+import qualified Data.ByteString.Lazy as LBS
 import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.Writer
@@ -77,6 +78,8 @@ import Data.Time ( defaultTimeLocale
                  , TimeZone (..)
                  )
 import Data.Foldable (asum)
+import qualified Data.Aeson as JSON
+import qualified Data.Aeson.Encode.Pretty as JSON
 
 tshow :: Show a => a -> Text
 tshow = Text.pack . show
@@ -618,3 +621,27 @@ gfnDictsort args =
                     (if sortByKey then fst else (asText . snd))
             return . orderedDict . List.sortOn projection $ items
         _ -> throwHere $ ArgumentsError (Just "dictsort") "expected: (dict, case_sensitive=false, by=null)"
+
+gfnJSON :: Monad m => Function (Run p m h)
+gfnJSON args =
+  let extracted =
+          extractArgsDefL
+            [ ("val", def)
+            , ("pretty", toGVal True)
+            ]
+            args
+  in case extracted of
+      Right [ gVal, gPretty ] -> do
+          let encoder =
+                if asBoolean gPretty then
+                    JSON.encodePretty
+                else
+                    JSON.encode
+          return .
+            toGVal .
+            Text.pack .
+            UTF8.toString .
+            LBS.toStrict .
+            encoder $
+            gVal
+      Left _ -> throwHere $ ArgumentsError (Just "json") "expected: one argument"

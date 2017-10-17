@@ -787,6 +787,16 @@ simulationTests = testGroup "Simulation"
                     "{{ replace('foobar', 'o') }}"
                     "fbar"
             ]
+        , testGroup "\"json\""
+            [ testCase "null" $ do
+                mkTestHtml [] []
+                    "{{ null|json }}"
+                    "null"
+            , testCase "[1,2,3]" $ do
+                mkTestHtml [] []
+                    "{{ [1,2,3]|json(false) }}"
+                    "[1,2,3]"
+            ]
         ]
     , testGroup "Setting variables"
         [ testCase "plain" $ do

@@ -36,6 +36,7 @@ library
   -- other-extensions:
   build-depends: base >=4.8 && <5
                , aeson
+               , aeson-pretty
                , bytestring
                , data-default >= 0.5
                , filepath >= 1.3

@@ -161,6 +161,21 @@ Variadic integer division: `int_ratio(a, b, c) == a / b / c`.
 Checks whether `x` is iterable. Anything that implements the list or dict
 interface, or both, is considered iterable.
 
+## `json(x, pretty=true)`
+
+Encodes `x` as JSON. If `pretty` is falsy, produce compact output (no optional
+whitespace); if `pretty` is truthy, produce nicely indented output. Conversion
+to JSON follows the following rules:
+
+- If the value is `null`, then return `null`
+- If the value implements `asJSON`, use that
+- If the value implements `asList`, serialize it as a JSON array (`[...]`)
+- If the value implements `asDictItems`, serialize it as a JSON object
+  (`{...}`)
+- If the value is numeric, serialize it as a JSON number
+- Otherwise, serialize it as a string, according to the value's string
+  representation
+
 ## `length(x)`
 
 Get the length of `x`. For lists and dictionaries, get the number of elements.
