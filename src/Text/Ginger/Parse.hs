@@ -16,19 +16,19 @@ module Text.Ginger.Parse
 , formatParserError
 , IncludeResolver
 , Source, SourceName
-, SourcePos
+, SourcePos (..)
+, sourceName
 , sourceLine
 , sourceColumn
-, sourceName
 )
 where
 
-import Text.Parsec ( ParseError
-                   , SourcePos
+import Text.Parsec ( ParseError (..)
+                   , SourcePos (..)
                    , SourceName (..)
+                   , sourceName
                    , sourceLine
                    , sourceColumn
-                   , sourceName
                    , ParsecT
                    , runParserT
                    , try, lookAhead
