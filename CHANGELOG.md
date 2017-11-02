@@ -1,3 +1,11 @@
+## 0.7.3.0
+
+- Expose parser error position details
+
+## 0.7.2.0
+
+- '|json' filter
+
 ## 0.7.1.0
 
 - `StripBlocks` and `LTrimBlocks` options
