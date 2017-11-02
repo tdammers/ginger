@@ -20,6 +20,7 @@ module Text.Ginger.Parse
 , sourceName
 , sourceLine
 , sourceColumn
+, setSourceName
 )
 where
 
@@ -29,6 +30,7 @@ import Text.Parsec ( ParseError (..)
                    , sourceName
                    , sourceLine
                    , sourceColumn
+                   , setSourceName
                    , ParsecT
                    , runParserT
                    , try, lookAhead
