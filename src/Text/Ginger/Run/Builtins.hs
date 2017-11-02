@@ -298,6 +298,8 @@ gfnMap args = do
                 (\(key, value) -> (key,) <$> mapFunction [(Nothing, value)])
         (Nothing, Just items) ->
             toGVal <$> mapM (mapFunction . (:[]) . (Nothing,)) items
+        (Nothing, Nothing) ->
+            return def
             
 
 gfnSort :: Monad m => Function (Run p m h)
