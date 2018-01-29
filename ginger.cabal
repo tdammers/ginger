@@ -40,7 +40,7 @@ library
                , bytestring
                , data-default >= 0.5
                , filepath >= 1.3
-               , http-types
+               , http-types >= 0.8 && (< 0.11 || >= 0.12)
                , mtl >= 2.2
                , parsec >= 3.0
                , safe >= 0.3
@@ -58,7 +58,7 @@ executable ginger
     main-is: GingerCLI.hs
     hs-source-dirs: cli
     default-language:    Haskell2010
-    build-depends: base >= 4.5 && <5
+    build-depends: base >= 4.8 && <5
                  , bytestring
                  , data-default >= 0.5
                  , ginger
@@ -74,7 +74,7 @@ test-suite tests
                  , Text.Ginger.SimulationTests
     hs-source-dirs: test
     default-language: Haskell2010
-    build-depends: base >=4.5 && <5
+    build-depends: base >=4.8 && <5
                  , ginger
                  , aeson
                  , bytestring
