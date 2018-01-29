@@ -20,9 +20,9 @@ language.
 Ginger provides most of the original Jinja2 template language, as much as that
 makes sense in a Haskell host application.
 
-We do, however, some of the most blatant Pythonisms, especially when we felt
-the features in question were more of an accidental result of binding template
-constructs to Python constructs.
+We do, however, avoid some of the most blatant Pythonisms, especially when we
+felt the features in question were more of an accidental result of binding
+template constructs to Python constructs.
 
 On top of that, we deviate on a few points, and add some features that we think
 are very useful and help make the language better and more consistent.
