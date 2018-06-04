@@ -88,7 +88,7 @@ main = do
             let context =
                     makeContextHtmlExM
                         contextLookup
-                        (putStrLn . Text.unpack . htmlSource)
+                        (putStr . Text.unpack . htmlSource)
                         (hPutStrLn stderr . show)
             runGingerT context t >>= either (hPutStrLn stderr . show) (putStr . show)
 
