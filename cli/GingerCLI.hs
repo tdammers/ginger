@@ -90,7 +90,11 @@ main = do
                         contextLookup
                         (putStr . Text.unpack . htmlSource)
                         (hPutStrLn stderr . show)
-            runGingerT context t >>= either (hPutStrLn stderr . show) (putStr . show)
+            runGingerT context t >>= either (hPutStrLn stderr . show) showOutput
+    where
+      showOutput value
+        | isNull value = return ()
+        | otherwise = putStrLn . show $ value
 
 printParserError :: Maybe String -> ParserError -> IO ()
 printParserError srcMay = putStrLn . formatParserError srcMay
