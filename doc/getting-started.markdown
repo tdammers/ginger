@@ -37,46 +37,132 @@ entry, or even hook the git repository into `stack.yml`. Please refer to
 </html>
 ```
 
+Paste this in a file named `test.html`. Then create another file called
+`test.json`, containing this:
+
+```json
+{
+    "navigation": [
+        {
+            "label": "Home",
+            "url": "/"
+        },
+        {
+            "label": "Example Site",
+            "url": "https://www.example.com/hello"
+        },
+        {
+            "label": "Ginger Website",
+            "url": "https://ginger.tobiasdammers.nl/"
+        }
+    ],
+    "title": "Hello, World!"
+}
+```
+
+We can pass this to the `ginger` CLI executable, like so:
+
+```shell
+$ ginger test.html test.json
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Hello, World!</title>
+    </head>
+    
+    <body>
+        <menu id="nav-main">
+                    <li><a href="/">Home</a></li>
+                    <li><a href="https://www.example.com/hello">Example Site</a></li>
+                    <li><a href="https://ginger.tobiasdammers.nl/">Ginger Website</a></li>
+                </menu>
+        <div class="layout-content-main">
+            <h1>Hello, World!</h1>
+            
+        </div>
+    </body>
+</html>
+```
+
+Now go play with the template (`test.html`) and the input data (`test.json`),
+and see if you can make it do interesting things.
+
+## Ginger Syntax: The Basics.
+
 There are two kinds of delimiters. `{% ... %}` and `{{ ... }}`. The first
 one is used to execute statements such as for-loops or assign values, the
 latter prints the result of an expression to the template. To users of Jinja,
-Twig, or Django, this should be instantly familiar.
+Twig, or Django, this should be instantly familiar. If you're new to these,
+however, here's a quick rundown:
+
+- `{{ expression }}` takes the value of an `expression` and injects it into
+  the output at the same position, with automatic HTML-encoding. Ginger has
+  a fully-featured expression language, so things like addition (`a + b`),
+  property access (`a["foo"]` or `a.foo`), etc., will work. You can see this in
+  action in our example template.
+- `{% for loopVar in list  %} ... {% endfor %}` is a loop construct, roughly
+  equivalent to `forM` in Haskell or `foreach` in a typical imperative
+  language. Our example uses it to iterate over the `navigation` variable.
+- `{% if expression %} ... {% else %} ... {% endif %}` is a conditional, and
+  it works exactly like you'd expect - if `expression` evaluates to something
+  truthy, the first branch is rendered, otherwise the second branch is
+  rendered.
 
 # Haskell Code
 
-On the Haskell side of things, executing a template is a two-step process.
-First, template source code is parsed into a 'Template' data structure,
-which is then fed to 'runGinger' or 'runGingerT'.
+So far, we've been using the command-line `ginger` tool, but of course the real
+beef is using Ginger in a host application. A good way to get an idea of how
+that works is to look at the code in `cli/GingerCLI.hs`, the module that
+defines the `ginger` command-line tool.
 
 ##  Parsing
 
-Because Ginger templates can include other templates, the parser needs a way of
-resolving template names. Instead of hard-wiring the parser into 'IO' though,
-Ginger will work on any Monad type, but requires the caller to provide a
-suitable template resolver function. For 'IO', the resolver would typically
-load a file from a template directory, but other monads might have access to
-some sort of cache, or expose template compiled into a program, or simply
-return 'Nothing' unconditionally to disable any and all imports. A suitable
-example implementation for 'IO' would look like this:
+The first thing we'll need to do is to parse some input into a Ginger
+`Template`. Templates are polymorphic over the source code position; but this
+is an implementation you can safely ignore for now. Let's look at
+`parseGinger`:
 
-    loadFile fn = openFile fn ReadMode >>= hGetContents
+parseGinger :: forall m. Monad m => IncludeResolver m -> Maybe SourceName -> Source -> m (Either ParserError (Template SourcePos))
+    parseGinger :: forall m. Monad m
+                => IncludeResolver m
+                -> Maybe SourceName
+                -> Source
+                -> m (Either ParserError (Template SourcePos))
 
-    loadFileMay fn =
-        tryIOError (loadFile fn) >>= \e ->
-             case e of
-                Right contents ->
-                    return (Just contents)
-                Left err -> do
-                    print err -- remove this line if you want to fail silently
-                    return Nothing
+First of all, this function is parametric over `m`, a Monad instance in which
+the whole thing will run. We would need this to load includes, but since we're
+not going to do that for now, we will pick `Identity`.
 
-(Taken from `cli/GingerCLI.hs`). This interprets the template name as a
-filename relative to the CWD, and returns the file contents on success or
-'Nothing' if there is any error.
+`IncludeResolver m` is a synonym for `SourceName -> m (Maybe Source)`, but
+since we won't be handling includes yet, we can use `(const $ return Nothing)`:
+we simply fail to load any and all includes.
 
-If you don't need a monadic context for resolving includes (e.g. because you
-have pre-loaded all template sources), you can use the pure 'parseGinger'
-flavor, which does not rely on a host monad.
+The `Maybe SourceName` parameter is used to display source file names in error
+messages; we'll pass `Nothing`, because we don't have one.
+
+The `Source` argument is the actual source code, and it's currently a synonym
+for `String`.
+
+Armed with all this, we can write the parsing part:
+
+```haskell
+module Main where
+
+import Text.Ginger
+import Control.Monad.Identity
+import System.IO
+
+main = do
+  src <- getContents
+  let result = runIdentity $
+        parseGinger
+          (const $ return Nothing) -- include resolver
+          Nothing                  -- source name
+          src
+  case result of
+    Left err -> hPutStrLn stderr $ show err
+    Right result -> print result
+```
 
 ## Running - The Easy Interface
 
