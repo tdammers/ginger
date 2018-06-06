@@ -62,7 +62,7 @@ import Data.Default (def)
 import Safe (readMay, lastDef, headMay)
 import Network.HTTP.Types (urlEncode)
 import Debug.Trace (trace)
-import Data.List (lookup, zipWith, unzip)
+import Data.List (lookup, zipWith, unzip, foldl')
 import Data.Time ( defaultTimeLocale
                  , formatTime
                  , LocalTime (..)
@@ -134,6 +134,14 @@ gfnContains (list:elems) = do
         e `isInList` xs = Prelude.any (looseEquals e) xs
         es `areInList` xs = Prelude.all (`isInList` xs) es
     return . toGVal $ rawElems `areInList` rawList
+
+gfnConcat :: Monad m => Function (Run p m h)
+gfnConcat [] =
+  return $ toGVal False
+gfnConcat [x] =
+  return (snd x)
+gfnConcat (x:xs) =
+  return $ foldl' gappend (snd x) (fmap snd xs)
 
 looseEquals :: GVal (Run p m h) -> GVal (Run p m h) -> Bool
 looseEquals a b

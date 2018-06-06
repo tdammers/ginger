@@ -20,6 +20,7 @@ where
 import Prelude ( (.), ($), (==), (/=)
                , (++), (+), (-), (*), (/), div
                , (=<<), (>>=), return
+               , (||), (&&)
                , undefined, otherwise, id, const
                , fmap
                , Maybe (..)
@@ -109,6 +110,30 @@ data GVal m =
         , isNull :: Bool -- ^ Check if the value is null
         , asJSON :: Maybe JSON.Value -- ^ Provide a custom JSON representation of the value
         }
+
+gappend :: GVal m -> GVal m -> GVal m
+gappend a b =
+  GVal
+    { asList = (++) <$> asList a <*> asList b
+    , asDictItems = (++) <$> asDictItems a <*> asDictItems b
+    , asLookup = do
+        lookupA <- asLookup a
+        lookupB <- asLookup b
+        return $ \k -> lookupA k <|> lookupB k
+    , asHtml = asHtml a <> asHtml b
+    , asText = asText a <> asText b
+    , asBoolean = (asBoolean a || asBoolean b) && not (isNull a || isNull b)
+    , asNumber = readMay . Text.unpack $ (asText a <> asText b)
+    , asFunction = Nothing
+    , isNull = isNull a || isNull b
+    , asJSON = case (JSON.toJSON a, JSON.toJSON b) of
+        (JSON.Array x, JSON.Array y) -> Just $ JSON.Array (x <> y)
+        (JSON.Object x, JSON.Object y) -> Just $ JSON.Object (x <> y)
+        (JSON.String x, JSON.String y) -> Just $ JSON.String (x <> y)
+        (JSON.Null, b) -> Just $ b
+        (a, JSON.Null) -> Just $ a
+        _ -> Nothing -- If JSON tags mismatch, use default toJSON impl
+    }
 
 -- | Marshal a GVal between carrier monads.
 -- This will lose 'asFunction' information, because functions cannot be

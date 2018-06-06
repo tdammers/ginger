@@ -129,7 +129,7 @@ defaultScope =
     , ("capitalize", fromFunction . variadicStringFunc $ mconcat . Prelude.map capitalize)
     , ("ceil", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.ceiling)
     , ("center", fromFunction gfnCenter)
-    , ("concat", fromFunction . variadicStringFunc $ mconcat)
+    , ("concat", fromFunction gfnConcat)
     , ("contains", fromFunction gfnContains)
     , ("d", fromFunction gfnDefault)
     , ("date", fromFunction gfnDateFormat)
