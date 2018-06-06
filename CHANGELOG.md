@@ -1,3 +1,9 @@
+## 0.7.4.0
+
+- Make concat() / ~ more generic (now also concatenates lists and dictionaries)
+- CLI omits printing of `null` results. Useful when using as a filter.
+- Fixed excessive newlines in CLI output
+
 ## 0.7.3.0
 
 - Expose parser error position details
