@@ -13,6 +13,8 @@ module Text.Ginger.Parse
 , ParserError (..)
 , ParserOptions (..)
 , mkParserOptions
+, Delimiters (..)
+, defDelimiters
 , formatParserError
 , IncludeResolver
 , Source, SourceName
@@ -183,7 +185,7 @@ parseGinger' opts src = do
         runReaderT
             ( runParserT
                 (templateP `before` eof)
-                defParseState
+                defParseState { psDelimiters = poDelimiters opts }
                 (fromMaybe "<<unknown>>" $ poSourceName opts)
                 src
             )
@@ -193,6 +195,27 @@ parseGinger' opts src = do
         Left e -> return . Left $ fromParsecError e
 
 
+data Delimiters
+    = Delimiters
+        { delimOpenInterpolation :: String
+        , delimCloseInterpolation :: String
+        , delimOpenTag :: String
+        , delimCloseTag :: String
+        , delimOpenComment :: String
+        , delimCloseComment :: String
+        }
+
+defDelimiters :: Delimiters
+defDelimiters
+    = Delimiters
+        { delimOpenInterpolation = "{{"
+        , delimCloseInterpolation = "}}"
+        , delimOpenTag = "{%"
+        , delimCloseTag = "%}"
+        , delimOpenComment = "{#"
+        , delimCloseComment = "#}"
+        }
+
 data ParserOptions m
     = ParserOptions
         { poIncludeResolver :: IncludeResolver m
@@ -200,6 +223,7 @@ data ParserOptions m
         , poKeepTrailingNewline :: Bool
         , poLStripBlocks :: Bool
         , poTrimBlocks :: Bool
+        , poDelimiters :: Delimiters
         }
 
 mkParserOptions :: Monad m => IncludeResolver m -> ParserOptions m
@@ -210,12 +234,14 @@ mkParserOptions resolver =
         , poKeepTrailingNewline = False
         , poLStripBlocks = False
         , poTrimBlocks = False
+        , poDelimiters = defDelimiters
         }
 
 data ParseState
     = ParseState
         { psBlocks :: HashMap VarName (Block SourcePos)
         , psStripIndent :: String
+        , psDelimiters :: Delimiters
         }
 
 defParseState :: ParseState
@@ -223,6 +249,7 @@ defParseState =
     ParseState
         { psBlocks = HashMap.empty
         , psStripIndent = ""
+        , psDelimiters = defDelimiters
         }
 
 type Parser m a = ParsecT String ParseState (ReaderT (ParserOptions m) m) a
@@ -865,71 +892,75 @@ simpleTagP :: Monad m => String -> Parser m ()
 simpleTagP tagName = openTagP >> string tagName >> closeTagP
 
 openInterpolationP :: Monad m => Parser m ()
-openInterpolationP = openP '{'
+openInterpolationP =
+    delimOpenInterpolation . psDelimiters <$> getState >>= openP
 
 closeInterpolationP :: Monad m => Parser m ()
-closeInterpolationP = closeP '}'
+closeInterpolationP =
+    delimCloseInterpolation . psDelimiters <$> getState >>= closeP
 
 openCommentP :: Monad m => Parser m ()
-openCommentP = openP '#'
+openCommentP =
+    delimOpenComment . psDelimiters <$> getState >>= openP
 
 closeCommentP :: Monad m => Parser m ()
-closeCommentP = closeP '#'
+closeCommentP =
+    delimCloseComment . psDelimiters <$> getState >>= closeP
 
 openTagP :: Monad m => Parser m ()
-openTagP = openP '%'
+openTagP =
+    delimOpenTag . psDelimiters <$> getState >>= openP
 
 closeTagP :: Monad m => Parser m ()
 closeTagP = do
-    closeP '%'
-
+    delimCloseTag . psDelimiters <$> getState >>= closeP
     unlessFlag poKeepTrailingNewline
         (ignore . optional $ literalNewlineP)
 
-openP :: Monad m => Char -> Parser m ()
+openP :: Monad m => String -> Parser m ()
 openP c = try (openWP c)
         <|> try (openFWP c)
         <|> try (openNWP c)
 
-openWP :: Monad m => Char -> Parser m ()
+openWP :: Monad m => String -> Parser m ()
 openWP c = ignore $ do
     spaces
-    string [ '{', c, '-' ]
+    string $ c ++ "-"
     spacesOrComment
 
-openFWP :: Monad m => Char -> Parser m ()
+openFWP :: Monad m => String -> Parser m ()
 openFWP c = ignore $ do
-    string [ '{', c, '+' ]
+    string $ c ++ "+"
     spacesOrComment
 
 
-openNWP :: Monad m => Char -> Parser m ()
+openNWP :: Monad m => String -> Parser m ()
 openNWP c = ignore $ do
     whenFlag poLStripBlocks spaces
-    string [ '{', c ]
+    string c
     notFollowedBy $ oneOf "+-"
     spacesOrComment
 
-closeP :: Monad m => Char -> Parser m ()
+closeP :: Monad m => String -> Parser m ()
 closeP c = try (closeWP c)
          <|> try (closeFWP c)
          <|> try (closeNWP c)
 
-closeWP :: Monad m => Char -> Parser m ()
+closeWP :: Monad m => String -> Parser m ()
 closeWP c = ignore $ do
     spacesOrComment
-    string [ '-', c, '}' ]
+    string $ '-':c
     spaces
 
-closeFWP :: Monad m => Char -> Parser m ()
+closeFWP :: Monad m => String -> Parser m ()
 closeFWP c = ignore $ do
     spacesOrComment
-    string [ '+', c, '}' ]
+    string $ '+':c
 
-closeNWP :: Monad m => Char -> Parser m ()
+closeNWP :: Monad m => String -> Parser m ()
 closeNWP c = ignore $ do
     spacesOrComment
-    string [ c, '}' ]
+    string c
     whenFlag poTrimBlocks spaces
 
 expressionP :: Monad m => Parser m (Expression SourcePos)
@@ -979,7 +1010,7 @@ ternaryExprP = do
     cTernaryTailP pos expr1 <|> pyTernaryTailP pos expr1 <|> return expr1
 
 cTernaryTailP :: Monad m => SourcePos -> (Expression SourcePos) -> Parser m (Expression SourcePos)
-cTernaryTailP pos condition = do
+cTernaryTailP pos condition = try $ do
     char '?'
     spacesOrComment
     yesBranch <- expressionP
@@ -1240,3 +1271,5 @@ keyword kw = do
     string kw
     notFollowedBy identCharP
     return kw
+
+-- vim: sw=4

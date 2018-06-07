@@ -19,6 +19,7 @@ import qualified Data.Aeson as JSON
 import qualified Data.ByteString.Lazy.UTF8 as LUTF8
 import qualified Data.ByteString.Lazy as LBS
 import Data.Time (TimeLocale)
+import Control.Exception
 
 simulationTests :: TestTree
 simulationTests = testGroup "Simulation"
@@ -1234,7 +1235,43 @@ simulationTests = testGroup "Simulation"
                 "{{ do { 'hello'; 'world'; } }}"
                 "world"
         ]
+    , testGroup "overriding delimiters"
+        [ testCase "angle brackets" $ do
+            mkTestHtmlOpts
+              (\o -> o { poDelimiters = angleBracketDelimiters })
+              [] []
+              "<% for i in [1,2,3] %><# Comment! -#> << i >> <%- endfor %>"
+              "123"
+        , testCase "evil mode" $ do
+            mkTestHtmlOpts
+              (\o -> o { poDelimiters = evilDelimiters })
+              [] []
+              "<?for i in [1,2,3] ?><!-- Comment! ---> <?= i ?> <?- endfor ?>"
+              "123"
+        ]
     ]
+
+angleBracketDelimiters :: Delimiters
+angleBracketDelimiters
+    = Delimiters
+        { delimOpenInterpolation = "<<"
+        , delimCloseInterpolation = ">>"
+        , delimOpenTag = "<%"
+        , delimCloseTag = "%>"
+        , delimOpenComment = "<#"
+        , delimCloseComment = "#>"
+        }
+
+evilDelimiters :: Delimiters
+evilDelimiters
+    = Delimiters
+        { delimOpenInterpolation = "<?="
+        , delimCloseInterpolation = "?>"
+        , delimOpenTag = "<?"
+        , delimCloseTag = "?>"
+        , delimOpenComment = "<!--"
+        , delimCloseComment = "-->"
+        }
 
 mkTestHtml :: [(VarName, GVal (Run SourcePos IO Html))]
            -> [(FilePath, String)]
@@ -1281,17 +1318,24 @@ mkTest :: (Monoid a, ToGVal (Run SourcePos IO a) a)
        -> Text -- ^ Expected output
        -> Assertion
 mkTest setOptions mContext valToText contextDict includeLookup src expected = do
-    let resolver srcName = return $ lookup srcName includeLookup
-    let options = setOptions (mkParserOptions resolver)
-    template <- either (fail . show) return =<< parseGinger' options src
-    output <- newIORef mempty
-    let write h = modifyIORef output (<> h)
-    let context = mContext
-                    (\key -> return $ fromMaybe def (lookup key contextDict))
-                    write
-    runGingerT context (optimize template)
-    actual <- valToText <$> readIORef output
-    assertEqual "" expected actual
+  run `catch` handleParserError
+  where
+    run = do
+      let resolver srcName = return $ lookup srcName includeLookup
+      let options = setOptions (mkParserOptions resolver)
+      template <- either throw return =<< parseGinger' options src
+      output <- newIORef mempty
+      let write h = modifyIORef output (<> h)
+      let context = mContext
+                      (\key -> return $ fromMaybe def (lookup key contextDict))
+                      write
+      runGingerT context (optimize template)
+      actual <- valToText <$> readIORef output
+      assertEqual "" expected actual
+
+    handleParserError :: ParserError -> IO ()
+    handleParserError err = do
+      assertBool (formatParserError (Just src) err) False
 
 loadSillyLocale :: IO (Maybe JSON.Value)
 loadSillyLocale = do
