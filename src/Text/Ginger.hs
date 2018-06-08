@@ -43,9 +43,12 @@ module Text.Ginger
 -- Note that whitespace /inside/ delimiters is never printed; the dash only
 -- ever removes whitespace on the outside.
 
--- | /Not implemented yet/: Jinja2 allows the programmer to override the
--- default tags from @{% %}@ and @{{ }}@ to different tokens, e.g. @\<% %\>@
--- and @\<\< \>\>@.  Ginger does not currently support this.
+-- These delimiters can be changed on the Haskell side. In principle, any
+-- string is accepted for any delimiter; you may, however, get surprising
+-- results if you pick delimiters that clash with other Ginger syntax, or with
+-- one another (e.g., using the same string to start interpolations and flow
+-- control constructs will not work). See the 'ParserOptions' and 'Delimiters'
+-- data structures for more details.
 
 -- ** Variables
 -- | You can mess around with the variables in templates provided they are

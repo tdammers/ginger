@@ -104,8 +104,14 @@ data ParserError =
 
 instance Exception ParserError where
 
--- | 
-formatParserError :: Maybe String -> ParserError -> String
+-- | Formats a parser errror into something human-friendly.
+-- If template source code is not provided, only the line and column numbers
+-- and the error message are printed. If template source code is provided,
+-- the offending source line is also printed, with a caret (@^@) marking the
+-- exact location of the error.
+formatParserError :: Maybe String -- ^ Template source code (not filename)
+                  -> ParserError -- ^ Error to format
+                  -> String
 formatParserError tplSrc e =
     let sourceLocation = do
             pos <- peSourcePosition e
@@ -144,8 +150,14 @@ fromParsecError e =
             $ errorMessages e)
         (Just $ errorPos e)
 
--- | Parse Ginger source from a file.
-parseGingerFile :: forall m. Monad m => IncludeResolver m -> SourceName -> m (Either ParserError (Template SourcePos))
+-- | Parse Ginger source from a file. Both the initial template and all
+-- subsequent includes are loaded through the provided 'IncludeResolver'. A
+-- consequence of this is that if you pass a \"null resolver\" (like `const
+-- (return Nothing)`), this function will always fail.
+parseGingerFile :: forall m. Monad m
+                => IncludeResolver m
+                -> SourceName
+                -> m (Either ParserError (Template SourcePos))
 parseGingerFile resolver sourceName =
     parseGingerFile' opts sourceName
     where
@@ -154,8 +166,14 @@ parseGingerFile resolver sourceName =
             (mkParserOptions resolver)
                 { poSourceName = Just sourceName }
 
--- | Parse Ginger source from memory.
-parseGinger :: forall m. Monad m => IncludeResolver m -> Maybe SourceName -> Source -> m (Either ParserError (Template SourcePos))
+-- | Parse Ginger source from memory. The initial template is taken directly
+-- from the provided 'Source', while all subsequent includes are loaded through
+-- the provided 'IncludeResolver'.
+parseGinger :: forall m. Monad m
+            => IncludeResolver m
+            -> Maybe SourceName
+            -> Source
+            -> m (Either ParserError (Template SourcePos))
 parseGinger resolver sourceName source =
     parseGinger' opts source
     where
@@ -164,7 +182,8 @@ parseGinger resolver sourceName source =
             (mkParserOptions resolver)
                 { poSourceName = sourceName }
 
--- | Parse Ginger source from a file.
+-- | Parse Ginger source from a file. Flavor of 'parseGingerFile' that takes
+-- additional 'ParserOptions'.
 parseGingerFile' :: Monad m => ParserOptions m -> SourceName -> m (Either ParserError (Template SourcePos))
 parseGingerFile' opts' fn = do
     let opts = opts' { poSourceName = Just fn }
@@ -178,7 +197,8 @@ parseGingerFile' opts' fn = do
                 }
         Just src -> parseGinger' opts src
 
--- | Parse Ginger source from memory.
+-- | Parse Ginger source from memory. Flavor of 'parseGinger' that takes
+-- additional 'ParserOptions'.
 parseGinger' :: Monad m => ParserOptions m -> Source -> m (Either ParserError (Template SourcePos))
 parseGinger' opts src = do
     result <-
@@ -195,6 +215,7 @@ parseGinger' opts src = do
         Left e -> return . Left $ fromParsecError e
 
 
+-- | Delimiter configuration.
 data Delimiters
     = Delimiters
         { delimOpenInterpolation :: String
@@ -205,6 +226,8 @@ data Delimiters
         , delimCloseComment :: String
         }
 
+-- | Default delimiter configuration: @{{ }}@ for interpolation, @{% %}@ for
+-- tags, @{# #}@ for comments.
 defDelimiters :: Delimiters
 defDelimiters
     = Delimiters
@@ -218,14 +241,21 @@ defDelimiters
 
 data ParserOptions m
     = ParserOptions
-        { poIncludeResolver :: IncludeResolver m
+        { -- | How to load templates / includes
+          poIncludeResolver :: IncludeResolver m
+          -- | Current source file name, if any
         , poSourceName :: Maybe SourceName
+          -- | Disable newline stripping
         , poKeepTrailingNewline :: Bool
+          -- | Enable auto-stripping of @{% block %}@s
         , poLStripBlocks :: Bool
+          -- | Enable auto-trimming of @{% block %}@s
         , poTrimBlocks :: Bool
+          -- | Interpolation, tag, and comment delimiters
         , poDelimiters :: Delimiters
         }
 
+-- | Default parser options for a given resolver
 mkParserOptions :: Monad m => IncludeResolver m -> ParserOptions m
 mkParserOptions resolver =
     ParserOptions

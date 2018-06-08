@@ -20,7 +20,7 @@ language.
 Ginger provides most of the original Jinja2 template language, as much as that
 makes sense in a Haskell host application.
 
-We do, however, avoid some of the most blatant Pythonisms, especially when we
+We do, however, avoid some of the most blatant Pythonisms, especially where we
 felt the features in question were more of an accidental result of binding
 template constructs to Python constructs.
 
@@ -45,7 +45,7 @@ Stack ones.
 
 Add the following to your `.cabal`'s `build-depends`:
 
-    ginger >=0.3.9.1 && <0.4
+    ginger >=0.7.4.0 && <0.8
 
 ## Template Syntax
 
@@ -74,13 +74,19 @@ Ginger website](https://ginger.tobiasdammers.nl/guide).
         </body>
     </html>
 
-There are two kinds of delimiters. `{% ... %}` and `{{ ... }}`. The first
-one is used to execute statements such as for-loops or assign values, the
-latter prints the result of an expression to the template.
+There are three kinds of delimiters:
 
-*Not implemented yet*: Jinja2 allows the programmer to override the default
-tags from `{% %}` and `{{ }}` to different tokens, e.g. `<% %>` and `<< >>`.
-Ginger does not currently support this.
+- Interpolation, to inject values into the output; these default to `{{` and
+  `}}`
+- Flow Control, to create conditionals, loops, and other control constructs;
+  these default to `{%` and `%}`
+- Comments, which are removed from the output; these default to `{#` and `#}`.
+
+These delimiters can be changed on the Haskell side. In principle, any string
+is accepted for any delimiter; you may, however, get surprising results if you
+pick delimiters that clash with other Ginger syntax, or with one another (e.g.,
+using the same string to start interpolations and flow control constructs will
+not work).
 
 ## Haskell API
 
