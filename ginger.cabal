@@ -26,6 +26,7 @@ library
                  , Text.Ginger.GVal
                  , Text.Ginger.Html
                  , Text.Ginger.Optimizer
+                 , Text.Ginger.Optimizer.ConstraintAnalyzer
                  , Text.Ginger.Parse
                  , Text.Ginger.Run
                  , Text.PrintfA
@@ -38,6 +39,7 @@ library
                , aeson
                , aeson-pretty
                , bytestring
+               , containers
                , data-default >= 0.5
                , filepath >= 1.3
                , http-types >= 0.8 && (< 0.11 || >= 0.12)
