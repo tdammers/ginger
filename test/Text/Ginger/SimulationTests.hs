@@ -219,6 +219,12 @@ simulationTests = testGroup "Simulation"
             mkTestHtml [] [] "{% if false %}yes{% elif false %}maybe{% else %}no{% endif %}" "no"
         , testCase "if false then \"yes\" else if true then \"maybe\" else \"no\"" $ do
             mkTestHtml [] [] "{% if false %}yes{% elif true %}maybe{% else %}no{% endif %}" "maybe"
+        , testCase "if null should be false" $ do
+            mkTestHtml [] [] "{% if null %}yes{% else %}no{% endif %}" "no"
+        {- TODO: Implement "not"
+        , testCase "if not true then \"yes\" else \"no\"" $ do
+            mkTestHtml [] [] "{% if not true %}yes{% else %}no{% endif %}" "no"
+        -}
         ]
     , testGroup "Exceptions"
         [ testCase "try/catch, no exception" $ do
@@ -275,6 +281,32 @@ simulationTests = testGroup "Simulation"
                   "{% endswitch %}\n"
                 )
                 "One"
+        ]
+    , testGroup "Test builtins"
+        [ {- TODO implement defined
+          testCase "defined(myvar) [defined]" $ do
+            mkTestHtml [] [] "{% set myvar=0 %}{% if defined(myvar) %}yes{% else %}no{% endif %}" "yes"
+        , testCase "defined(myvar) [notdefined]" $ do
+            mkTestHtml [] [] "{% if defined(myvar) %}yes{% else %}no{% endif %}" "no"
+        , -}
+          testCase "even(2)" $ do
+            mkTestHtml [] [] "{% if even(2) %}yes{% else %}no{% endif %}" "yes"
+        , testCase "even(3)" $ do
+            mkTestHtml [] [] "{% if even(3) %}yes{% else %}no{% endif %}" "no"
+        , testCase "even(\"2\")" $ do
+            mkTestHtml [] [] "{% if even(\"2\") %}yes{% else %}no{% endif %}" "yes"
+        , testCase "even(\"3\")" $ do
+            mkTestHtml [] [] "{% if even(\"3\") %}yes{% else %}no{% endif %}" "no"
+        , testCase "even(\"two\")" $ do
+            mkTestHtml [] [] "{% if even(\"two\") %}yes{% else %}no{% endif %}" "no"
+        , testCase "odd(2)" $ do
+            mkTestHtml [] [] "{% if odd(2) %}yes{% else %}no{% endif %}" "no"
+        , testCase "odd(3)" $ do
+            mkTestHtml [] [] "{% if odd(3) %}yes{% else %}no{% endif %}" "yes"
+        , testCase "odd(\"2\")" $ do
+            mkTestHtml [] [] "{% if odd(\"2\") %}yes{% else %}no{% endif %}" "no"
+        , testCase "odd(\"3\")" $ do
+            mkTestHtml [] [] "{% if odd(\"3\") %}yes{% else %}no{% endif %}" "yes"
         ]
     , testGroup "Comparisons"
         [ testCase "if 1 == 1 then \"yes\" else \"no\"" $ do
