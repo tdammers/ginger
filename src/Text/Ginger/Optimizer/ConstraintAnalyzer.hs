@@ -7,6 +7,10 @@
 {-#LANGUAGE FlexibleContexts #-}
 {-#LANGUAGE LambdaCase #-}
 
+-- | A static analyzer for Ginger AST that infers the relative const-ness and
+-- purity of Ginger constructs. That is, given constraint evidence for the
+-- surrounding context, it can infer constraint evidence for a Ginger
+-- expression, statement, or template.
 module Text.Ginger.Optimizer.ConstraintAnalyzer
 where
 
@@ -35,6 +39,8 @@ import qualified Data.Text as Text
 import Data.Default
 
 -- * Representing Evidence
+
+-- ** Scope References
 
 -- | A generalized reference to something that is in scope somewhere, and that
 -- we know something about.
@@ -83,57 +89,42 @@ instance Monoid ScopeRef where
   mempty = CurrentItem
   mappend = scopeAppend
 
-data Constraint
-  = Static -- ^ This value is known to be static, i.e. fully determined at
-           -- compile time.
-  | PureFn -- ^ This value represents a pure function, i.e. applying it has no
-           -- side effects.
-  | KnownValue (GVal Identity) -- ^ We actually know the value at compile time.
-  | KnownOutput (GVal Identity) -- ^ We know what it outputs
-  deriving (Show)
+-- ** Constraints
 
--- We need this stupid Ord instance because 'GVal' doesn't have a sensible one.
--- It's not an entirely honest instance, really, but for the sake of putting
--- it in a 'Map', it's good enough.
-
-instance Ord Constraint where
-  compare = compareConstraint
-
-compareConstraint Static Static = EQ
-compareConstraint Static _ = LT
-compareConstraint PureFn Static = GT
-compareConstraint PureFn PureFn = EQ
-compareConstraint PureFn _ = LT
-compareConstraint (KnownValue _) (KnownOutput _) = LT
-compareConstraint (KnownValue a) (KnownValue b) = compare (asText a) (asText b)
-compareConstraint (KnownValue _) _ = GT
-compareConstraint (KnownOutput a) (KnownOutput b) = compare (asText a) (asText b)
-compareConstraint (KnownOutput _) _ = GT
-
-instance Eq Constraint where
-  a == b = compare a b == EQ
-
+-- | Knowledge that we have about the constraints on an individual item in a
+-- scope.
+--
+-- Note that for the 'knownOutput' and 'knownValue' fields, 'Nothing' means
+-- that we do not know what they evaluate to cq. render; so it most definitely
+-- does not mean that they do not render any output, or evaluate to null. When
+-- we actually do know that, the values will be 'Just def'.
 data Constraints =
   Constraints
-    { isStatic :: Bool
-    , isPure :: Bool
-    , knownValue :: Maybe (GVal Identity)
-    , knownOutput :: Maybe (GVal Identity)
+    { isStatic :: Bool -- ^ Value can be determined at compile time
+    , isPure :: Bool -- ^ This is a pure function
+    , knownValue :: Maybe (GVal Identity) -- ^ The static value, if known
+    , knownOutput :: Maybe (GVal Identity) -- ^ Output, if known
     }
     deriving (Show)
 
+-- | We know nothing about this item.
 unconstrained :: Constraints
 unconstrained =
   Constraints False False Nothing Nothing
 
+-- | We know that we can determine the value of this item statically, but we
+-- don't know what that value is yet.
 staticConstraints :: Constraints
 staticConstraints =
   unconstrained { isStatic = True }
 
+-- | We know the value of this item, and also that is outputs nothing. Implies
+-- 'isStatic'.
 knownValueConstraints :: GVal Identity -> Constraints
 knownValueConstraints val =
   knownConstraints val def
 
+-- | We know the value of this item, and what it outputs. Implies 'isStatic'.
 knownConstraints :: GVal Identity -> GVal Identity -> Constraints
 knownConstraints val output =
   unconstrained
@@ -142,6 +133,9 @@ knownConstraints val output =
     , knownOutput = Just output
     }
 
+-- | Additively combine constraints. The intuition is that
+-- @appendConstraints a b@ means \"We already knew @a@, and now we have also
+-- learned @b@.\"
 appendConstraints :: Constraints -> Constraints -> Constraints
 appendConstraints a b =
   Constraints
@@ -151,18 +145,26 @@ appendConstraints a b =
     , knownOutput = knownOutput b <|> knownOutput a
     }
 
+-- ** Evidence
+
+-- | The entire knowledge we have about a scope. Essentially, a lookup table
+-- of 'ScopeRef's onto 'Constraints'.
 newtype Evidence = Evidence { unEvidence :: Map ScopeRef Constraints }
   deriving (Show)
 
+-- | The default 'Semigroup' on 'Evidence' is accumulating knowledge.
 instance Semigroup Evidence where
   (<>) = appendEvidence
 
+-- | The default 'Monoid' on 'Evidence' is accumulating knowledge, with \"we
+-- don't know anything\" as the empty value.
 instance Monoid Evidence where
   mempty = noEvidence
   mappend = (<>)
 
--- * Pretty-printing Evidence
+-- * Pretty-Printing
 
+-- | Format a 'Constraints' record.
 ppConstraints :: Constraints -> String
 ppConstraints c =
   intercalate ", " $ catMaybes
@@ -172,6 +174,9 @@ ppConstraints c =
     , ("value: " ++) . show . asText <$> knownValue c
     ]
 
+-- | Format a 'ScopeRef'. The current scope is indicated as @.@, top-level
+-- identifiers are printed as barewords, everything else is formatted as
+-- square-bracket indexing.
 ppRef :: ScopeRef -> String
 ppRef CurrentItem = "."
 ppRef (NamedItem n CurrentItem) = Text.unpack n
@@ -179,26 +184,26 @@ ppRef (NamedItem n parent) = ppRef parent ++ "[" ++ show n ++ "]"
 ppRef (NumberedItem i CurrentItem) = "[" ++ show i ++ "]"
 ppRef (NumberedItem i parent) = ppRef parent ++ "[" ++ show i ++ "]"
 
+-- | Format an 'Evidence'; every scope item is returned as a separate list
+-- element.
 ppEvidence' :: Evidence -> [String]
 ppEvidence' ev =
   [ ppRef ref ++ " is " ++ ppConstraints constraints
   | (ref, constraints) <- Map.toAscList (unEvidence ev)
   ]
 
+-- | Format an 'Evidence'; every scope item is printed on its own line.
 ppEvidence :: Evidence -> String
 ppEvidence = unlines . ppEvidence'
 
 -- * Manipulating Evidence
 
+-- | Additively combine 'Evidence's.
 appendEvidence :: Evidence -> Evidence -> Evidence
 appendEvidence (Evidence a) (Evidence b) =
   Evidence $ Map.unionWith appendConstraints a b
 
-emptySetToNothing :: Set a -> Maybe (Set a)
-emptySetToNothing s
-  | Set.null s = Nothing
-  | otherwise = Just s
-
+-- | Alter the 'Constraints' at a given scope reference.
 alterConstraints :: (Constraints -> Constraints) -> ScopeRef -> Evidence -> Evidence
 alterConstraints f ref =
   Evidence
@@ -207,14 +212,7 @@ alterConstraints f ref =
       ref
   . unEvidence
 
-clearConstraints :: ScopeRef -> Evidence -> Evidence
-clearConstraints =
-  alterConstraints (const unconstrained)
-
-setConstraints :: Constraints -> ScopeRef -> Evidence -> Evidence
-setConstraints constr =
-  alterConstraints (const constr)
-
+-- | Get the 'Constraints' at a given 'ScopeRef' in an 'Evidence'.
 getConstraints :: ScopeRef -> Evidence -> Constraints
 getConstraints ref ev =
   fromMaybe unconstrained . Map.lookup ref . unEvidence $ ev
@@ -237,6 +235,7 @@ portEvidence parentRef ev =
 
 type Infer = State Evidence
 
+-- | Run an 'Infer' action over an initial 'Evidence'.
 runInfer :: Infer a -> Evidence -> (a, Evidence)
 runInfer action ev = runState action ev
 
@@ -323,11 +322,15 @@ inferExpr (MemberLookupE _ parent key) = do
         . unEvidence
         $ parentEvidence
 
+-- TODO:
 -- CallE a (Expression a) [(Maybe Text, (Expression a))] -- ^ foo(bar=baz, quux)
+
+-- TODO:
 -- LambdaE a [Text] (Expression a) -- ^ (foo, bar) -> expr
+
 inferExpr (TernaryE _ condE yesE noE) = do
   condEvidence <- inferExpr condE
-  case knownValueMaybe (getConstraints CurrentItem condEvidence) of
+  case knownValue (getConstraints CurrentItem condEvidence) of
     Nothing -> do
       -- We don't actually know which of the two branches will run, so we need
       -- to inspect them both, and then combine them using intersection. That
@@ -347,6 +350,7 @@ inferExpr (DoE _ stmt) =
 inferExpr expr =
   pure noEvidence
 
+-- | Infer the constraints on child expressions.
 inferChildEvidence :: [(ScopeRef, Expression a)] -> Infer Evidence
 inferChildEvidence ((ref, expr):exprs) = do
   myEvidence <- inferExpr expr
@@ -361,13 +365,11 @@ inferChildEvidence [] =
 -- otherwise it will be 'Nothing'.
 refFromKeyConstraints :: Constraints -> Maybe ScopeRef
 refFromKeyConstraints constraints = do
-  gval <- knownValueMaybe constraints
+  gval <- knownValue constraints
   fmap (numberedItem . round) (asNumber gval)
     <|> Just (namedItem (asText gval))
 
-knownValueMaybe :: Constraints -> Maybe (GVal Identity)
-knownValueMaybe = knownValue
-  
+-- | Infer the constraints on key/value pairs of child expressions.
 inferChildPairEvidence :: [(Expression a, Expression a)] -> Infer Evidence
 inferChildPairEvidence ((keyExpr, valExpr):exprs) = do
   keyEvidence <- inferExpr keyExpr
@@ -389,6 +391,7 @@ inferChildPairEvidence [] =
 
 -- ** Statements
 
+-- | Infer constraints for a statement.
 inferStmt :: Statement a -> Infer Evidence
 inferStmt (MultiS _ stmts) = do
   -- Multi statements sequence their children. This means that:
@@ -406,15 +409,16 @@ inferStmt (ScopedS _ body) = do
   context <- get
   inferStmt body <* put context
 
+-- TODO:
 -- IndentS a (Expression a) (Statement a) -- ^ Establish an indented context around the wrapped statement
---
+
 inferStmt (LiteralS _ val) =
   -- Literals are always known
   pure . singletonEvidence $ knownConstraints def (toGVal val)
 
 inferStmt (InterpolationS _ expr) = do
   exprEvidence <- inferExpr expr
-  case knownValueMaybe (getConstraints CurrentItem exprEvidence) of
+  case knownValue (getConstraints CurrentItem exprEvidence) of
     Nothing -> pure exprEvidence
     Just value ->
       pure $
@@ -425,9 +429,10 @@ inferStmt (InterpolationS _ expr) = do
 
 inferStmt (ExpressionS _ expr) =
   inferExpr expr
+
 inferStmt (IfS _ condExpr yesStmt noStmt) = do
   condEvidence <- inferExpr condExpr
-  case knownValueMaybe (getConstraints CurrentItem condEvidence) of
+  case knownValue (getConstraints CurrentItem condEvidence) of
     Nothing -> do
       -- We don't actually know which of the two branches will run, so we need
       -- to inspect them both, and then combine them using intersection. That
@@ -438,27 +443,39 @@ inferStmt (IfS _ condExpr yesStmt noStmt) = do
       case asBoolean val of
         True -> inferStmt yesStmt
         False -> inferStmt noStmt
+
+-- TODO:
 -- SwitchS a (Expression a) [((Expression a), (Statement a))] (Statement a) -- ^ {% switch expression %}{% case expression %}statement{% endcase %}...{% default %}statement{% enddefault %}{% endswitch %}
 -- ForS a (Maybe VarName) VarName (Expression a) (Statement a) -- ^ {% for index, varname in expression %}statement{% endfor %}
+
 inferStmt (SetVarS _ name expr) = do
   exprEvidence <- inferExpr expr
   importEvidence (namedItem name) exprEvidence
   pure . singletonEvidence $ knownValueConstraints def
 
+-- TODO:
 -- DefMacroS a VarName (Macro a) -- ^ {% macro varname %}statements{% endmacro %}
 -- BlockRefS a VarName
 -- PreprocessedIncludeS a (Template a) -- ^ {% include "template" %}
+
 inferStmt (NullS _) =
   pure . singletonEvidence $ knownValueConstraints def
 -- TryCatchS a (Statement a) [CatchBlock a] (Statement a) -- ^ Try / catch / finally
 inferStmt stmt = pure noEvidence
 
+-- | Fold a list of 'Evidence's following sequential execution semantics. See
+-- 'sequenceConstraints' for an explanation.
 sequentialEvidence :: [Evidence] -> Evidence
 sequentialEvidence =
   Evidence
     . foldl' (Map.unionWith sequenceConstraints) (unEvidence . singletonEvidence $ knownConstraints def def)
     . map unEvidence
 
+-- | Combine two 'Evidence's following sequential execution semantics. This
+-- means that staticnessand purity are combined subtractively (if both items
+-- meet the constraint, then we retain it, otherwise we drop it), the known
+-- value will be the value of the second argument, if any (because in
+-- sequential
 sequenceConstraints :: Constraints -> Constraints -> Constraints
 sequenceConstraints a b =
   Constraints
@@ -480,5 +497,3 @@ parseAndReportStmt src = do
           $ src
   let evidence = runInfer (inferStmt stmt) noEvidence
   mapM_ putStrLn . ppEvidence' $ fst evidence
-  putStrLn "-----"
-  mapM_ putStrLn . ppEvidence' $ snd evidence
