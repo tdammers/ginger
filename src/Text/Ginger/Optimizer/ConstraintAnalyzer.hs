@@ -56,9 +56,12 @@ numberedItem i = NumberedItem i CurrentItem
 namedItem :: VarName -> ScopeRef
 namedItem n = NamedItem n CurrentItem
 
+-- | @makeRefRelativeTo candidate parent@ attempts to remove the @parent@ ref
+-- from the @candidate@, if @candidate@ is indeed inside the @parent@ scope.
 makeRefRelativeTo :: ScopeRef -- ^ candidate
                   -> ScopeRef -- ^ parent
-                  -> Maybe ScopeRef
+                  -> Maybe ScopeRef -- ^ 'Just' the relative part, or 'Nothing'
+                                    -- if @candidate@ is not in @parent@
 -- Making anything relative to the current item is a no-op
 makeRefRelativeTo x CurrentItem =
   Just x
@@ -118,6 +121,11 @@ staticConstraints :: Constraints
 staticConstraints =
   unconstrained { isStatic = True }
 
+-- | We know that it's a pure function, which also implies staticness.
+pureConstraints :: Constraints
+pureConstraints =
+  staticConstraints { isPure = True }
+
 -- | We know the value of this item, and also that is outputs nothing. Implies
 -- 'isStatic'.
 knownValueConstraints :: GVal Identity -> Constraints
@@ -166,6 +174,8 @@ instance Monoid Evidence where
 
 -- | Format a 'Constraints' record.
 ppConstraints :: Constraints -> String
+ppConstraints Constraints { isStatic = False, isPure = False } =
+  "unconstrained"
 ppConstraints c =
   intercalate ", " $ catMaybes
     [ if isStatic c then Just "static" else Nothing
@@ -276,10 +286,14 @@ inferExpr (ListE _ xs) = do
   childEvidence <- inferChildEvidence
                       (zip [NumberedItem i CurrentItem | i <- [0..]] xs)
   let selfEvidence =
-        singletonEvidence .
-          Map.foldl' appendConstraints (knownConstraints def def) .
+        singletonEvidence
+        (Map.foldl' appendConstraints (knownConstraints def def) .
           unEvidence $
-          childEvidence
+          childEvidence)
+        { knownValue =
+            toGVal <$>
+              (mapM knownValue . Map.elems . unEvidence $ childEvidence)
+        }
   pure $ selfEvidence <> childEvidence
 
 -- Object literals are bit more complicated, because the keys may or may not
@@ -322,11 +336,38 @@ inferExpr (MemberLookupE _ parent key) = do
         . unEvidence
         $ parentEvidence
 
--- TODO:
--- CallE a (Expression a) [(Maybe Text, (Expression a))] -- ^ foo(bar=baz, quux)
+inferExpr (CallE _ funcE argsE) = do
+  funcConstraints <- getConstraints CurrentItem <$> inferExpr funcE
+  case funcConstraints of
+    -- Constraints { isStatic = True, isPure = True, knownValue = Just func } -> do
+      -- We know the actual function, and it's pure. This is very good.
+    Constraints { isStatic = True, isPure = True } -> do
+      -- We know it's a pure function, and while we don't know which exact one,
+      -- we still know that iff all the arguments are static, then so is the
+      -- return value.
+      constraints <- forM argsE $ \(_, argE) -> do
+        getConstraints CurrentItem <$> inferExpr argE
+      pure . singletonEvidence $ unconstrained { isStatic = all isStatic constraints }
+    _ ->
+      -- Not a pure function: all bets are off
+      pure noEvidence
 
--- TODO:
--- LambdaE a [Text] (Expression a) -- ^ (foo, bar) -> expr
+
+inferExpr (LambdaE _ argNames body) = do
+  applyEvidence <- withLocalState $ do
+    -- We'll infer the body in a hypothetical context where all the
+    -- arguments are pure and static. If the function is pure, then
+    -- the result of this will indicate staticness.
+    forM argNames $ \argName ->
+      importEvidence
+        (namedItem argName)
+        (singletonEvidence pureConstraints)
+    inferExpr body
+  let applyConstraints = getConstraints CurrentItem applyEvidence
+  if isStatic applyConstraints then
+    pure . singletonEvidence $ pureConstraints
+  else
+    pure . singletonEvidence $ unconstrained
 
 inferExpr (TernaryE _ condE yesE noE) = do
   condEvidence <- inferExpr condE
@@ -389,6 +430,20 @@ inferChildPairEvidence ((keyExpr, valExpr):exprs) = do
 inferChildPairEvidence [] =
   pure noEvidence
 
+-- | @withLocalState action@ runs @action@ against a copy of the current state,
+-- leaving the actual state untouched. Any changes to the state made from
+-- within @action@ are discarded on the outside.
+withLocalState :: State s a -> State s a
+withLocalState a = do
+  s <- get
+  a <* put s
+
+namedRefList :: [(Text, a)] -> [(ScopeRef, a)]
+namedRefList = map (\(k, v) -> (namedItem k, v))
+
+numberedRefList :: [a] -> [(ScopeRef, a)]
+numberedRefList = map (\(k, v) -> (numberedItem k, v)) . zip [0..]
+
 -- ** Statements
 
 -- | Infer constraints for a statement.
@@ -403,11 +458,9 @@ inferStmt (MultiS _ stmts) = do
   -- - purity and staticness are determined in a subtractive fashion
   sequentialEvidence <$> mapM inferStmt stmts
 
-inferStmt (ScopedS _ body) = do
-  -- For a scoped statement, we simply remember the original evidence context
-  -- and restore it after we're done inferring this statement.
-  context <- get
-  inferStmt body <* put context
+inferStmt (ScopedS _ body) =
+  -- For a scoped statement, we simply infer the body in a local state.
+  withLocalState $ inferStmt body
 
 -- TODO:
 -- IndentS a (Expression a) (Statement a) -- ^ Establish an indented context around the wrapped statement
@@ -417,18 +470,23 @@ inferStmt (LiteralS _ val) =
   pure . singletonEvidence $ knownConstraints def (toGVal val)
 
 inferStmt (InterpolationS _ expr) = do
+  -- An interpolation statement is static iff its expressions is
+  -- static; it always returns null, and its output is the value
+  -- of the expression.
   exprEvidence <- inferExpr expr
-  case knownValue (getConstraints CurrentItem exprEvidence) of
-    Nothing -> pure exprEvidence
-    Just value ->
-      pure $
-        alterConstraints
-          (\c -> c { knownOutput = Just value })
-          CurrentItem
-          exprEvidence
+  let exprConstraints = getConstraints CurrentItem exprEvidence
+  pure . singletonEvidence $
+    unconstrained
+      { isStatic = isStatic exprConstraints
+      , knownOutput = knownValue exprConstraints
+      , knownValue = Just def
+      }
 
-inferStmt (ExpressionS _ expr) =
+inferStmt (ExpressionS _ expr) = do
+  -- An expression statement merely evaluates the expression for its
+  -- side effects
   inferExpr expr
+  pure . singletonEvidence $ knownConstraints def def
 
 inferStmt (IfS _ condExpr yesStmt noStmt) = do
   condEvidence <- inferExpr condExpr
@@ -436,7 +494,8 @@ inferStmt (IfS _ condExpr yesStmt noStmt) = do
     Nothing -> do
       -- We don't actually know which of the two branches will run, so we need
       -- to inspect them both, and then combine them using intersection. That
-      -- is, we can only retain evidence that applies to both branches.
+      -- is, we can only retain evidence that applies to both branches; and we
+      -- cannot really say anything useful about the output at all.
       -- TODO: actually do the above.
       pure $ singletonEvidence unconstrained
     Just val ->
@@ -446,7 +505,57 @@ inferStmt (IfS _ condExpr yesStmt noStmt) = do
 
 -- TODO:
 -- SwitchS a (Expression a) [((Expression a), (Statement a))] (Statement a) -- ^ {% switch expression %}{% case expression %}statement{% endcase %}...{% default %}statement{% enddefault %}{% endswitch %}
--- ForS a (Maybe VarName) VarName (Expression a) (Statement a) -- ^ {% for index, varname in expression %}statement{% endfor %}
+
+inferStmt (ForS _ varNameIndexMay varNameValue itereeE body) = do
+  -- for loops work as follows.
+  --
+  -- First, we need to figure out the constraints on the iteree.
+  itereeEvidence <- inferExpr itereeE
+  let itereeConstraints = getConstraints CurrentItem itereeEvidence
+      -- remember what output evaluating the iteree generates
+      itereeOutput = knownOutput itereeConstraints
+  case itereeConstraints of
+    -- If the iteree
+    -- is not known statically, then we can't really say anything about the loop
+    -- at all.
+    Constraints { isStatic = False } ->
+      pure noEvidence
+
+    -- If the iteree *is* fully known, then we can unroll the loop.
+    Constraints { knownValue = Just value } -> do
+      let itereeValues =
+            fromMaybe [] $
+            (namedRefList <$> asDictItems value) <|>
+            (numberedRefList <$> asList value)
+      fmap sequentialEvidence . forM itereeValues $ \(ref, val) ->
+        withLocalState $ do
+          importEvidence CurrentItem $
+                Evidence . Map.fromList . catMaybes $
+                  [ Just (namedItem varNameValue, staticConstraints)
+                  , do
+                      varNameIndex <- varNameIndexMay
+                      Just (namedItem varNameIndex, staticConstraints)
+                  ]
+          portEvidence ref <$> inferStmt body
+
+    -- If it's static, but we don't know the value, then we can only do a
+    -- general constness analysis on the body, but we cannot unroll the loop
+    -- yet. We still know that *if* the body is static in a context where the
+    -- loop index and loop variable are static, then the whole loop is also
+    -- static.
+    _ -> withLocalState $ do
+      -- The loop variables axiomatically only depend on the iteree, and
+      -- since we already know that the iteree is static, we are allowed to
+      -- fabricate evidence on the loop variable(s).
+      importEvidence CurrentItem $
+            Evidence . Map.fromList . catMaybes $
+              [ Just (namedItem varNameValue, staticConstraints)
+              , do
+                  varNameIndex <- varNameIndexMay
+                  Just (namedItem varNameIndex, staticConstraints)
+              ]
+      -- And now we run the inference on the loop body.
+      inferStmt body
 
 inferStmt (SetVarS _ name expr) = do
   exprEvidence <- inferExpr expr
@@ -487,6 +596,16 @@ sequenceConstraints a b =
 
 inferTemplateConstraints :: Template a -> Infer Evidence
 inferTemplateConstraints tpl = pure noEvidence
+
+parseAndReportExpr :: String -> IO ()
+parseAndReportExpr src = do
+  let Template { templateBody = InterpolationS _ expr } =
+        either (error . formatParserError (Just src)) id
+          . runIdentity
+          . parseGinger (const . return $ Nothing) Nothing
+          $ "{{ " ++ src ++ " }}"
+  let evidence = runInfer (inferExpr expr) noEvidence
+  mapM_ putStrLn . ppEvidence' $ fst evidence
 
 parseAndReportStmt :: String -> IO ()
 parseAndReportStmt src = do
