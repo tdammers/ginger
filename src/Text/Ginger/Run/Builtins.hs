@@ -297,7 +297,7 @@ gfnMap args = do
         (Nothing, Just key) -> return $ \case
             (_, item):_ ->
                 return $ lookupLooseDef def (toGVal key) item
-            _ -> 
+            _ ->
                 return def
         _ -> fail "You have to pass a function or an attribute"
     case (dictMay, listMay) of
@@ -308,7 +308,7 @@ gfnMap args = do
             toGVal <$> mapM (mapFunction . (:[]) . (Nothing,)) items
         (Nothing, Nothing) ->
             return def
-            
+
 
 gfnSort :: Monad m => Function (Run p m h)
 gfnSort args = do
@@ -655,3 +655,19 @@ gfnJSON args =
             encoder $
             gVal
       Left _ -> throwHere $ ArgumentsError (Just "json") "expected: one argument"
+
+
+-- Built-in tests
+--gfnDefined :: Monad m => Function (Run p m h)
+--gfnDefined = unaryFunc $ toGVal . isJust . fmap getVar . fromGVal
+
+gfnDivisibleBy :: Monad m => Function (Run p m h)
+gfnDivisibleBy = binaryFunc $ \x y -> toGVal $ divisibleBy <$> (toInteger x) <*> (toInteger y)
+  where divisibleBy x y = x `Prelude.mod` y == 0
+
+gfnEven :: Monad m => Function (Run p m h)
+gfnEven = unaryFunc $ toGVal . fmap Prelude.even . toInteger
+
+gfnOdd :: Monad m => Function (Run p m h)
+gfnOdd = unaryFunc $ toGVal . fmap Prelude.odd . toInteger
+
