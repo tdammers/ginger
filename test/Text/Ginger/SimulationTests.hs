@@ -595,7 +595,7 @@ simulationTests = testGroup "Simulation"
                 mkTestHtml [] []
                     "{% if equals(1, 1, 1) %}yes{% else %}no{% endif %}"
                     "yes"
-            , testCase "some qual" $ do
+            , testCase "some equal" $ do
                 mkTestHtml [] []
                     "{% if equals(1, 1, 2) %}yes{% else %}no{% endif %}"
                     "no"
