@@ -61,7 +61,7 @@ import qualified Data.Aeson as JSON
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 import qualified Data.Vector as Vector
-import Control.Monad ( forM, mapM )
+import Control.Monad ((<=<), forM, mapM)
 import Control.Monad.Trans (MonadTrans, lift)
 import Data.Default (Default, def)
 import Text.Printf
@@ -730,6 +730,11 @@ toNumber = asNumber
 toInt :: GVal m -> Maybe Int
 toInt x = toNumber x >>= toBoundedInteger
 
+-- | Convert a 'GVal' to an 'Integer'
+-- The conversion will fail when the value is not an integer
+toInteger :: GVal m -> Maybe Integer
+toInteger = Prelude.either (const Nothing) Just . floatingOrInteger <=< asNumber
+
 -- | Convert a 'GVal' to an 'Int', falling back to the given
 -- default if the conversion fails.
 toIntDef :: Int -> GVal m -> Int
@@ -779,6 +784,9 @@ instance FromGVal m Int where
 
 instance FromGVal m Scientific where
     fromGVal = asNumber
+
+instance FromGVal m Integer where
+    fromGVal = toInteger
 
 instance FromGVal m Text where
     fromGVal = Just . asText
