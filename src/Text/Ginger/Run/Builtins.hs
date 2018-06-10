@@ -657,7 +657,7 @@ gfnJSON args =
       Left _ -> throwHere $ ArgumentsError (Just "json") "expected: one argument"
 
 
-{- builtin test functions -}
+-- Built-in tests
 --gfnDefined :: Monad m => Function (Run p m h)
 --gfnDefined = unaryFunc $ toGVal . isJust . fmap getVar . fromGVal
 

@@ -47,19 +47,18 @@ optimizeTemplate t =
       , templateParent = optimize <$> templateParent t
       }
 
-{-
-    = MultiS p [Statement a] -- ^ A sequence of multiple statements
-    | ScopedS p Statement a -- ^ Run wrapped statement in a local scope
-    | LiteralS p Html -- ^ Literal output (anything outside of any tag)
-    | InterpolationS p Expression a -- ^ {{ expression }}
-    | IfS p Expression a Statement a Statement a -- ^ {% if expression %}statement{% else %}statement{% endif %}
-    | ForS p (Maybe VarName) VarName Expression a Statement a -- ^ {% for index, varname in expression %}statement{% endfor %}
-    | SetVarS p VarName Expression a -- ^ {% set varname = expr %}
-    | DefMacroS p VarName Macro a -- ^ {% macro varname %}statements{% endmacro %}
-    | BlockRefS p VarName
-    | PreprocessedIncludeS p Template a -- ^ {% include "template" %}
-    | NullS p -- ^ The do-nothing statement (NOP)
--}
+--    = MultiS p [Statement a] -- ^ A sequence of multiple statements
+--    | ScopedS p Statement a -- ^ Run wrapped statement in a local scope
+--    | LiteralS p Html -- ^ Literal output (anything outside of any tag)
+--    | InterpolationS p Expression a -- ^ {{ expression }}
+--    | IfS p Expression a Statement a Statement a -- ^ {% if expression %}statement{% else %}statement{% endif %}
+--    | ForS p (Maybe VarName) VarName Expression a Statement a -- ^ {% for index, varname in expression %}statement{% endfor %}
+--    | SetVarS p VarName Expression a -- ^ {% set varname = expr %}
+--    | DefMacroS p VarName Macro a -- ^ {% macro varname %}statements{% endmacro %}
+--    | BlockRefS p VarName
+--    | PreprocessedIncludeS p Template a -- ^ {% include "template" %}
+--    | NullS p -- ^ The do-nothing statement (NOP)
+
 optimizeStatement (MultiS p items) =
     case optimizeStatementList items of
         [] -> NullS p
@@ -100,21 +99,19 @@ mergeLiterals (x@(LiteralS p1 a):y@(LiteralS p2 b):xs) = mergeLiterals $ (Litera
 mergeLiterals (x:xs) = x:mergeLiterals xs
 
 
-{-
-data Expression a
-    = StringLiteralE p Text -- ^ String literal expression: "foobar"
-    | NumberLiteralE p Scientific -- ^ Numeric literal expression: 123.4
-    | BoolLiteralE p Bool -- ^ Boolean literal expression: true
-    | NullLiteralE p -- ^ Literal null
-    | VarE p VarName -- ^ Variable reference: foobar
-    | ListE p [Expression a] -- ^ List construct: [ expr, expr, expr ]
-    | ObjectE p [(Expression a, Expression a)] -- ^ Object construct: { expr: expr, expr: expr, ... }
-    | MemberLookupE p Expression a Expression a -- ^ foo[bar] (also dot access)
-    | CallE p Expression a [(Maybe Text, Expression a)] -- ^ foo(bar=baz, quux)
-    | LambdaE p [Text] Expression a -- ^ (foo, bar) -> expr
-    | TernaryE p Expression a Expression a Expression a -- ^ expr ? expr : expr
-    deriving (Show)
--}
+-- data Expression a
+--     = StringLiteralE p Text -- ^ String literal expression: "foobar"
+--     | NumberLiteralE p Scientific -- ^ Numeric literal expression: 123.4
+--     | BoolLiteralE p Bool -- ^ Boolean literal expression: true
+--     | NullLiteralE p -- ^ Literal null
+--     | VarE p VarName -- ^ Variable reference: foobar
+--     | ListE p [Expression a] -- ^ List construct: [ expr, expr, expr ]
+--     | ObjectE p [(Expression a, Expression a)] -- ^ Object construct: { expr: expr, expr: expr, ... }
+--     | MemberLookupE p Expression a Expression a -- ^ foo[bar] (also dot access)
+--     | CallE p Expression a [(Maybe Text, Expression a)] -- ^ foo(bar=baz, quux)
+--     | LambdaE p [Text] Expression a -- ^ (foo, bar) -> expr
+--     | TernaryE p Expression a Expression a Expression a -- ^ expr ? expr : expr
+--     deriving (Show)
 
 data Purity = Pure | Impure
     deriving (Show, Eq, Enum, Read, Ord, Bounded)
