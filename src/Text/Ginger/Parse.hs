@@ -1231,7 +1231,9 @@ varExprP = do
     litName <- identifierP
     spacesOrComment
     return $ case litName of
+        "True" -> BoolLiteralE pos True
         "true" -> BoolLiteralE pos True
+        "False" -> BoolLiteralE pos False
         "false" -> BoolLiteralE pos False
         "null" -> NullLiteralE pos
         _ -> VarE pos litName

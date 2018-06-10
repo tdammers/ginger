@@ -102,8 +102,12 @@ simulationTests = testGroup "Simulation"
         , testGroup "Booleans"
             [ testCase "true" $ mkTestHtml
                 [] [] "{{ true }}" "1"
+            , testCase "True" $ mkTestHtml
+                [] [] "{{ True }}" "1"
             , testCase "false" $ mkTestHtml
                 [] [] "{{ false }}" ""
+            , testCase "False" $ mkTestHtml
+                [] [] "{{ False }}" ""
             ]
         , testCase "Null" $ mkTestHtml
             [] [] "{{ null }}" ""
