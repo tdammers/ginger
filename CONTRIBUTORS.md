@@ -4,3 +4,5 @@
   https://github.com/tdammers/
 - **Alex Greif**  
   https://github.com/agreif/
+- **Wanja Chresta**
+  https://github.com/wchresta/
