@@ -1063,8 +1063,8 @@ booleanExprP :: Monad m => Parser m (Expression SourcePos)
 booleanExprP =
     operativeExprP
         comparativeExprP
-        [ ("||", "any")
-        , ("&&", "all")
+        [ ("or", "any")
+        , ("and", "all")
         ]
 
 comparativeExprP :: Monad m => Parser m (Expression SourcePos)
