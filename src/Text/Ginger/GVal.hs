@@ -728,7 +728,7 @@ toNumber = asNumber
 -- The conversion will fail when the value is not numeric, and also if
 -- it is too large to fit in an 'Int'.
 toInt :: GVal m -> Maybe Int
-toInt x = toNumber x >>= toBoundedInteger
+toInt = toBoundedInteger <=< toNumber
 
 -- | Convert a 'GVal' to an 'Integer'
 -- The conversion will fail when the value is not an integer

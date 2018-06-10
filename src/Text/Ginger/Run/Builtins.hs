@@ -661,6 +661,10 @@ gfnJSON args =
 --gfnDefined :: Monad m => Function (Run p m h)
 --gfnDefined = unaryFunc $ toGVal . isJust . fmap getVar . fromGVal
 
+gfnDivisibleBy :: Monad m => Function (Run p m h)
+gfnDivisibleBy = binaryFunc $ \x y -> toGVal $ divisibleBy <$> (toInteger x) <*> (toInteger y)
+  where divisibleBy x y = x `Prelude.mod` y == 0
+
 gfnEven :: Monad m => Function (Run p m h)
 gfnEven = unaryFunc $ toGVal . fmap Prelude.even . toInteger
 
