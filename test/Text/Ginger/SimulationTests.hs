@@ -298,19 +298,31 @@ simulationTests = testGroup "Simulation"
             mkTestHtml [] [] "{% if (null < 1) %}yes{% else %}no{% endif %}" "no"
         ]
     , testGroup "Boolean AND"
-        [ testCase "AND (both)" $ do
+        [ testCase "AND (both) (and)" $ do
+            mkTestHtml [] [] "{% if 1 and 2 %}yes{% else %}no{% endif %}" "yes"
+        , testCase "AND (only one) (and)" $ do
+            mkTestHtml [] [] "{% if 1 and 0 %}yes{% else %}no{% endif %}" "no"
+        , testCase "AND (neither) (and)" $ do
+            mkTestHtml [] [] "{% if 0 and 0 %}yes{% else %}no{% endif %}" "no"
+        , testCase "AND (both) (&&)" $ do
             mkTestHtml [] [] "{% if 1 && 2 %}yes{% else %}no{% endif %}" "yes"
-        , testCase "AND (only one)" $ do
+        , testCase "AND (only one) (&&)" $ do
             mkTestHtml [] [] "{% if 1 && 0 %}yes{% else %}no{% endif %}" "no"
-        , testCase "AND (neither)" $ do
+        , testCase "AND (neither) (&&)" $ do
             mkTestHtml [] [] "{% if 0 && 0 %}yes{% else %}no{% endif %}" "no"
         ]
     , testGroup "Boolean OR"
-        [ testCase "OR (both)" $ do
+        [ testCase "OR (both) (or)" $ do
+            mkTestHtml [] [] "{% if 1 or 2 %}yes{% else %}no{% endif %}" "yes"
+        , testCase "OR (only one) (or)" $ do
+            mkTestHtml [] [] "{% if 1 or 0 %}yes{% else %}no{% endif %}" "yes"
+        , testCase "OR (either) (or)" $ do
+            mkTestHtml [] [] "{% if 0 or 0 %}yes{% else %}no{% endif %}" "no"
+        , testCase "OR (both) (||)" $ do
             mkTestHtml [] [] "{% if 1 || 2 %}yes{% else %}no{% endif %}" "yes"
-        , testCase "OR (only one)" $ do
+        , testCase "OR (only one) (||)" $ do
             mkTestHtml [] [] "{% if 1 || 0 %}yes{% else %}no{% endif %}" "yes"
-        , testCase "OR (either)" $ do
+        , testCase "OR (either) (||)" $ do
             mkTestHtml [] [] "{% if 0 || 0 %}yes{% else %}no{% endif %}" "no"
         ]
     , testGroup "Slicing brackets"
