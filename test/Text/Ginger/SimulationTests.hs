@@ -349,14 +349,14 @@ simulationTests = testGroup "Simulation"
 --            mkTestHtml [] [] "{% set myvar=0 %}{% if defined(myvar) %}yes{% else %}no{% endif %}" "yes"
 --        , testCase "defined(myvar) [notdefined]" $ do
 --            mkTestHtml [] [] "{% if defined(myvar) %}yes{% else %}no{% endif %}" "no"
-        [ testGroup "\"divisibleBy\""
-            [ testCase "divisibleBy(14,7)" $ do
+        [ testGroup "\"divisibleby\""
+            [ testCase "divisibleby(14,7)" $ do
                 mkTestHtml [] []
-                    "{% if divisibleBy(14,7) %}yes{% else %}no{% endif %}"
+                    "{% if divisibleby(14,7) %}yes{% else %}no{% endif %}"
                     "yes"
-            , testCase "divisibleBy(14,6)" $ do
+            , testCase "divisibleby(14,6)" $ do
                 mkTestHtml [] []
-                    "{% if divisibleBy(14,6) %}yes{% else %}no{% endif %}"
+                    "{% if divisibleby(14,6) %}yes{% else %}no{% endif %}"
                     "no"
             ]
         , testGroup "\"even\""

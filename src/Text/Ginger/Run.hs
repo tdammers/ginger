@@ -137,13 +137,12 @@ defaultScope =
     , ("default", fromFunction gfnDefault)
     , ("dictsort", fromFunction gfnDictsort)
     , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
-    , ("divisibleBy", fromFunction gfnDivisibleBy)
+    , ("divisibleby", fromFunction gfnDivisibleBy)
     , ("e", fromFunction gfnEscape)
     , ("eq", fromFunction gfnEquals)
     , ("equals", fromFunction gfnEquals)
     , ("equalto", fromFunction gfnEquals)
     , ("escape", fromFunction gfnEscape)
-    , ("escaped", fromFunction gfnEscaped)
     , ("eval", fromFunction gfnEval)
     , ("even", fromFunction gfnEven)
     , ("filesizeformat", fromFunction gfnFileSizeFormat)
@@ -155,7 +154,6 @@ defaultScope =
     , ("greater", fromFunction gfnGreater)
     , ("greaterthan", fromFunction gfnGreater)
     , ("greaterEquals", fromFunction gfnGreaterEquals)
-    , ("in", fromFunction gfnIn)
     , ("int", fromFunction . unaryFunc $ toGVal . fmap (Prelude.truncate :: Scientific -> Int) . asNumber)
     , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
     , ("iterable", fromFunction . unaryFunc $ toGVal . (\x -> isList x || isDict x))
@@ -187,6 +185,12 @@ defaultScope =
     , ("upper", fromFunction . variadicStringFunc $ mconcat . Prelude.map Text.toUpper)
     , ("lower", fromFunction . variadicStringFunc $ mconcat . Prelude.map Text.toLower)
     , ("throw", fromFunction gfnThrow)
+
+    -- Tests/predicates
+
+    , ("in", fromFunction gfnIn)
+    , ("escaped", fromFunction gfnEscaped)
+
     -- TODO: sameas (predicate)
     -- NOTE that this test doesn't make sense in a host language where pointers
     -- are transparent - in Haskell, we simply don't care whether two values
