@@ -145,7 +145,7 @@ defaultScope =
     , ("equals", fromFunction gfnEquals)
     , ("equalto", fromFunction gfnEquals)
     , ("escape", fromFunction gfnEscape)
-    -- TODO: escaped
+    , ("escaped", fromFunction gfnEscaped)
     , ("eval", fromFunction gfnEval)
     , ("even", fromFunction gfnEven)
     , ("filesizeformat", fromFunction gfnFileSizeFormat)

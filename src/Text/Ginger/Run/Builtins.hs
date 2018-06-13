@@ -108,6 +108,21 @@ gfnDefault ((_, x):xs)
 gfnEscape :: Monad m => Function (Run p m h)
 gfnEscape = return . toGVal . html . mconcat . fmap (asText . snd)
 
+-- Check if all arguments are HTML-\"escaped\" (sic!) NOTE that this doesn't
+-- really make much sense considering the way Ginger works - every GVal is, by
+-- construction, both escaped in its 'asGVal' representation and not escaped in
+-- its 'asText' representation, at the same time.
+-- So what we check instead is whether the current 'asHtml'representation of
+-- the value is exactly the same as what explicitly HTML-encoding the 'asText'
+-- representation would give. In other words, we check whether the HTML
+-- representations of @{{ v }}@ and @{{ v|escape }}@ match.
+gfnEscaped :: Monad m => Function (Run p m h)
+gfnEscaped = return . toGVal . List.all (isEscaped . snd)
+  where
+    isEscaped v =
+      (asHtml . toGVal . html . asText $ v) ==
+      (asHtml v)
+
 gfnAny :: Monad m => Function (Run p m h)
 gfnAny xs = return . toGVal $ Prelude.any (asBoolean . snd) xs
 
