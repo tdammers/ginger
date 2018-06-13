@@ -126,7 +126,6 @@ defaultScope =
     , ("any", fromFunction gfnAny)
     , ("all", fromFunction gfnAll)
     -- TODO: batch
-    -- TODO: callable
     , ("capitalize", fromFunction . variadicStringFunc $ mconcat . Prelude.map capitalize)
     , ("ceil", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.ceiling)
     , ("center", fromFunction gfnCenter)
@@ -136,7 +135,6 @@ defaultScope =
     , ("date", fromFunction gfnDateFormat)
     , ("dateformat", fromFunction gfnDateFormat)
     , ("default", fromFunction gfnDefault)
-    -- TODO: defined
     , ("dictsort", fromFunction gfnDictsort)
     , ("difference", fromFunction . variadicNumericFunc 0 $ difference)
     , ("divisibleBy", fromFunction gfnDivisibleBy)
@@ -167,37 +165,48 @@ defaultScope =
     , ("less", fromFunction gfnLess)
     , ("lessthan", fromFunction gfnLess)
     , ("lessEquals", fromFunction gfnLessEquals)
-    -- TODO: lower (predicate)
     , ("lt", fromFunction gfnLess)
     , ("map", fromFunction gfnMap)
-    -- TODO: mapping (predicate)
     , ("modulo", fromFunction . variadicNumericFunc 1 $ fromIntegral . modulo . Prelude.map Prelude.floor)
     , ("ne", fromFunction gfnNEquals)
     , ("nequals", fromFunction gfnNEquals)
-    -- TODO: none (predicate)
     , ("num", fromFunction . unaryFunc $ toGVal . asNumber)
-    -- TODO: number (predicate)
     , ("odd", fromFunction gfnOdd)
     , ("printf", fromFunction gfnPrintf)
     , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
     , ("ratio", fromFunction . variadicNumericFunc 1 $ Scientific.fromFloatDigits . ratio . Prelude.map Scientific.toRealFloat)
     , ("replace", fromFunction gfnReplace)
     , ("round", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.round)
-    -- TODO: sameas (predicate)
-    -- TODO: sequence (predicate)
     , ("show", fromFunction . unaryFunc $ fromString . show)
     , ("slice", fromFunction gfnSlice)
     , ("sort", fromFunction gfnSort)
     , ("str", fromFunction . unaryFunc $ toGVal . asText)
-    -- TODO: string (predicate)
     , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
     , ("truncate", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.truncate)
-    -- TODO: undefined (predicate)
     , ("urlencode", fromFunction gfnUrlEncode)
     , ("upper", fromFunction . variadicStringFunc $ mconcat . Prelude.map Text.toUpper)
-    -- TODO: upper (predicate)
     , ("lower", fromFunction . variadicStringFunc $ mconcat . Prelude.map Text.toLower)
     , ("throw", fromFunction gfnThrow)
+    -- TODO: sameas (predicate)
+    -- NOTE that this test doesn't make sense in a host language where pointers
+    -- are transparent - in Haskell, we simply don't care whether two values
+    -- share a memory location or not, and whether they do or not might even
+    -- depend on build flags.
+
+    -- TODO: mapping (predicate)
+    -- TODO: none (predicate)
+    -- TODO: number (predicate)
+    -- TODO: sequence (predicate)
+    -- TODO: string (predicate)
+    -- TODO: callable
+
+    -- TODO: defined (predicate)
+    -- TODO: undefined (predicate)
+    -- NOTE that @defined@ cannot actually be written as a function. See
+    -- issue #33.
+
+    -- TODO: lower (predicate)
+    -- TODO: upper (predicate)
     ]
 
 -- | Simplified interface to render a ginger template \"into\" a monad.
