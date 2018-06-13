@@ -99,13 +99,13 @@ gfnUrlEncode =
         . asText
         )
 
-gfnDefault :: Monad m => Function (Run p m h)
+gfnDefault :: Monad m => Function m
 gfnDefault [] = return def
 gfnDefault ((_, x):xs)
     | asBoolean x = return x
     | otherwise = gfnDefault xs
 
-gfnEscape :: Monad m => Function (Run p m h)
+gfnEscape :: Monad m => Function m
 gfnEscape = return . toGVal . html . mconcat . fmap (asText . snd)
 
 -- Check if all arguments are HTML-\"escaped\" (sic!) NOTE that this doesn't
@@ -116,20 +116,20 @@ gfnEscape = return . toGVal . html . mconcat . fmap (asText . snd)
 -- the value is exactly the same as what explicitly HTML-encoding the 'asText'
 -- representation would give. In other words, we check whether the HTML
 -- representations of @{{ v }}@ and @{{ v|escape }}@ match.
-gfnEscaped :: Monad m => Function (Run p m h)
+gfnEscaped :: Monad m => Function m
 gfnEscaped = return . toGVal . List.all (isEscaped . snd)
   where
     isEscaped v =
       (asHtml . toGVal . html . asText $ v) ==
       (asHtml v)
 
-gfnAny :: Monad m => Function (Run p m h)
+gfnAny :: Monad m => Function m
 gfnAny xs = return . toGVal $ Prelude.any (asBoolean . snd) xs
 
-gfnAll :: Monad m => Function (Run p m h)
+gfnAll :: Monad m => Function m
 gfnAll xs = return . toGVal $ Prelude.all (asBoolean . snd) xs
 
-gfnIn :: Monad m => Function (Run p m h)
+gfnIn :: Monad m => Function m
 gfnIn [] =
   return def
 gfnIn [needle] =
@@ -148,13 +148,13 @@ inDict :: GVal m -> GVal m -> Bool
 inDict needle haystack =
   isJust $ lookupKey (asText needle) haystack
 
-gfnEquals :: Monad m => Function (Run p m h)
+gfnEquals :: Monad m => Function m
 gfnEquals [] = return $ toGVal True
 gfnEquals [x] = return $ toGVal True
 gfnEquals (x:xs) =
     return . toGVal $ Prelude.all ((snd x `looseEquals`) . snd) xs
 
-gfnNEquals :: Monad m => Function (Run p m h)
+gfnNEquals :: Monad m => Function m
 gfnNEquals [] = return $ toGVal True
 gfnNEquals [x] = return $ toGVal True
 gfnNEquals (x:xs) =
@@ -169,7 +169,7 @@ gfnContains (list:elems) = do
         es `areInList` xs = Prelude.all (`isInList` xs) es
     return . toGVal $ rawElems `areInList` rawList
 
-gfnConcat :: Monad m => Function (Run p m h)
+gfnConcat :: Monad m => Function m
 gfnConcat [] =
   return $ toGVal False
 gfnConcat [x] =
@@ -188,44 +188,44 @@ looseEquals a b
     | isNull a || isNull b = asBoolean a == asBoolean b
     | otherwise = asText a == asText b
 
-gfnLess :: Monad m => Function (Run p m h)
+gfnLess :: Monad m => Function m
 gfnLess [] = return . toGVal $ False
 gfnLess xs' =
     let xs = fmap snd xs'
     in return . toGVal $
         Prelude.all (== Just True) (Prelude.zipWith less xs (Prelude.tail xs))
 
-gfnGreater :: Monad m => Function (Run p m h)
+gfnGreater :: Monad m => Function m
 gfnGreater [] = return . toGVal $ False
 gfnGreater xs' =
     let xs = fmap snd xs'
     in return . toGVal $
         Prelude.all (== Just True) (Prelude.zipWith greater xs (Prelude.tail xs))
 
-gfnLessEquals :: Monad m => Function (Run p m h)
+gfnLessEquals :: Monad m => Function m
 gfnLessEquals [] = return . toGVal $ False
 gfnLessEquals xs' =
     let xs = fmap snd xs'
     in return . toGVal $
         Prelude.all (== Just True) (Prelude.zipWith lessEq xs (Prelude.tail xs))
 
-gfnGreaterEquals :: Monad m => Function (Run p m h)
+gfnGreaterEquals :: Monad m => Function m
 gfnGreaterEquals [] = return . toGVal $ False
 gfnGreaterEquals xs' =
     let xs = fmap snd xs'
     in return . toGVal $
         Prelude.all (== Just True) (Prelude.zipWith greaterEq xs (Prelude.tail xs))
 
-less :: Monad m => GVal (Run p m h) -> GVal (Run p m h) -> Maybe Bool
+less :: Monad m => GVal m -> GVal m -> Maybe Bool
 less a b = (<) <$> asNumber a <*> asNumber b
 
-greater :: Monad m => GVal (Run p m h) -> GVal (Run p m h) -> Maybe Bool
+greater :: Monad m => GVal m -> GVal m -> Maybe Bool
 greater a b = (>) <$> asNumber a <*> asNumber b
 
-lessEq :: Monad m => GVal (Run p m h) -> GVal (Run p m h) -> Maybe Bool
+lessEq :: Monad m => GVal m -> GVal m -> Maybe Bool
 lessEq a b = (<=) <$> asNumber a <*> asNumber b
 
-greaterEq :: Monad m => GVal (Run p m h) -> GVal (Run p m h) -> Maybe Bool
+greaterEq :: Monad m => GVal m -> GVal m -> Maybe Bool
 greaterEq a b = (>=) <$> asNumber a <*> asNumber b
 
 difference :: Prelude.Num a => [a] -> a
@@ -247,7 +247,7 @@ modulo [] = 0
 capitalize :: Text -> Text
 capitalize txt = Text.toUpper (Text.take 1 txt) <> Text.drop 1 txt
 
-gfnCenter :: Monad m => Function (Run p m h)
+gfnCenter :: Monad m => Function m
 gfnCenter [] = gfnCenter [(Nothing, toGVal ("" :: Text))]
 gfnCenter [x] = gfnCenter [x, (Nothing, toGVal (80 :: Int))]
 gfnCenter [x,y] = gfnCenter [x, y, (Nothing, toGVal (" " :: Text))]
@@ -309,7 +309,7 @@ gfnReplace args =
             return . toGVal $ Text.replace search replace str
         _ -> throwHere $ ArgumentsError (Just "replace") "expected: (str, search, replace)"
 
-gfnMap :: Monad m => Function (Run p m h)
+gfnMap :: Monad m => Function m
 gfnMap args = do
     let parsedArgs = extractArgsDefL
             [ ("collection", def)
@@ -344,7 +344,7 @@ gfnMap args = do
             return def
 
 
-gfnSort :: Monad m => Function (Run p m h)
+gfnSort :: forall p m h. Monad m => Function (Run p m h)
 gfnSort args = do
     let parsedArgs = extractArgsDefL
             [ ("sortee", def)
@@ -359,13 +359,13 @@ gfnSort args = do
                    , asBoolean reverseG
                    )
         _ -> throwHere $ ArgumentsError (Just "sort") "expected: (sortee, by, reverse)"
-    let -- extractByFunc :: Maybe ((Text, GVal (Run p m h)) -> Run p m h (GVal (Run p m h)))
+    let extractByFunc :: Maybe ((Text, GVal (Run p m h)) -> Run p m h (GVal (Run p m h)))
         extractByFunc = do
             f <- asFunction sortKey
             return $ \g ->
                 f [(Nothing, snd g)]
 
-    let -- extractByPath :: Maybe ((Text, GVal (Run p m h)) -> Run p m h (GVal (Run p m h)))
+    let extractByPath :: Maybe ((Text, GVal (Run p m h)) -> Run p m h (GVal (Run p m h)))
         extractByPath = do
             keys <- asList sortKey
             return $ \g ->
@@ -431,7 +431,7 @@ center str width pad =
         repsR = Prelude.succ charsR `div` Text.length pad
         paddingR = Text.take charsR . Text.replicate repsR $ pad
 
-gfnFileSizeFormat :: Monad m => Function (Run p m h)
+gfnFileSizeFormat :: Monad m => Function m
 gfnFileSizeFormat [(_, sizeG)] =
     gfnFileSizeFormat [(Nothing, sizeG), (Nothing, def)]
 gfnFileSizeFormat [(_, sizeG), (_, binaryG)] = do
