@@ -114,6 +114,25 @@ gfnAny xs = return . toGVal $ Prelude.any (asBoolean . snd) xs
 gfnAll :: Monad m => Function (Run p m h)
 gfnAll xs = return . toGVal $ Prelude.all (asBoolean . snd) xs
 
+gfnIn :: Monad m => Function (Run p m h)
+gfnIn [] =
+  return def
+gfnIn [needle] =
+  return $ toGVal False
+gfnIn [(_, needle),(_, haystack)] =
+  return . toGVal $ inDict needle haystack || inList needle haystack
+
+inList :: GVal m -> GVal m -> Bool
+inList needle haystack =
+  maybe
+    False
+    (List.any (looseEquals needle))
+    (asList haystack)
+
+inDict :: GVal m -> GVal m -> Bool
+inDict needle haystack =
+  isJust $ lookupKey (asText needle) haystack
+
 gfnEquals :: Monad m => Function (Run p m h)
 gfnEquals [] = return $ toGVal True
 gfnEquals [x] = return $ toGVal True
@@ -143,7 +162,7 @@ gfnConcat [x] =
 gfnConcat (x:xs) =
   return $ foldl' gappend (snd x) (fmap snd xs)
 
-looseEquals :: GVal (Run p m h) -> GVal (Run p m h) -> Bool
+looseEquals :: GVal m -> GVal m -> Bool
 looseEquals a b
     | isJust (asFunction a) || isJust (asFunction b) = False
     | isJust (asList a) /= isJust (asList b) = False

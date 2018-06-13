@@ -912,6 +912,24 @@ simulationTests = testGroup "Simulation"
                     "{{ [1,2,3]|json(false) }}"
                     "[1,2,3]"
             ]
+        , testGroup "\"in\""
+            [ testCase "elem in list" $ do
+                mkTestHtml [] []
+                    "{% if 'foo'|in(['bar', 'baz', 'foo']) %}yes{% else %}no{% endif %}"
+                    "yes"
+            , testCase "elem not in list" $ do
+                mkTestHtml [] []
+                    "{% if 'foo'|in(['bar', 'baz', 'fooq']) %}yes{% else %}no{% endif %}"
+                    "no"
+            , testCase "elem in dict" $ do
+                mkTestHtml [] []
+                    "{% if 'foo'|in({'bar': false, 'baz': false, 'foo': false}) %}yes{% else %}no{% endif %}"
+                    "yes"
+            , testCase "elem not in dict" $ do
+                mkTestHtml [] []
+                    "{% if 'foo'|in({'bar': false, 'baz': false, 'fooq': false}) %}yes{% else %}no{% endif %}"
+                    "no"
+            ]
         ]
     , testGroup "Setting variables"
         [ testCase "plain" $ do
