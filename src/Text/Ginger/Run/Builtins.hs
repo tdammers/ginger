@@ -188,6 +188,9 @@ looseEquals a b
     | isNull a || isNull b = asBoolean a == asBoolean b
     | otherwise = asText a == asText b
 
+gfnIsLt :: Monad m => Function (Run p m h)
+gfnIsLt = gfnLess
+
 gfnLess :: Monad m => Function m
 gfnLess [] = return . toGVal $ False
 gfnLess xs' =
