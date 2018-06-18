@@ -38,7 +38,7 @@ import Text.Parsec ( ParseError (..)
                    , try, lookAhead
                    , manyTill, oneOf, string, notFollowedBy, between, sepBy
                    , eof, spaces, anyChar, noneOf, char
-                   , option, optionMaybe
+                   , choice, option, optionMaybe
                    , unexpected
                    , digit
                    , getState, modifyState, putState
@@ -1177,7 +1177,8 @@ testExprP = do
     keyword "is"
     spacesOrComment
     funcName <- atomicExprP--stringLiteralExprP
-    args <- option [] $ groupP "(" ")" funcArgP
+    args <- choice [groupP "(" ")" funcArgP
+                  , option [] $ funcArgP >>= (\a -> return [a])]
     return $ \e -> CallE pos (addIsPrefix funcName) ((Nothing, e):args)
     where
       addIsPrefix expr = case expr of

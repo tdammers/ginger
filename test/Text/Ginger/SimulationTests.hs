@@ -1390,6 +1390,10 @@ simulationTests = testGroup "Simulation"
               mkTestHtml [] []
                 "{% if 1 is lt(1) %}true{% else %}false{% endif %}"
                 "false"
+          , testCase "parens-less argument syntax" $ do
+              mkTestHtml [] []
+                "{% if 1 is lt 2 %}true{% else %}false{% endif %}"
+                "true"
           , testCase "precedence vs booleans" $ do
               mkTestHtml [] []
                 "{% if false && 1 is lt(1) %}true{% else %}false{% endif %}"
