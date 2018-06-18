@@ -1176,11 +1176,12 @@ testExprP = do
     pos <- getPosition
     keyword "is"
     spacesOrComment
-    funcName <- atomicExprP--stringLiteralExprP
+    funcName <- atomicExprP
     args <- choice [groupP "(" ")" funcArgP
                   , option [] $ funcArgP >>= (\a -> return [a])]
     return $ \e -> CallE pos (addIsPrefix funcName) ((Nothing, e):args)
     where
+      addIsPrefix :: Expression a -> Expression a
       addIsPrefix expr = case expr of
                            (VarE a text) -> VarE a $ Text.append (Text.pack "is_") text
                            _ -> expr
