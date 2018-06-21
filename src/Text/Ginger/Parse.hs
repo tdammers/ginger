@@ -38,7 +38,7 @@ import Text.Parsec ( ParseError (..)
                    , try, lookAhead
                    , manyTill, oneOf, string, notFollowedBy, between, sepBy
                    , eof, spaces, anyChar, noneOf, char
-                   , option, optionMaybe
+                   , choice, option, optionMaybe
                    , unexpected
                    , digit
                    , getState, modifyState, putState
@@ -1113,6 +1113,7 @@ postfixP pos = dotPostfixP pos
              <|> arrayAccessP
              <|> funcCallP
              <|> filterP
+             <|> testExprP
 
 dotPostfixP :: Monad m => SourcePos -> Parser m ((Expression SourcePos) -> (Expression SourcePos))
 dotPostfixP pos = do
@@ -1169,6 +1170,21 @@ filterP = do
     func <- atomicExprP
     args <- option [] $ groupP "(" ")" funcArgP
     return $ \e -> CallE pos func ((Nothing, e):args)
+
+testExprP :: Monad m => Parser m ((Expression SourcePos) -> (Expression SourcePos))
+testExprP = do
+    pos <- getPosition
+    keyword "is"
+    spacesOrComment
+    funcName <- atomicExprP
+    args <- choice [groupP "(" ")" funcArgP
+                  , option [] $ funcArgP >>= (\a -> return [a])]
+    return $ \e -> CallE pos (addIsPrefix funcName) ((Nothing, e):args)
+    where
+      addIsPrefix :: Expression a -> Expression a
+      addIsPrefix expr = case expr of
+                           (VarE a text) -> VarE a $ Text.append (Text.pack "is_") text
+                           _ -> expr
 
 atomicExprP :: Monad m => Parser m (Expression SourcePos)
 atomicExprP = doExprP

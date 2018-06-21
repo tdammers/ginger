@@ -1381,6 +1381,28 @@ simulationTests = testGroup "Simulation"
               "<?for i in [1,2,3] ?><!-- Comment! ---> <?= i ?> <?- endfor ?>"
               "123"
         ]
+    , testGroup "is-tests"
+           [ testCase "basic is-test, true" $ do
+              mkTestHtml [] []
+                "{% if 1 is lt(2) %}true{% else %}false{% endif %}"
+                "true"
+          , testCase "basic is-test, false" $ do
+              mkTestHtml [] []
+                "{% if 1 is lt(1) %}true{% else %}false{% endif %}"
+                "false"
+          , testCase "parens-less argument syntax" $ do
+              mkTestHtml [] []
+                "{% if 1 is lt 2 %}true{% else %}false{% endif %}"
+                "true"
+          , testCase "precedence vs booleans" $ do
+              mkTestHtml [] []
+                "{% if false && 1 is lt(1) %}true{% else %}false{% endif %}"
+                "false"
+          , testCase "precedence vs addition" $ do
+              mkTestHtml [] []
+                "{% if 1 + 1 is lt(2) %}true{% else %}false{% endif %}"
+                "true"
+          ]
     ]
 
 angleBracketDelimiters :: Delimiters

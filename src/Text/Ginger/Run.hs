@@ -156,6 +156,7 @@ defaultScope =
     , ("greaterEquals", fromFunction gfnGreaterEquals)
     , ("int", fromFunction . unaryFunc $ toGVal . fmap (Prelude.truncate :: Scientific -> Int) . asNumber)
     , ("int_ratio", fromFunction . variadicNumericFunc 1 $ fromIntegral . intRatio . Prelude.map Prelude.floor)
+    , ("is_lt", fromFunction gfnLess)
     , ("iterable", fromFunction . unaryFunc $ toGVal . (\x -> isList x || isDict x))
     , ("json", fromFunction gfnJSON)
     , ("length", fromFunction . unaryFunc $ toGVal . length)
