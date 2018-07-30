@@ -149,9 +149,32 @@ appendConstraints a b =
   Constraints
     { isStatic = isStatic a || isStatic b
     , isPure = isPure a || isPure b
-    , knownValue = knownValue b <|> knownValue a
-    , knownOutput = knownOutput b <|> knownOutput a
+    , knownValue = knownValue b ||? knownValue a
+    , knownOutput = knownOutput b ||? knownOutput a
     }
+
+-- | Intersection of constraints.
+-- @intersectConstraints a b@ gives the facts that hold under both sets of
+-- constraints.
+intersectConstraints :: Constraints -> Constraints -> Constraints
+intersectConstraints a b =
+  Constraints
+    { isStatic = isStatic a &&isStatic b
+    , isPure = isPure a && isPure b
+    , knownValue = knownValue b &&? knownValue a
+    , knownOutput = knownOutput b &&? knownOutput a
+    }
+
+-- | Union of 'Maybe's
+(||?) :: Maybe a -> Maybe a -> Maybe a
+Nothing ||? b = b
+a ||? _ = a
+
+-- | Intersection of 'Maybe's
+(&&?) :: Maybe a -> Maybe a -> Maybe a
+Nothing &&? b = Nothing
+a &&? Nothing = Nothing
+a &&? b = a
 
 -- ** Evidence
 
@@ -212,6 +235,20 @@ ppEvidence = unlines . ppEvidence'
 appendEvidence :: Evidence -> Evidence -> Evidence
 appendEvidence (Evidence a) (Evidence b) =
   Evidence $ Map.unionWith appendConstraints a b
+
+-- | Merge 'Evidence's such that constraints on identifiers found in both
+-- sets of evidence are combined by intersection. This represents a situation
+-- where constraints from two lines of analysis must both hold. For any given
+-- key in either evidence map, we have to intersect the constraints with those
+-- found for the same key in the other map (because *both* sets of constraints
+-- must hold), but if the key doesn't exist in the other map, then we know that
+-- that line of analysis didn't encounter the key at all, and thus the
+-- constraints we have will all hold (iow., the code analysed in the other line
+-- of analysis doesn't touch the key at all, so it doesn't influence the
+-- constraints).
+intersectUnionEvidence :: Evidence -> Evidence -> Evidence
+intersectUnionEvidence (Evidence a) (Evidence b) =
+  Evidence $ Map.unionWith intersectConstraints a b
 
 -- | Alter the 'Constraints' at a given scope reference.
 alterConstraints :: (Constraints -> Constraints) -> ScopeRef -> Evidence -> Evidence
@@ -462,8 +499,10 @@ inferStmt (ScopedS _ body) =
   -- For a scoped statement, we simply infer the body in a local state.
   withLocalState $ inferStmt body
 
--- TODO:
--- IndentS a (Expression a) (Statement a) -- ^ Establish an indented context around the wrapped statement
+inferStmt (IndentS _ expr body) = do
+  exprEvidence <- inferExpr expr
+  bodyEvidence <- inferStmt body
+  return $ intersectUnionEvidence exprEvidence bodyEvidence
 
 inferStmt (LiteralS _ val) =
   -- Literals are always known
@@ -492,12 +531,12 @@ inferStmt (IfS _ condExpr yesStmt noStmt) = do
   condEvidence <- inferExpr condExpr
   case knownValue (getConstraints CurrentItem condEvidence) of
     Nothing -> do
-      -- We don't actually know which of the two branches will run, so we need
-      -- to inspect them both, and then combine them using intersection. That
-      -- is, we can only retain evidence that applies to both branches; and we
-      -- cannot really say anything useful about the output at all.
-      -- TODO: actually do the above.
-      pure $ singletonEvidence unconstrained
+      -- We have to assume that both the yes and the no branch may run, so
+      -- the best we can do is report the evidence intersection of the
+      -- expression and both branches.
+      yesEv <- inferStmt yesStmt
+      noEv <- inferStmt noStmt
+      pure $ condEvidence `intersectUnionEvidence` yesEv `intersectUnionEvidence` noEv
     Just val ->
       case asBoolean val of
         True -> inferStmt yesStmt
