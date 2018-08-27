@@ -24,6 +24,8 @@ import Control.Monad.Trans.Class ( lift )
 import Control.Monad.Trans.Maybe
 import Control.Monad
 import Data.Default ( def )
+import System.Process as Process
+import Text.Printf (printf)
 
 loadFile fn = openFile fn ReadMode >>= hGetContents
 
@@ -46,6 +48,24 @@ printF = fromFunction $ go
         printArg (Nothing, v) = liftRun . putStrLn . Text.unpack . asText $ v
         printArg (Just x, _) = return ()
 
+systemF :: GVal (Run p IO Html)
+systemF = fromFunction $ go . fmap snd
+    where
+        go :: [GVal (Run p IO Html)] -> Run p IO Html (GVal (Run p IO Html))
+        go [cmd,args,pipe] = do
+          let gArgs = fmap gAsStr . fromMaybe [] . asList $ args
+          strToGVal <$> liftRun (Process.readProcess (gAsStr cmd) gArgs (gAsStr pipe))
+        go [] = pure def
+        go [cmd] = go [cmd,def]
+        go [cmd,args] = go [cmd,args,def]
+        go xs = go $ Prelude.take 3 xs
+
+gAsStr :: GVal m -> String
+gAsStr = Text.unpack . asText
+
+strToGVal :: String -> GVal m
+strToGVal = toGVal . Text.pack
+
 main = do
     args <- getArgs
     let (srcFn, scopeFn) = case args of
@@ -63,6 +83,7 @@ main = do
         contextLookup key =
             case key of
                 "print" -> return printF
+                "system" -> return systemF
                 _ -> return $ scopeLookup key
 
     (tpl, src) <- case srcFn of
