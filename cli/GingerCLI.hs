@@ -10,6 +10,7 @@ import Text.Ginger
 import Text.Ginger.Html
 import Data.Text as Text
 import qualified Data.Aeson as JSON
+import qualified Data.Yaml as YAML
 import Data.Maybe
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
@@ -35,7 +36,7 @@ loadFileMay fn =
                 return Nothing
 
 decodeFile :: (JSON.FromJSON v) => FilePath -> IO (Maybe v)
-decodeFile fn = JSON.decode <$> (openFile fn ReadMode >>= LBS.hGetContents)
+decodeFile fn = YAML.decode <$> (openFile fn ReadMode >>= BS.hGetContents)
 
 printF :: GVal (Run p IO Html)
 printF = fromFunction $ go

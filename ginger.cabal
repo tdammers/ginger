@@ -66,6 +66,7 @@ executable ginger
                  , text
                  , transformers
                  , unordered-containers >= 0.2.5
+                 , yaml
 
 test-suite tests
     type: exitcode-stdio-1.0
