@@ -6,7 +6,7 @@
 {-#LANGUAGE GeneralizedNewtypeDeriving #-}
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE FlexibleInstances #-}
-{-#LANGUAGE CPP #-}
+
 module Text.Ginger.Html
 ( Html
 , unsafeRawHtml
@@ -19,13 +19,11 @@ where
 import Data.Text (Text)
 import qualified Data.Text as Text
 
-#if !MIN_VERSION_base(4,11,0)
-import Data.Semigroup
-#endif
+import Data.Semigroup as Sem
 
 -- | A chunk of HTML source.
 newtype Html = Html { unHtml :: Text }
-    deriving (Semigroup, Monoid, Show, Eq, Ord)
+    deriving (Sem.Semigroup, Monoid, Show, Eq, Ord)
 
 -- | Types that support conversion to HTML.
 class ToHtml s where

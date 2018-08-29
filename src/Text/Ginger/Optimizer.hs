@@ -4,7 +4,7 @@
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE ScopedTypeVariables #-}
 {-#LANGUAGE FlexibleContexts #-}
-{-#LANGUAGE CPP #-}
+
 -- | A syntax tree optimizer
 module Text.Ginger.Optimizer
 ( Optimizable (..) )
@@ -24,9 +24,7 @@ import Control.Applicative
 import Data.Text (Text)
 import qualified Data.Aeson as JSON
 
-#if !MIN_VERSION_base(4,11,0)
-import Data.Semigroup
-#endif
+import Data.Semigroup as Sem
 
 class Optimizable a where
     optimize :: a -> a
@@ -125,12 +123,12 @@ bothPure :: Purity -> Purity -> Purity
 bothPure Pure Pure = Pure
 bothPure _ _ = Impure
 
-instance Semigroup Purity where
+instance Sem.Semigroup Purity where
     (<>) = bothPure
 
 instance Monoid Purity where
     mempty = Pure
-    mappend = bothPure
+    mappend = (<>)
 
 pureExpression :: Expression a -> Purity
 pureExpression (StringLiteralE p _) = Pure

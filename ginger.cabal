@@ -34,6 +34,7 @@ library
   other-modules: Text.Ginger.Run.Type
                , Text.Ginger.Run.Builtins
   -- other-extensions:
+
   build-depends: base >=4.8 && <5
                , aeson
                , aeson-pretty
@@ -51,6 +52,8 @@ library
                , unordered-containers >= 0.2.5
                , utf8-string
                , vector
+  if !impl(ghc >= 8.0)
+    build-depends: semigroups == 0.18.*
   hs-source-dirs:      src
   default-language:    Haskell2010
 
