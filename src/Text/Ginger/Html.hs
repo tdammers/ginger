@@ -18,10 +18,11 @@ where
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Monoid
+import Data.Semigroup
 
 -- | A chunk of HTML source.
 newtype Html = Html { unHtml :: Text }
-    deriving (Monoid, Show, Eq, Ord)
+    deriving (Semigroup, Monoid, Show, Eq, Ord)
 
 -- | Types that support conversion to HTML.
 class ToHtml s where

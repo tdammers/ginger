@@ -120,6 +120,9 @@ bothPure :: Purity -> Purity -> Purity
 bothPure Pure Pure = Pure
 bothPure _ _ = Impure
 
+instance Semigroup Purity where
+    (<>) = bothPure
+
 instance Monoid Purity where
     mempty = Pure
     mappend = bothPure
@@ -261,7 +264,7 @@ compileTimeEval e = case pureExpression e of
     Impure -> Nothing
 
 newtype Collected = Collected [GVal Identity]
-    deriving (Monoid)
+    deriving (Semigroup, Monoid)
 
 instance ToGVal m Collected where
     toGVal = collectedToGVal
