@@ -4,6 +4,7 @@
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE ScopedTypeVariables #-}
 {-#LANGUAGE FlexibleContexts #-}
+{-#LANGUAGE CPP #-}
 -- | A syntax tree optimizer
 module Text.Ginger.Optimizer
 ( Optimizable (..) )
@@ -12,7 +13,7 @@ where
 import Text.Ginger.AST
 import Text.Ginger.GVal
 import Text.Ginger.Run
-import Data.Monoid
+
 import Control.Monad.Identity
 import Data.Default
 import Control.Monad.State (execState, evalState)
@@ -22,6 +23,10 @@ import Data.Maybe (fromMaybe)
 import Control.Applicative
 import Data.Text (Text)
 import qualified Data.Aeson as JSON
+
+#if !MIN_VERSION_base(4,11,0)
+import Data.Semigroup
+#endif
 
 class Optimizable a where
     optimize :: a -> a

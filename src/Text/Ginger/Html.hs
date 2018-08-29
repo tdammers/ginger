@@ -6,6 +6,7 @@
 {-#LANGUAGE GeneralizedNewtypeDeriving #-}
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE FlexibleInstances #-}
+{-#LANGUAGE CPP #-}
 module Text.Ginger.Html
 ( Html
 , unsafeRawHtml
@@ -17,8 +18,10 @@ where
 
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Data.Monoid
+
+#if !MIN_VERSION_base(4,11,0)
 import Data.Semigroup
+#endif
 
 -- | A chunk of HTML source.
 newtype Html = Html { unHtml :: Text }
