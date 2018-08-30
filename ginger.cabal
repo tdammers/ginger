@@ -34,7 +34,6 @@ library
   other-modules: Text.Ginger.Run.Type
                , Text.Ginger.Run.Builtins
   -- other-extensions:
-
   build-depends: base >=4.8 && <5
                , aeson
                , aeson-pretty

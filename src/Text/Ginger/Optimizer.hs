@@ -4,7 +4,6 @@
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE ScopedTypeVariables #-}
 {-#LANGUAGE FlexibleContexts #-}
-
 -- | A syntax tree optimizer
 module Text.Ginger.Optimizer
 ( Optimizable (..) )
@@ -13,7 +12,6 @@ where
 import Text.Ginger.AST
 import Text.Ginger.GVal
 import Text.Ginger.Run
-
 import Control.Monad.Identity
 import Data.Default
 import Control.Monad.State (execState, evalState)
@@ -23,8 +21,7 @@ import Data.Maybe (fromMaybe)
 import Control.Applicative
 import Data.Text (Text)
 import qualified Data.Aeson as JSON
-
-import Data.Semigroup as Sem
+import Data.Semigroup as Semigroup
 
 class Optimizable a where
     optimize :: a -> a
@@ -123,7 +120,7 @@ bothPure :: Purity -> Purity -> Purity
 bothPure Pure Pure = Pure
 bothPure _ _ = Impure
 
-instance Sem.Semigroup Purity where
+instance Semigroup.Semigroup Purity where
     (<>) = bothPure
 
 instance Monoid Purity where
@@ -267,7 +264,7 @@ compileTimeEval e = case pureExpression e of
     Impure -> Nothing
 
 newtype Collected = Collected [GVal Identity]
-    deriving (Semigroup, Monoid)
+    deriving (Semigroup.Semigroup, Monoid)
 
 instance ToGVal m Collected where
     toGVal = collectedToGVal
