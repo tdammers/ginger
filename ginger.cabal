@@ -51,6 +51,8 @@ library
                , unordered-containers >= 0.2.5
                , utf8-string
                , vector
+  if !impl(ghc >= 8.0)
+    build-depends: semigroups == 0.18.*
   hs-source-dirs:      src
   default-language:    Haskell2010
 

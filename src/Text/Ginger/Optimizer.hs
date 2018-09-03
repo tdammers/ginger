@@ -12,7 +12,6 @@ where
 import Text.Ginger.AST
 import Text.Ginger.GVal
 import Text.Ginger.Run
-import Data.Monoid
 import Control.Monad.Identity
 import Data.Default
 import Control.Monad.State (execState, evalState)
@@ -22,6 +21,7 @@ import Data.Maybe (fromMaybe)
 import Control.Applicative
 import Data.Text (Text)
 import qualified Data.Aeson as JSON
+import Data.Semigroup as Semigroup
 
 class Optimizable a where
     optimize :: a -> a
@@ -120,9 +120,12 @@ bothPure :: Purity -> Purity -> Purity
 bothPure Pure Pure = Pure
 bothPure _ _ = Impure
 
+instance Semigroup.Semigroup Purity where
+    (<>) = bothPure
+
 instance Monoid Purity where
     mempty = Pure
-    mappend = bothPure
+    mappend = (<>)
 
 pureExpression :: Expression a -> Purity
 pureExpression (StringLiteralE p _) = Pure
@@ -261,7 +264,7 @@ compileTimeEval e = case pureExpression e of
     Impure -> Nothing
 
 newtype Collected = Collected [GVal Identity]
-    deriving (Monoid)
+    deriving (Semigroup.Semigroup, Monoid)
 
 instance ToGVal m Collected where
     toGVal = collectedToGVal
