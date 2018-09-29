@@ -1,3 +1,17 @@
+## 0.8.0.0
+
+- Now compiles on GHC 8.4
+- CLI: added a `system()` template function (for spawning subprocesses)
+- CLI accepts YAML
+- Added `is` operator (also makes Ginger conform to Jinja2 test syntax)
+- Various bugfixes
+- New builtins: `escaped`, `in`, Python-style boolean operators, `divisibleBy`,
+  `even`, `odd`, and more
+- Boolean literals now also accepted in caps
+- Improved documentation
+- `GVal` instances for `Integer`
+- Overridable delimiters
+
 ## 0.7.4.0
 
 - Make concat() / ~ more generic (now also concatenates lists and dictionaries)
