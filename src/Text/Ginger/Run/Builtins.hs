@@ -309,6 +309,26 @@ gfnReplace args =
             return . toGVal $ Text.replace search replace str
         _ -> throwHere $ ArgumentsError (Just "replace") "expected: (str, search, replace)"
 
+gfnZipWith :: forall m p h. Monad m => Function (Run p m h)
+gfnZipWith ((Nothing, gfn):args) = do
+  zipFunction <- case asFunction gfn of
+    Nothing -> fail $ "Invalid args to zipWith"
+    Just fn -> return fn
+  toGVal <$> go zipFunction (fmap fst args) (fmap (fromMaybe [] . asList . snd) args)
+  where
+    go :: Function (Run p m h) -> [Maybe Text] -> [[GVal (Run p m h)]] -> Run p m h [GVal (Run p m h)]
+    go f _ [] = return []
+    go f argNames args = do
+      let heads = fmap headMay args
+          tails = fmap (List.drop 1) args
+      if List.any isNothing heads then
+        return []
+      else do
+        currentVal <- f (List.zip argNames (fmap (fromMaybe def) heads))
+        tailVals <- go f argNames tails
+        return $ currentVal : tailVals
+
+
 gfnMap :: Monad m => Function m
 gfnMap args = do
     let parsedArgs = extractArgsDefL

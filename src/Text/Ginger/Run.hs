@@ -186,6 +186,7 @@ defaultScope =
     , ("upper", fromFunction . variadicStringFunc $ mconcat . Prelude.map Text.toUpper)
     , ("lower", fromFunction . variadicStringFunc $ mconcat . Prelude.map Text.toLower)
     , ("throw", fromFunction gfnThrow)
+    , ("zipwith", fromFunction gfnZipWith)
 
     -- Tests/predicates
 
