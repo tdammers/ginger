@@ -6,3 +6,5 @@
 /misc
 tags
 .stack-work
+.ghc.environment*
+/dist-newstyle
