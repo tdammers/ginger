@@ -172,6 +172,7 @@ defaultScope =
     , ("nequals", fromFunction gfnNEquals)
     , ("num", fromFunction . unaryFunc $ toGVal . asNumber)
     , ("odd", fromFunction gfnOdd)
+    , ("partial", fromFunction gfnPartial)
     , ("printf", fromFunction gfnPrintf)
     , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
     , ("ratio", fromFunction . variadicNumericFunc 1 $ Scientific.fromFloatDigits . ratio . Prelude.map Scientific.toRealFloat)

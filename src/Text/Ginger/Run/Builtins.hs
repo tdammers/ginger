@@ -323,6 +323,16 @@ gfnCompose ((_, fG):xs) = do
               f [(Nothing, arg')]
       return $ fromFunction h
 
+gfnPartial :: forall m p h. Monad m => Function (Run p m h)
+gfnPartial [] = fail "Invalid arguments to partial()"
+gfnPartial ((_, fG):args) = do
+  case asFunction fG of
+    Nothing -> fail "Argument to partial() is not a function"
+    Just f -> do
+      let h args' = do
+            f (args ++ args')
+      return $ fromFunction h
+
 gfnZip :: forall m p h. Monad m => Function (Run p m h)
 gfnZip args = do
   toGVal <$> go (fmap (fromMaybe [] . asList . snd) args)

@@ -207,6 +207,13 @@ Not-equals: `a != b`.
 
 Force `x` to a number (int or float).
 
+## `partial(f, args)`
+
+Construct a function that takes additional arguments after `args`, and passes
+those together with `args` to `f`. That is:
+
+`partial(f, a, b)(c, d)` == `f(a, b, c, d)`.
+
 ## `printf(fmt, arg0, ...)`
 
 Classic `printf`. `fmt` accepts format strings similar to `printf` in libc; for

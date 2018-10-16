@@ -751,7 +751,12 @@ simulationTests = testGroup "Simulation"
         -- \"modulo\"
         -- \"num\"
         -- TODO
-        -- \"printf\"
+        , testGroup "\"partial\""
+            [ testCase "partial" $ do
+                mkTestHtml [] []
+                  "{{ partial(sum, 1)(2) }}"
+                  "3"
+            ]
         , testGroup "\"printf\""
             [ testCase "%i, passed as int" $ do
                 mkTestHtml [] []
