@@ -41,6 +41,12 @@ Aligns a string `str` to fit in `width` characters. If `str` is shorter than
 `width`, it gets truncated; if it is longer, `pad` characters are added on both
 sides to make it fit.
 
+## `compose(f, g, ...)`
+
+Function composition.
+
+`(compose(f, g))(a, b, c)` == `f(g(a, b, c))`
+
 ## `concat(arg0, arg1, ...)`
 
 Concatenates all arguments into one.
@@ -266,3 +272,26 @@ Truncate a number: chop off the fractional part.
 ## `urlencode(str)`
 
 URL-encode `str`.
+
+## `zip(list0, ...)`
+
+Constructs a list from all arguments, such that the first list element is a
+list of the first elements of each argument, the second list element is a list
+of the second elements, and so on. Collection of element stops as soon as the
+end of any of the arguments is reached.
+
+```
+{{ zip([1,2,3], [4,5,6]) }}
+{# outputs [[1,4],[2,5],[3,6]] #}
+```
+
+## `zipwith(f, list0, ...)`
+
+Constructs a list by applying the function `f` to all elements of each list
+argument - just like `zip`, but instead of constructing a list of lists,
+construct a list of return values of application of `f`. E.g.:
+
+```
+{{ zipwith(sum, [1,2,3], [4,5,6]) }}
+{# outputs [5,7,9] #}
+```
