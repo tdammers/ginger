@@ -497,6 +497,10 @@ simulationTests = testGroup "Simulation"
                     "{{ \"foobar\"|center(2) }}"
                     "foobar"
             ]
+        , testCase "\"compose\"" $ do
+            mkTestText [] []
+                "{{ (compose(json, capitalize))('hello') }}"
+                "\"Hello\""
         , testCase "\"concat\"" $ do
             mkTestHtml [] []
                 "{{ [\"hello\", \"world\"]|concat }}"
@@ -901,6 +905,18 @@ simulationTests = testGroup "Simulation"
                 mkTestHtml [] []
                     "{{ replace('foobar', 'o') }}"
                     "fbar"
+            ]
+        , testGroup "\"zip\""
+            [ testCase "lists" $ do
+                mkTestHtml [] []
+                    "{{ zip([1,2,3], [4,5,6])|json(pretty=false) }}"
+                    "[[1,4],[2,5],[3,6]]"
+            ]
+        , testGroup "\"zipwith\""
+            [ testCase "sum" $ do
+                mkTestHtml [] []
+                    "{{ zipwith(sum, [1,2,3], [4,5,6])|json(pretty=false) }}"
+                    "[5,7,9]"
             ]
         , testGroup "\"json\""
             [ testCase "null" $ do

@@ -129,6 +129,7 @@ defaultScope =
     , ("capitalize", fromFunction . variadicStringFunc $ mconcat . Prelude.map capitalize)
     , ("ceil", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.ceiling)
     , ("center", fromFunction gfnCenter)
+    , ("compose", fromFunction gfnCompose)
     , ("concat", fromFunction gfnConcat)
     , ("contains", fromFunction gfnContains)
     , ("d", fromFunction gfnDefault)
@@ -186,6 +187,7 @@ defaultScope =
     , ("upper", fromFunction . variadicStringFunc $ mconcat . Prelude.map Text.toUpper)
     , ("lower", fromFunction . variadicStringFunc $ mconcat . Prelude.map Text.toLower)
     , ("throw", fromFunction gfnThrow)
+    , ("zip", fromFunction gfnZip)
     , ("zipwith", fromFunction gfnZipWith)
 
     -- Tests/predicates

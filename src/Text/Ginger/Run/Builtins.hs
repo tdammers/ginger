@@ -309,10 +309,41 @@ gfnReplace args =
             return . toGVal $ Text.replace search replace str
         _ -> throwHere $ ArgumentsError (Just "replace") "expected: (str, search, replace)"
 
+gfnCompose :: forall m p h. Monad m => Function (Run p m h)
+gfnCompose [] = fail "Invalid arguments to compose()"
+gfnCompose [(_, fG)] = return fG
+gfnCompose ((_, fG):xs) = do
+  gG <- gfnCompose xs
+  case (asFunction fG, asFunction gG) of
+    (Nothing, _) -> fail $ "Argument to compose() is not a function"
+    (_, Nothing) -> fail $ "PANIC: Composition of functions is not a function"
+    (Just f, Just g) -> do
+      let h args = do
+              arg' <- g args
+              f [(Nothing, arg')]
+      return $ fromFunction h
+
+gfnZip :: forall m p h. Monad m => Function (Run p m h)
+gfnZip args = do
+  toGVal <$> go (fmap (fromMaybe [] . asList . snd) args)
+  where
+    go :: [[GVal (Run p m h)]] -> Run p m h [GVal (Run p m h)]
+    go [] = return []
+    go args = do
+      let heads = fmap headMay args
+          tails = fmap (List.drop 1) args
+      if List.any isNothing heads then
+        return []
+      else do
+        let currentVal = toGVal (fmap (fromMaybe def) heads)
+        tailVals <- go tails
+        return $ currentVal : tailVals
+
+
 gfnZipWith :: forall m p h. Monad m => Function (Run p m h)
 gfnZipWith ((Nothing, gfn):args) = do
   zipFunction <- case asFunction gfn of
-    Nothing -> fail $ "Invalid args to zipWith"
+    Nothing -> fail $ "Invalid args to zipwith"
     Just fn -> return fn
   toGVal <$> go zipFunction (fmap fst args) (fmap (fromMaybe [] . asList . snd) args)
   where
