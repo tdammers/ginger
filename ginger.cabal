@@ -28,11 +28,12 @@ library
                  , Text.Ginger.Optimizer
                  , Text.Ginger.Parse
                  , Text.Ginger.Run
+                 , Text.Ginger.Run.Type
+                 , Text.Ginger.Run.Builtins
                  , Text.PrintfA
                  , Text.Ginger.Run.VM
                  , Text.Ginger.Run.FuncUtils
-  other-modules: Text.Ginger.Run.Type
-               , Text.Ginger.Run.Builtins
+  -- other-modules:
   -- other-extensions:
   build-depends: base >=4.8 && <5
                , aeson

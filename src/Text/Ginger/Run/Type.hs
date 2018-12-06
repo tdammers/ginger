@@ -5,6 +5,12 @@
 {-#LANGUAGE TypeSynonymInstances #-}
 {-#LANGUAGE MultiParamTypeClasses #-}
 {-#LANGUAGE ScopedTypeVariables #-}
+
+-- | The internals of the 'Run' monad, and various things needed to make the
+-- magic happen. You will not normally need to import this module;
+-- 'Text.Ginger.Run' re-exports the things you probably want. However, if you
+-- want to provide your own run monad that extends 'Run' somehow, this module
+-- may be of use.
 module Text.Ginger.Run.Type
 ( GingerContext (..)
 , makeContext
@@ -26,6 +32,8 @@ module Text.Ginger.Run.Type
 , RunState (..)
 , RuntimeError (..)
 , runtimeErrorWhat
+, runtimeErrorWhere
+, runtimeErrorMessage
 -- * The Newlines type
 -- | Required for handling indentation
 , Newlines (..)

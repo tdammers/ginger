@@ -6,6 +6,11 @@
 {-#LANGUAGE MultiParamTypeClasses #-}
 {-#LANGUAGE ScopedTypeVariables #-}
 {-#LANGUAGE LambdaCase #-}
+
+-- | Implementations of the default template context functions and values. You
+-- will not normally need to import this module, unless you want to provide
+-- your own context with things that reuse functionality from the default
+-- ones.
 module Text.Ginger.Run.Builtins
 where
 

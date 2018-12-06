@@ -54,6 +54,11 @@ module Text.Ginger.Run
 , hoistRun
 , hoistNewlines
 , hoistRunState
+-- * Errors
+, RuntimeError (..)
+, runtimeErrorWhat
+, runtimeErrorWhere
+, runtimeErrorMessage
 )
 where
 
