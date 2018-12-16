@@ -156,6 +156,16 @@ inDict :: GVal m -> GVal m -> Bool
 inDict needle haystack =
   isJust $ lookupKey (asText needle) haystack
 
+gfnApply :: Monad m => Function (Run p m h)
+gfnApply [] = return def
+gfnApply [_] = return def
+gfnApply ((_, fg):(_,a):xs) =
+  case asFunction fg of
+    Nothing -> throwHere $ ArgumentsError (Just "apply") "Tried to call something that isn't a function"
+    Just f ->
+      let args = (fmap (Nothing,) . fromMaybe [] . asList $ a) ++ xs
+      in f args
+
 gfnEquals :: Monad m => Function m
 gfnEquals [] = return $ toGVal True
 gfnEquals [x] = return $ toGVal True

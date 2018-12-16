@@ -130,6 +130,7 @@ defaultScope =
     , ("abs", fromFunction . unaryNumericFunc 0 $ Prelude.abs)
     , ("any", fromFunction gfnAny)
     , ("all", fromFunction gfnAll)
+    , ("apply", fromFunction gfnApply)
     -- TODO: batch
     , ("capitalize", fromFunction . variadicStringFunc $ mconcat . Prelude.map capitalize)
     , ("ceil", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.ceiling)

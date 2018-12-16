@@ -952,6 +952,12 @@ simulationTests = testGroup "Simulation"
                     "{% if 'foo'|in({'bar': false, 'baz': false, 'fooq': false}) %}yes{% else %}no{% endif %}"
                     "no"
             ]
+        , testGroup "\"apply\""
+            [ testCase "sum" $ do
+                mkTestHtml [] []
+                  "{{ apply(sum, [1,2,3]) }}"
+                  "6"
+            ]
         ]
     , testGroup "Setting variables"
         [ testCase "plain" $ do
