@@ -5,6 +5,7 @@ where
 
 import Text.Ginger
 import Text.Ginger.Html
+import Text.Ginger.Run.Type (GingerContext (..))
 import Test.Tasty
 import Test.Tasty.HUnit
 import Data.Default (def)
@@ -1424,6 +1425,38 @@ simulationTests = testGroup "Simulation"
                 "{% if 1 + 1 is lt(2) %}true{% else %}false{% endif %}"
                 "true"
           ]
+    , testGroup "regex module"
+          [ testGroup "regex.test"
+            [ testCase "simple match" $ do
+                mkTestText [] []
+                  "{{ regex.test('[a-z]', 'abcde') ? 'yes' : 'no' }}"
+                  "yes"
+            , testCase "simple match" $ do
+                mkTestText [] []
+                  "{{ regex.test('[a-z]', '12345') ? 'yes' : 'no' }}"
+                  "no"
+            ]
+          , testGroup "regex.match"
+            [ testCase "simple match" $ do
+                mkTestText [] []
+                  "{{ regex.match('[a-z]', 'abcde') }}"
+                  "a"
+            , testCase "string representation of multiple matches returns only whole match" $ do
+                mkTestText [] []
+                  "{{ regex.match('(foo)(bar)', 'foobar') }}"
+                  "foobar"
+            , testCase "html representation of multiple matches returns only whole match" $ do
+                mkTestHtml [] []
+                  "{{ regex.match('(foo)(bar)', 'foobar') }}"
+                  "foobar"
+            ]
+          , testGroup "regex.matches"
+            [ testCase "simple match" $ do
+                mkTestText [] []
+                  "{{ regex.matches('[a-z]', 'abc')|json(pretty=false) }}"
+                  "[[\"a\"],[\"b\"],[\"c\"]]"
+            ]
+          ]
     ]
 
 angleBracketDelimiters :: Delimiters
@@ -1501,9 +1534,10 @@ mkTest setOptions mContext valToText contextDict includeLookup src expected = do
       template <- either throw return =<< parseGinger' options src
       output <- newIORef mempty
       let write h = modifyIORef output (<> h)
-      let context = mContext
+      let context' = mContext
                       (\key -> return $ fromMaybe def (lookup key contextDict))
                       write
+          context = context' { contextWarn = liftRun2 $ print }
       runGingerT context (optimize template)
       actual <- valToText <$> readIORef output
       assertEqual "" expected actual

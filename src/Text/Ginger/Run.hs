@@ -201,6 +201,8 @@ defaultScope =
     , ("in", fromFunction gfnIn)
     , ("escaped", fromFunction gfnEscaped)
 
+    , ("regex", gfoRegex)
+
     -- TODO: sameas (predicate)
     -- NOTE that this test doesn't make sense in a host language where pointers
     -- are transparent - in Haskell, we simply don't care whether two values

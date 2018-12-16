@@ -34,6 +34,8 @@ import Prelude ( (.), ($), (==), (/=)
                , Either (..)
                , id
                , flip
+               , const
+               , either
                )
 import qualified Prelude
 import Data.Maybe (fromMaybe, isJust, isNothing)
@@ -82,9 +84,10 @@ import Data.Time ( defaultTimeLocale
                  , TimeLocale (..)
                  , TimeZone (..)
                  )
-import Data.Foldable (asum)
+import Data.Foldable (asum, toList)
 import qualified Data.Aeson as JSON
 import qualified Data.Aeson.Encode.Pretty as JSON
+import qualified Text.Regex.TDFA as RE
 
 tshow :: Show a => a -> Text
 tshow = Text.pack . show
@@ -771,3 +774,62 @@ gfnEven = unaryFunc $ toGVal . fmap Prelude.even . toInteger
 gfnOdd :: Monad m => Function (Run p m h)
 gfnOdd = unaryFunc $ toGVal . fmap Prelude.odd . toInteger
 
+gfoRegex :: Monad m => GVal (Run p m h)
+gfoRegex =
+  dict
+    [ ("match", fromFunction gfnReMatchOne)
+    , ("matches", fromFunction gfnReMatch)
+    , ("test", fromFunction gfnReTest)
+    ]
+
+gfnReMatchOne :: forall p m h. Monad m => Function (Run p m h)
+gfnReMatchOne args =
+  toGVal . fmap (\(_, m, _) -> matchTextToGVal m :: GVal (Run p m h)) <$> fnReMatch RE.matchOnceText args
+
+gfnReMatch :: forall p m h. Monad m => Function (Run p m h)
+gfnReMatch args =
+  toGVal . fmap (matchTextToGVal :: RE.MatchText String -> GVal (Run p m h)) <$> fnReMatch RE.matchAllText args
+
+gfnReTest :: Monad m => Function (Run p m h)
+gfnReTest args =
+  toGVal <$> fnReMatch RE.matchTest args
+
+matchTextToGVal :: Monad m => RE.MatchText String -> GVal m
+matchTextToGVal matchArr =
+  let base = toGVal . toList . fmap (Text.pack . fst) $ matchArr
+      textRepr = fromMaybe "" . fmap (Text.pack . fst) . headMay . toList $ matchArr
+  in base
+      { asText = textRepr
+      , asHtml = html textRepr
+      }
+
+fnReMatch matchFunc args =
+  let gArgs = extractArgsL ["re", "haystack", "opts"] args
+  in either (const barf) go gArgs
+  where
+    go = \case
+      [r, h, Nothing] ->
+        go [r, h, Just def]
+      [Just reG, Just haystackG, Just optsG] -> do
+        opts <- parseCompOpts optsG
+        let re = RE.makeRegexOpts opts RE.defaultExecOpt (Text.unpack . asText $ reG)
+            haystack = Text.unpack . asText $ haystackG
+        return $ matchFunc re haystack
+      _ -> barf
+    barf = do
+      throwHere $ ArgumentsError (Just "re.match") "expected: regex, haystack, [opts]"
+
+parseCompOpts :: Monad m => GVal (Run p m h) -> Run p m h RE.CompOption
+parseCompOpts g = do
+  let str = Text.unpack . asText $ g
+  foldM
+    (\x ->
+      \case
+        'i' -> return x { RE.caseSensitive = False }
+        'm' -> return x { RE.multiline = True }
+        c -> do
+          warn $ ArgumentsError Nothing $ "unexpected regex modifier: " <> tshow c
+          return x
+    )
+    RE.blankCompOpt
+    str

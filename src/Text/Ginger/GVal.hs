@@ -133,6 +133,7 @@ gappend a b =
         (JSON.Null, b) -> Just $ b
         (a, JSON.Null) -> Just $ a
         _ -> Nothing -- If JSON tags mismatch, use default toJSON impl
+    , length = (+) <$> length a <*> length b
     }
 
 -- | Marshal a GVal between carrier monads.
