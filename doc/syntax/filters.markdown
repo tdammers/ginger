@@ -302,3 +302,49 @@ construct a list of return values of application of `f`. E.g.:
 {{ zipwith(sum, [1,2,3], [4,5,6]) }}
 {# outputs [5,7,9] #}
 ```
+
+## The `regex` module
+
+Support for POSIX regular expressions.
+
+### `regex.test(regex, haystack, opts='')`
+
+Test regular expression `regex` against string `haystack`.
+
+`opts` may contain `"i"` (case-insensitive) and/or `"m"` (multiline).
+
+Returns `true` if matched, `false` if not.
+
+### `regex.matches(regex, haystack, opts='')`
+
+Test regular expression `regex` against string `haystack`, returning an array
+of matches, each of them an array where the 0-th element represents the entire
+match, and the subsequent ones represent subgroup matches.
+
+Example:
+
+```
+{{ regex.matches('foo(bar|baz)', 'foobar, foobaz') }}
+{# returns [['foobar', 'bar'], ['foobaz', 'baz']] #}
+```
+
+### `regex.match(regex, haystack, opts='')`
+
+Same as `regex.matches`, but match only once, and return that match directly.
+
+Example:
+
+```
+{{ regex.match('foo(bar|baz)', 'foobar, foobaz') }}
+{# returns ['foobar', 'bar'] #}
+```
+
+**NOTE** that match objects returned from `regex.match` and `regex.matches`
+stringify such that only the full-pattern capture is used; subgroup captures
+are not used for stringification. This allows for conveniently writing just the
+`match` / `matches` call, without explicitly digging out the 0th capture:
+
+```
+{{ regex.match('foo(bar|baz)', 'foobar') }}
+{# prints "foobar" #}
+```
