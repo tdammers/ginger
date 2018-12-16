@@ -1,3 +1,16 @@
+## 0.8.3.0
+
+- Added builtin `regex` module for POSIX regular expressions support
+
+## 0.8.2.0
+
+- Expose some internals of the `Run` type and the default implementations of
+  built-in functions / filters
+
+## 0.8.1.0
+
+- Added built-ins: `partial`, `zip`, `zipwith`, `compose`
+
 ## 0.8.0.0
 
 - Now compiles on GHC 8.4
