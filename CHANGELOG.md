@@ -1,3 +1,7 @@
+## 0.8.4.0
+
+- Added builtin `apply`, making it possible to pass argument lists as arrays
+
 ## 0.8.3.0
 
 - Added builtin `regex` module for POSIX regular expressions support
