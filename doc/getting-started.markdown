@@ -175,13 +175,13 @@ make things clear:
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import Text.Ginger
-import qualified Data.HashMap.Strict as HashMap
+import Control.Monad.Identity (Identity, runIdentity)
 import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HashMap
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import Control.Monad.Identity (runIdentity)
+import Text.Ginger
 
 -- | A template context. We're using a HashMap of Text to Text, but any type
 -- that has a suitable 'ToGVal' instance would do.
@@ -201,7 +201,7 @@ nullResolver = const $ return Nothing
 -- | This is our template. Because 'parseGinger' wants a monad (as loading
 -- includes would normally go through some sort of monadic API like 'IO'), we
 -- use 'Identity' here.
-template :: Template 
+template :: Template SourcePos
 template = either (error . show) id . runIdentity $
   parseGinger nullResolver Nothing "Hello, {{ name }}, welcome in {{ location }}!"
 
@@ -262,7 +262,7 @@ import System.Exit (exitFailure)
 import System.IO (IOMode(ReadMode), openFile, hGetContents)
 import System.IO.Error (tryIOError)
 import Text.Ginger
-       (makeContextHtml, Template, toGVal, runGinger, parseGingerFile, VarName)
+       (SourcePos, makeContextHtml, Template, toGVal, runGinger, parseGingerFile, VarName)
 import Text.Ginger.GVal (ToGVal, GVal)
 import Text.Ginger.Html (htmlSource)
 
@@ -273,7 +273,7 @@ sampleContext = fromList [("name", "Alice")]
 
 
 -- Given a Template and a HashMap of context, render the template to Text
-render :: Template -> HashMap VarName Text -> Text
+render :: Template SourcePos -> HashMap VarName Text -> Text
 render template contextMap =
   let contextLookup = flip scopeLookup contextMap
       context = makeContextHtml contextLookup
@@ -312,7 +312,6 @@ main = do
   case template of
     Left err -> print err >> exitFailure
     Right template' -> print $ render template' sampleContext
-
 ```
 
 ## Further Reading
