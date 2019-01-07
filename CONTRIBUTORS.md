@@ -7,3 +7,5 @@
 - **Wanja Chresta**
   https://github.com/wchresta/
 - **Vamshi Surabhi**
+- **Richard Cook**
+  https://github.com/rcook/
