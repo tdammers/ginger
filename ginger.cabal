@@ -36,9 +36,9 @@ library
   -- other-modules:
   -- other-extensions:
   build-depends: base >=4.8 && <5
-               , aeson
-               , aeson-pretty
-               , bytestring
+               , aeson >=1.4.2.0 && <1.5
+               , aeson-pretty >=0.8.7 && <0.9
+               , bytestring >=0.10.8.2 && <0.11
                , data-default >= 0.5
                , filepath >= 1.3
                , http-types >= 0.8 && (< 0.11 || >= 0.12)
@@ -47,12 +47,12 @@ library
                , regex-tdfa >=1.2.3 && <=1.3
                , safe >= 0.3
                , scientific >= 0.3
-               , text
+               , text >=1.2.3.1 && <1.3
                , time >= 0.1.6.0
                , transformers >= 0.3
                , unordered-containers >= 0.2.5
-               , utf8-string
-               , vector
+               , utf8-string >=1.0.1.1 && <1.1
+               , vector >=0.12.0.2 && <0.13
   if !impl(ghc >= 8.0)
     build-depends: semigroups == 0.18.*
   hs-source-dirs:      src
@@ -60,18 +60,21 @@ library
 
 executable ginger
     main-is: GingerCLI.hs
+    other-modules: Options
     hs-source-dirs: cli
     default-language:    Haskell2010
     build-depends: base >= 4.8 && <5
-                 , bytestring
+                 , aeson >=1.4.2.0 && <1.5
+                 , bytestring >=0.10.8.2 && <0.11
                  , data-default >= 0.5
-                 , ginger
-                 , aeson
-                 , process
-                 , text
-                 , transformers
+                 , ginger >=0.8.4.0 && <0.9
+                 , optparse-applicative >=0.14.3.0 && <0.15
+                 , process >=1.6.5.0 && <1.7
+                 , text >=1.2.3.1 && <1.3
+                 , transformers >=0.5.6.2 && <0.6
                  , unordered-containers >= 0.2.5
-                 , yaml
+                 , utf8-string >=1.0.1.1 && <1.1
+                 , yaml >=0.11.0.0 && <0.12
 
 test-suite tests
     type: exitcode-stdio-1.0
@@ -81,16 +84,16 @@ test-suite tests
     hs-source-dirs: test
     default-language: Haskell2010
     build-depends: base >=4.8 && <5
-                 , ginger
-                 , aeson
-                 , bytestring
-                 , data-default
-                 , mtl
-                 , tasty
-                 , tasty-hunit
-                 , tasty-quickcheck
-                 , text
-                 , time
-                 , transformers
+                 , aeson >=1.4.2.0 && <1.5
+                 , bytestring >=0.10.8.2 && <0.11
+                 , data-default >=0.7.1.1 && <0.8
+                 , ginger >=0.8.4.0 && <0.9
+                 , mtl >=2.2.2 && <2.3
+                 , tasty >=1.2.1 && <1.3
+                 , tasty-hunit >=0.10.0.1 && <0.11
+                 , tasty-quickcheck >=0.10 && <0.11
+                 , text >=1.2.3.1 && <1.3
+                 , time >=1.9.2 && <1.10
+                 , transformers >=0.5.6.2 && <0.6
                  , unordered-containers >= 0.2.5
-                 , utf8-string
+                 , utf8-string >=1.0.1.1 && <1.1
