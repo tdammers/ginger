@@ -32,7 +32,7 @@ runOptions =
 
 templateSource :: Parser TemplateSource
 templateSource =
-  convert <$> option auto
+  convert <$> option str
       ( long "template"
       <> short 't'
       <> metavar "TEMPLATE"
@@ -49,7 +49,7 @@ dataSource =
 
 dataFromFile :: Parser DataSource
 dataFromFile =
-  convert <$> option auto
+  convert <$> option str
         ( long "data-file"
         <> metavar "DATAFILE"
         <> help "Load JSON or YAML data from this file (`-' to read from stdin)"
@@ -60,7 +60,7 @@ dataFromFile =
 
 dataLiteral :: Parser DataSource
 dataLiteral =
-  DataLiteral <$> option auto
+  DataLiteral <$> option str
         ( long "data"
         <> short 'd'
         <> metavar "DATA"
