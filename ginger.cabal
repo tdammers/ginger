@@ -6,7 +6,7 @@ version:             0.8.4.1
 synopsis:            An implementation of the Jinja2 template language in Haskell
 description:         Ginger is Jinja, minus the most blatant pythonisms. Wants
                      to be feature complete, but isn't quite there yet.
-homepage:            https://bitbucket.org/tdammers/ginger
+homepage:            https://ginger.tobiasdammers.nl/
 license:             MIT
 license-file:        LICENSE
 author:              Tobias Dammers
@@ -19,6 +19,7 @@ extra-source-files:  README.md
 data-files: test/fixtures/*.json
 cabal-version:       >=1.10
 bug-reports:         https://github.com/tdammers/ginger/issues
+source-repository:   https://github.com/tdammers/ginger
 
 library
   exposed-modules: Text.Ginger
