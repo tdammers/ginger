@@ -19,7 +19,10 @@ extra-source-files:  README.md
 data-files: test/fixtures/*.json
 cabal-version:       >=1.10
 bug-reports:         https://github.com/tdammers/ginger/issues
-source-repository:   https://github.com/tdammers/ginger
+
+source-repository head
+    type: git
+    location: https://github.com/tdammers/ginger
 
 library
   exposed-modules: Text.Ginger
