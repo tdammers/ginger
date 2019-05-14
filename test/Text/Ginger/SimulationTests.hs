@@ -745,10 +745,20 @@ simulationTests = testGroup "Simulation"
         -- TODO
         -- \"iterable\"
         -- TODO
-        , testCase "\"length\"" $ do
-            mkTestHtml [] []
-                "{{ [1,2,3]|length }}"
-                "3"
+        , testGroup "\"length\""
+            [ testCase "list" $ do
+              mkTestHtml [] []
+                  "{{ [1,2,3]|length }}"
+                  "3"
+            , testCase "dict" $ do
+              mkTestHtml [] []
+                  "{{ {'foo':'bar', 'baz':'quux'}|length }}"
+                  "2"
+            , testCase "string" $ do
+              mkTestHtml [] []
+                  "{{ 'foo'|length }}"
+                  "3"
+            ]
         -- \"modulo\"
         -- \"num\"
         -- TODO

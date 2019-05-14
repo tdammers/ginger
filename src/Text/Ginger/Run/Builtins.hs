@@ -272,6 +272,18 @@ gfnCenter [x,y] = gfnCenter [x, y, (Nothing, toGVal (" " :: Text))]
 gfnCenter ((_, s):(_, w):(_, pad):_) =
     return . toGVal $ center (asText s) (fromMaybe 80 $ Prelude.truncate <$> asNumber w) (asText pad)
 
+gfnLength :: Monad m => Function (Run p m h)
+gfnLength [] =
+  return def
+gfnLength ((_,x):_) =
+  case (asDictItems x, asList x) of
+    (Nothing, Nothing) ->
+      return . toGVal . Text.length . asText $ x
+    (Just items, _) ->
+      return . toGVal . Prelude.length $ items
+    (_, Just items) ->
+      return . toGVal . Prelude.length $ items
+
 gfnSlice :: Monad m => Function (Run p m h)
 gfnSlice args =
     let argValues =

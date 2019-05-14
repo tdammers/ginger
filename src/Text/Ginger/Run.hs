@@ -166,7 +166,7 @@ defaultScope =
     , ("is_lt", fromFunction gfnLess)
     , ("iterable", fromFunction . unaryFunc $ toGVal . (\x -> isList x || isDict x))
     , ("json", fromFunction gfnJSON)
-    , ("length", fromFunction . unaryFunc $ toGVal . length)
+    , ("length", fromFunction gfnLength)
     , ("le", fromFunction gfnLessEquals)
     , ("less", fromFunction gfnLess)
     , ("lessthan", fromFunction gfnLess)
