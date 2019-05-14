@@ -64,10 +64,10 @@ executable ginger
     hs-source-dirs: cli
     default-language:    Haskell2010
     build-depends: base >= 4.8 && <5
+                 , ginger
                  , aeson >=1.4.2.0 && <1.5
                  , bytestring >=0.10.8.2 && <0.11
                  , data-default >= 0.5
-                 , ginger >=0.8.4.0 && <0.9
                  , optparse-applicative >=0.14.3.0 && <0.15
                  , process >=1.6.5.0 && <1.7
                  , text >=1.2.3.1 && <1.3
@@ -84,16 +84,16 @@ test-suite tests
     hs-source-dirs: test
     default-language: Haskell2010
     build-depends: base >=4.8 && <5
+                 , ginger
                  , aeson >=1.4.2.0 && <1.5
                  , bytestring >=0.10.8.2 && <0.11
-                 , data-default >=0.7.1.1 && <0.8
-                 , ginger >=0.8.4.0 && <0.9
+                 , data-default >=0.5
                  , mtl >=2.2.2 && <2.3
                  , tasty >=1.2.1 && <1.3
                  , tasty-hunit >=0.10.0.1 && <0.11
                  , tasty-quickcheck >=0.10 && <0.11
                  , text >=1.2.3.1 && <1.3
-                 , time >=1.9.2 && <1.10
+                 , time >= 0.1.6.0
                  , transformers >=0.5.6.2 && <0.6
                  , unordered-containers >= 0.2.5
                  , utf8-string >=1.0.1.1 && <1.1
