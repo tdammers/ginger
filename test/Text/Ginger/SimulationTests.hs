@@ -904,6 +904,20 @@ simulationTests = testGroup "Simulation"
                     "{{ \"12345\"|slice(1,3) }}"
                     "234"
             ]
+        , testGroup "\"split\""
+            [ testCase "word-splitting" $ do
+                mkTestText [] []
+                    "{{ split('foo bar')|json(pretty=0) }}"
+                    "[\"foo\",\"bar\"]"
+            , testCase "word-splitting, more spaces" $ do
+                mkTestText [] []
+                    "{{ split('  foo  bar ')|json(pretty=0) }}"
+                    "[\"foo\",\"bar\"]"
+            , testCase "word-splitting, more spaces, explicit delim" $ do
+                mkTestText [] []
+                    "{{ split('  foo  bar ','')|json(pretty=0) }}"
+                    "[\"foo\",\"bar\"]"
+            ]
         , testGroup "\"replace\""
             [ testCase "simple case" $ do
                 mkTestHtml [] []

@@ -187,6 +187,7 @@ defaultScope =
     , ("show", fromFunction . unaryFunc $ fromString . show)
     , ("slice", fromFunction gfnSlice)
     , ("sort", fromFunction gfnSort)
+    , ("split", fromFunction gfnSplit)
     , ("str", fromFunction . unaryFunc $ toGVal . asText)
     , ("sum", fromFunction . variadicNumericFunc 0 $ Prelude.sum)
     , ("truncate", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.truncate)

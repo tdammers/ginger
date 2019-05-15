@@ -339,6 +339,23 @@ gfnReplace args =
             return . toGVal $ Text.replace search replace str
         _ -> throwHere $ ArgumentsError (Just "replace") "expected: (str, search, replace)"
 
+gfnSplit :: Monad m => Function (Run p m h)
+gfnSplit args =
+    let argValues =
+            extractArgsDefL
+                [ ("str", def)
+                , ("sep", def)
+                ]
+                args
+    in case argValues of
+        Right [strG, sepG] -> do
+            let search = asText strG
+                split = case asText sepG of
+                    "" -> Text.words
+                    sep -> Text.splitOn sep
+            return . toGVal . split $ search
+        _ -> throwHere $ ArgumentsError (Just "split") "expected: (str, sep=null)"
+
 gfnCompose :: forall m p h. Monad m => Function (Run p m h)
 gfnCompose [] = fail "Invalid arguments to compose()"
 gfnCompose [(_, fG)] = return fG
@@ -855,3 +872,5 @@ parseCompOpts g = do
     )
     RE.blankCompOpt
     str
+
+-- vim: sw=4 ts=4 expandtab

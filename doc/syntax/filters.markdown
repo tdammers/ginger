@@ -264,6 +264,11 @@ comparison that is used; by default, the list is sorted alphabetically, but
 - A list of strings, used as a chain of property to "drill down" into a nested
   dictionary.
 
+## `split(str, sep)`
+
+Split `str` into a list of substrings, delimited by separator `sep`. If `sep`
+is empty or `null`, split into whitespace-delimited words instead.
+
 ## `str(x)`
 
 Force `x` to a plain-text string.
