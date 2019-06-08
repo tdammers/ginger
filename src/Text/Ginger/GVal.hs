@@ -78,6 +78,11 @@ import Data.Time ( Day (..)
                  , TimeZone (..)
                  , TimeLocale (..)
                  )
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
+import Data.Text.Encoding (encodeUtf8, decodeUtf8)
+import qualified Data.Text.Lazy.Encoding as LText
 
 import Text.Ginger.Html
 
@@ -106,6 +111,7 @@ data GVal m =
         , asBoolean :: Bool -- ^ Get value's truthiness
         , asNumber :: Maybe Scientific -- ^ Convert value to a number, if possible
         , asFunction :: Maybe (Function m) -- ^ Access value as a callable function, if it is one
+        , asBytes :: Maybe ByteString -- ^ Access as raw bytes
         , length :: Maybe Int -- ^ Get length of value, if it is a collection (list/dict)
         , isNull :: Bool -- ^ Check if the value is null
         , asJSON :: Maybe JSON.Value -- ^ Provide a custom JSON representation of the value
@@ -122,6 +128,7 @@ gappend a b =
         return $ \k -> lookupA k <|> lookupB k
     , asHtml = asHtml a <> asHtml b
     , asText = asText a <> asText b
+    , asBytes = asBytes a <> asBytes b
     , asBoolean = (asBoolean a || asBoolean b) && not (isNull a || isNull b)
     , asNumber = readMay . Text.unpack $ (asText a <> asText b)
     , asFunction = Nothing
@@ -148,6 +155,7 @@ marshalGVal g =
         , asLookup = fmap (fmap marshalGVal .) (asLookup g)
         , asHtml = asHtml g
         , asText = asText g
+        , asBytes = asBytes g
         , asBoolean = asBoolean g
         , asNumber = asNumber g
         , asFunction = Nothing
@@ -173,6 +181,7 @@ marshalGValEx hoist unhoist g =
         , asLookup = fmap (fmap (marshalGValEx hoist unhoist) .) (asLookup g)
         , asHtml = asHtml g
         , asText = asText g
+        , asBytes = asBytes g
         , asBoolean = asBoolean g
         , asNumber = asNumber g
         , asFunction = marshalFunction hoist unhoist <$> asFunction g
@@ -202,6 +211,7 @@ instance Default (GVal m) where
             , asLookup = Nothing
             , asHtml = unsafeRawHtml ""
             , asText = ""
+            , asBytes = Nothing
             , asBoolean = False
             , asNumber = Nothing
             , asFunction = Nothing
@@ -323,6 +333,7 @@ instance ToGVal m v => ToGVal m [v] where
                 def
                     { asHtml = mconcat . Prelude.map asHtml $ xs
                     , asText = mconcat . Prelude.map asText $ xs
+                    , asBytes = mconcat . Prelude.map asBytes $ xs
                     , asBoolean = not . List.null $ xs
                     , isNull = False
                     , asList = Just $ Prelude.map toGVal xs
@@ -338,6 +349,7 @@ instance ToGVal m v => ToGVal m (HashMap Text v) where
                 def
                     { asHtml = mconcat . Prelude.map asHtml . HashMap.elems $ xs
                     , asText = mconcat . Prelude.map asText . HashMap.elems $ xs
+                    , asBytes = mconcat . Prelude.map asBytes . HashMap.elems $ xs
                     , asBoolean = not . HashMap.null $ xs
                     , isNull = False
                     , asLookup = Just (`HashMap.lookup` xs)
@@ -359,6 +371,7 @@ instance ToGVal m Integer where
         def
             { asHtml = html . Text.pack . show $ x
             , asText = Text.pack . show $ x
+            , asBytes = Just . encodeUtf8 . Text.pack . show $ x
             , asBoolean = x /= 0
             , asNumber = Just . fromIntegral $ x
             , isNull = False
@@ -369,6 +382,7 @@ instance ToGVal m Scientific where
         def
             { asHtml = html $ scientificToText x
             , asText = scientificToText x
+            , asBytes = Just . encodeUtf8 . scientificToText $ x
             , asBoolean = x /= 0
             , asNumber = Just x
             , isNull = False
@@ -382,6 +396,7 @@ instance ToGVal m Day where
         in (orderedDict dayDict)
             { asHtml = html $ formatted
             , asText = formatted
+            , asBytes = Just . encodeUtf8 $ formatted
             , asBoolean = True
             , asNumber = Just . fromIntegral $ julian
             , asList = Just (List.map snd dayDict)
@@ -402,6 +417,7 @@ instance ToGVal m TimeOfDay where
         in (orderedDict timeDict)
             { asHtml = html $ formatted
             , asText = formatted
+            , asBytes = Just . encodeUtf8 $ formatted
             , asBoolean = True
             , asNumber = Nothing
             , asList = Just (List.map snd timeDict)
@@ -425,6 +441,7 @@ instance ToGVal m LocalTime where
                 ])
             { asHtml = html $ formatted
             , asText = formatted
+            , asBytes = Just . encodeUtf8 $ formatted
             , asBoolean = True
             , asNumber = Nothing
             , asList = Just (List.map snd dtDict)
@@ -455,6 +472,7 @@ instance ToGVal m TimeLocale where
         in (dict timeLocaleDict)
             { asHtml = html $ formattedExample
             , asText = formattedExample
+            , asBytes = Just . encodeUtf8 $ formattedExample
             , asBoolean = True
             , asNumber = Nothing
             }
@@ -481,6 +499,7 @@ instance ToGVal m ZonedTime where
         in (dict dtDict)
             { asHtml = html $ formatted
             , asText = formatted
+            , asBytes = Just . encodeUtf8 $ formatted
             , asBoolean = True
             , asNumber = Nothing
             }
@@ -513,6 +532,7 @@ instance ToGVal m Bool where
             { asHtml = if x then html "1" else html ""
             , asText = if x then "1" else ""
             , asBoolean = x
+            , asBytes = Just $ if x then "1" else "0"
             , asNumber = Just $ if x then 1 else 0
             , isNull = False
             , asJSON = Just (JSON.Bool x)
@@ -527,6 +547,7 @@ instance IsString (GVal m) where
         def
             { asHtml = html . Text.pack $ x
             , asText = Text.pack x
+            , asBytes = Just . encodeUtf8 . Text.pack $ x
             , asBoolean = not $ Prelude.null x
             , asNumber = readMay x
             , isNull = False
@@ -542,6 +563,7 @@ instance ToGVal m Text where
         def
             { asHtml = html x
             , asText = x
+            , asBytes = Just . encodeUtf8 $ x
             , asBoolean = not $ Text.null x
             , asNumber = readMay . Text.unpack $ x
             , isNull = False
@@ -552,11 +574,34 @@ instance ToGVal m LText.Text where
         def
             { asHtml = html (LText.toStrict x)
             , asText = LText.toStrict x
+            , asBytes = Just . LBS.toStrict . LText.encodeUtf8 $ x
             , asBoolean = not $ LText.null x
             , asNumber = readMay . LText.unpack $ x
             , isNull = False
             }
 
+instance ToGVal m ByteString where
+    toGVal x =
+        def
+            { asHtml = html (decodeUtf8 x)
+            , asText = decodeUtf8 x
+            , asBytes = Just x
+            , asBoolean = not $ BS.null x
+            , asNumber = readMay . Text.unpack . decodeUtf8 $ x
+            , isNull = False
+            }
+
+instance ToGVal m LBS.ByteString where
+    toGVal x =
+        def
+            { asHtml = html . LText.toStrict . LText.decodeUtf8 $ x
+            , asText = LText.toStrict . LText.decodeUtf8 $ x
+            , asBytes = Just . LBS.toStrict $ x
+            , asBoolean = not $ LBS.null x
+            , asNumber = readMay . LText.unpack . LText.decodeUtf8 $ x
+            , isNull = False
+            }
+--
 -- | This instance is slightly wrong; the 'asBoolean', 'asNumber', and 'asText'
 -- methods all treat the HTML source as plain text. We do this to avoid parsing
 -- the HTML back into a 'Text' (and dealing with possible parser errors); the
@@ -794,6 +839,12 @@ instance FromGVal m Text where
 
 instance FromGVal m (GVal m) where
     fromGVal = Just
+
+instance FromGVal m ByteString where
+    fromGVal = asBytes
+
+instance FromGVal m LBS.ByteString where
+    fromGVal = fmap LBS.fromStrict . asBytes
 
 instance FromGVal m a => FromGVal m (Maybe a) where
     fromGVal = \g ->

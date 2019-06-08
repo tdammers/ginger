@@ -8,6 +8,9 @@ import Test.Tasty
 import Test.Tasty.QuickCheck
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
 import Data.Default (def)
 import qualified Data.HashMap.Strict as HashMap
 import Control.Exception
@@ -20,6 +23,12 @@ import Text.Ginger.Html
 
 instance Arbitrary Text where
     arbitrary = Text.pack <$> arbitrary
+
+instance Arbitrary ByteString where
+    arbitrary = BS.pack <$> arbitrary
+
+instance Arbitrary LBS.ByteString where
+    arbitrary = LBS.pack <$> arbitrary
 
 instance Arbitrary Html where
     arbitrary = oneof
@@ -100,6 +109,7 @@ propertyTests = testGroup "Properties"
         , testProperty "Bool" (roundTripGValP :: Bool -> Bool)
         , testProperty "[Text]" (roundTripGValP :: [Text] -> Bool)
         , testProperty "Maybe Text" (roundTripGValP :: Maybe Text -> Bool)
+        , testProperty "ByteString" (roundTripGValP :: Maybe ByteString -> Bool)
         , testProperty "Text" (roundTripGValP :: Text -> Bool)
         , testProperty "LocalTime" (roundTripGValP :: LocalTime -> Bool)
         , testProperty "TimeZone" (roundTripGValP :: TimeZone -> Bool)
