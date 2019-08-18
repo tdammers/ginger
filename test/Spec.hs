@@ -13,3 +13,4 @@ allTests =
         [ simulationTests
         , propertyTests
         ]
+
