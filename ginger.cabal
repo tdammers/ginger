@@ -63,6 +63,8 @@ library
   default-language:    Haskell2010
 
 executable ginger
+    if impl(ghcjs)
+        buildable: False
     main-is: GingerCLI.hs
     other-modules: Options
     hs-source-dirs: cli
