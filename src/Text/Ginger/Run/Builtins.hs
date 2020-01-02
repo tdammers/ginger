@@ -38,6 +38,7 @@ import Prelude ( (.), ($), (==), (/=)
                , either
                )
 import qualified Prelude
+import Control.Monad.Error (runErrorT)
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import qualified Data.List as List
 import Text.Ginger.AST
@@ -851,9 +852,11 @@ fnReMatch matchFunc args =
         go [r, h, Just def]
       [Just reG, Just haystackG, Just optsG] -> do
         opts <- parseCompOpts optsG
-        let re = RE.makeRegexOpts opts RE.defaultExecOpt (Text.unpack . asText $ reG)
+        let reM = runIdentity $ runErrorT $ RE.makeRegexOptsM opts RE.defaultExecOpt (Text.unpack . asText $ reG)
             haystack = Text.unpack . asText $ haystackG
-        return $ matchFunc re haystack
+        case reM of
+            Left err -> throwHere $ ArgumentsError Nothing $ "invalid regex: " <> Text.pack err
+            Right re -> return $ matchFunc re haystack
       _ -> barf
     barf = do
       throwHere $ ArgumentsError (Just "re.match") "expected: regex, haystack, [opts]"
