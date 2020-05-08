@@ -19,6 +19,7 @@ import Control.Monad.Identity (Identity)
 import Data.Time
 
 import Text.Ginger
+import Text.Ginger.ErrInfo
 import Text.Ginger.Html
 
 instance Arbitrary Text where
@@ -147,10 +148,4 @@ roundTripGValP :: (Eq a, ToGVal Identity a, FromGVal Identity a)
 roundTripGValP = roundTripGValExP (==)
 
 expand :: Template () -> IO (Either String Text)
-expand tpl =
-    mapLeft (const "ERROR" :: SomeException -> String) <$>
-        try (return $ runGinger (makeContextText (const def)) tpl)
-
-mapLeft :: (a -> b) -> Either a c -> Either b c
-mapLeft f (Left x) = Left (f x)
-mapLeft f (Right x) = Right x
+expand tpl = pure (runErrInfo (runGinger (makeContextText (const def)) tpl))

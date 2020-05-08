@@ -120,7 +120,7 @@ import Data.Aeson as JSON
 
 defaultScope :: forall m h p
               . ( Monoid h
-                , Monad m
+                , MonadFail m
                 , ToGVal (Run p m h) h
                 , ToGVal (Run p m h) p
                 )
@@ -232,7 +232,7 @@ defaultScope =
 -- @easyRenderM emit context template@ renders the @template@ with the
 -- given @context@ object (which should represent some sort of
 -- dictionary-like object) by feeding any output to the @emit@ function.
-easyRenderM :: ( Monad m
+easyRenderM :: ( MonadFail m
                , ContextEncodable h
                , Monoid h
                , ToGVal (Run p m h) v
@@ -253,34 +253,36 @@ easyRenderM emit context template =
 -- dictionary-like object) by returning the concatenated output.
 easyRender :: ( ContextEncodable h
               , Monoid h
-              , ToGVal (Run p (Writer h) h) v
-              , ToGVal (Run p (Writer h) h) h
-              , ToGVal (Run p (Writer h) h) p
+              , MonadFail m
+              , ToGVal (Run p (WriterT h m) h) v
+              , ToGVal (Run p (WriterT h m) h) h
+              , ToGVal (Run p (WriterT h m) h) p
               )
            => v
            -> Template p
-           -> h
+           -> m h
 easyRender context template =
-    execWriter $ easyRenderM tell context template
+    execWriterT $ easyRenderM tell context template
 
 -- | Purely expand a Ginger template. The underlying carrier monad is 'Writer'
 -- 'h', which is used to collect the output and render it into a 'h'
 -- value.
-runGinger :: ( ToGVal (Run p (Writer h) h) h
-             , ToGVal (Run p (Writer h) h) p
+runGinger :: ( ToGVal (Run p (WriterT h m) h) h
+             , ToGVal (Run p (WriterT h m) h) p
+             , MonadFail m
              , Monoid h
              )
-          => GingerContext p (Writer h) h
+          => GingerContext p (WriterT h m) h
           -> Template p
-          -> h
+          -> m h
 runGinger context template =
-    execWriter $ runGingerT context template
+    execWriterT $ runGingerT context template
 
 -- | Monadically run a Ginger template. The @m@ parameter is the carrier monad.
 runGingerT :: ( ToGVal (Run p m h) h
               , ToGVal (Run p m h) p
               , Monoid h
-              , Monad m
+              , MonadFail m
               , Applicative m
               , Functor m
               )
@@ -637,7 +639,7 @@ defRunState :: forall m h p
              . ( ToGVal (Run p m h) h
                , ToGVal (Run p m h) p
                , Monoid h
-               , Monad m
+               , MonadFail m
                )
             => Template p
             -> RunState p m h
@@ -661,7 +663,7 @@ gfnThrow :: ( Monad m
 gfnThrow args =
     throwHere (RuntimeError . mconcat . fmap (asText . snd) $ args)
 
-gfnEval :: ( Monad m
+gfnEval :: ( MonadFail m
            , Monoid h
            , ToGVal (Run p m h) h
            , ToGVal (Run p m h) p

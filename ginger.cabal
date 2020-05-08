@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                ginger
-version:             0.9.1.0
+version:             0.10.0.0
 synopsis:            An implementation of the Jinja2 template language in Haskell
 description:         Ginger is Jinja, minus the most blatant pythonisms. Wants
                      to be feature complete, but isn't quite there yet.
@@ -27,6 +27,7 @@ source-repository head
 library
   exposed-modules: Text.Ginger
                  , Text.Ginger.AST
+                 , Text.Ginger.ErrInfo
                  , Text.Ginger.GVal
                  , Text.Ginger.Html
                  , Text.Ginger.Optimizer
@@ -48,7 +49,7 @@ library
                , http-types >= 0.8 && (< 0.11 || >= 0.12)
                , mtl >= 2.2
                , parsec >= 3.0
-               , regex-tdfa >=1.2.3 && <=1.3
+               , regex-tdfa >=1.2.3 && <=1.4
                , safe >= 0.3
                , scientific >= 0.3
                , text >=1.2.3.1 && <1.3

@@ -10,12 +10,13 @@ module Text.Ginger.Optimizer
 where
 
 import Text.Ginger.AST
+import Text.Ginger.ErrInfo
 import Text.Ginger.GVal
 import Text.Ginger.Run
 import Control.Monad.Identity
 import Data.Default
 import Control.Monad.State (execState, evalState)
-import Control.Monad.Writer (Writer, execWriter, tell)
+import Control.Monad.Writer (WriterT)
 import qualified Data.HashMap.Strict as HashMap
 import Data.Maybe (fromMaybe)
 import Control.Applicative
@@ -260,7 +261,9 @@ compileTimeEval e = case pureExpression e of
                   (InterpolationS () (fmap (const ()) e))
                   HashMap.empty
                   Nothing
-        Just . toGVal . runCT $ tpl
+        case runErrInfo (runCT tpl) of
+            Right collected -> Just (toGVal collected)
+            _ -> Nothing
     Impure -> Nothing
 
 newtype Collected = Collected [GVal Identity]
@@ -273,10 +276,10 @@ collectedToGVal :: Collected -> GVal m
 collectedToGVal (Collected []) = def
 collectedToGVal (Collected (x:_)) = marshalGVal x
 
-runCT :: Template () -> Collected
+runCT :: Template () -> ErrInfo Collected
 runCT = runGinger ctContext
 
-ctContext :: GingerContext () (Writer Collected) Collected
+ctContext :: GingerContext () (WriterT Collected ErrInfo) Collected
 ctContext = makeContext' ctLookup ctEncode Nothing
 
 ctLookup :: VarName -> GVal m

@@ -37,6 +37,7 @@ import Prelude ( (.), ($), (==), (/=)
                , fst, snd
                , Monad
                , Functor
+               , MonadFail
                )
 import qualified Prelude
 import Data.Maybe ( fromMaybe, catMaybes, isJust, mapMaybe )
@@ -822,7 +823,7 @@ class FromGVal m a where
     fromGVal :: GVal m -> Maybe a
     fromGVal = Prelude.either (const Nothing) Just . fromGValEither
 
-fromGValM :: (Monad m, FromGVal m a) => GVal m -> m a
+fromGValM :: (MonadFail m, FromGVal m a) => GVal m -> m a
 fromGValM = Prelude.either Prelude.fail return . fromGValEither
 
 instance FromGVal m Int where

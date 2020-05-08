@@ -356,7 +356,7 @@ gfnSplit args =
             return . toGVal . split $ search
         _ -> throwHere $ ArgumentsError (Just "split") "expected: (str, sep=null)"
 
-gfnCompose :: forall m p h. Monad m => Function (Run p m h)
+gfnCompose :: forall m p h. MonadFail m => Function (Run p m h)
 gfnCompose [] = fail "Invalid arguments to compose()"
 gfnCompose [(_, fG)] = return fG
 gfnCompose ((_, fG):xs) = do
@@ -370,7 +370,7 @@ gfnCompose ((_, fG):xs) = do
               f [(Nothing, arg')]
       return $ fromFunction h
 
-gfnPartial :: forall m p h. Monad m => Function (Run p m h)
+gfnPartial :: forall m p h. MonadFail m => Function (Run p m h)
 gfnPartial [] = fail "Invalid arguments to partial()"
 gfnPartial ((_, fG):args) = do
   case asFunction fG of
@@ -397,7 +397,7 @@ gfnZip args = do
         return $ currentVal : tailVals
 
 
-gfnZipWith :: forall m p h. Monad m => Function (Run p m h)
+gfnZipWith :: forall m p h. MonadFail m => Function (Run p m h)
 gfnZipWith ((Nothing, gfn):args) = do
   zipFunction <- case asFunction gfn of
     Nothing -> fail $ "Invalid args to zipwith"
@@ -417,7 +417,7 @@ gfnZipWith ((Nothing, gfn):args) = do
         return $ currentVal : tailVals
 
 
-gfnMap :: Monad m => Function m
+gfnMap :: MonadFail m => Function m
 gfnMap args = do
     let parsedArgs = extractArgsDefL
             [ ("collection", def)

@@ -233,47 +233,50 @@ liftLookup f k = do
 -- marshalling values from Haskell to Ginger is a matter of calling 'toGVal'
 -- on them, so the 'GVal (Run (Writer Html))' part can usually be ignored.
 -- See the 'Text.Ginger.GVal' module for details.
-makeContext' :: Monoid h
-            => (VarName -> GVal (Run p (Writer h) h))
-            -> (GVal (Run p (Writer h) h) -> h)
+makeContext' :: (Monoid h, MonadFail m)
+            => (VarName -> GVal (Run p (WriterT h m) h))
+            -> (GVal (Run p (WriterT h m) h) -> h)
             -> Maybe (Newlines h)
-            -> GingerContext p (Writer h) h
+            -> GingerContext p (WriterT h m) h
 makeContext' lookupFn =
     makeContextM'
         (return . lookupFn)
         tell
 
 {-#DEPRECATED makeContext "Compatibility alias for makeContextHtml" #-}
-makeContext :: (VarName -> GVal (Run p (Writer Html) Html))
-            -> GingerContext p (Writer Html) Html
+makeContext :: MonadFail m
+            => (VarName -> GVal (Run p (WriterT Html m) Html))
+            -> GingerContext p (WriterT Html m) Html
 makeContext = makeContextHtml
 
 {-#DEPRECATED makeContextM "Compatibility alias for makeContextHtmlM" #-}
-makeContextM :: (Monad m, Functor m)
+makeContextM :: (MonadFail m, Functor m)
              => (VarName -> Run p m Html (GVal (Run p m Html)))
              -> (Html -> m ())
              -> GingerContext p m Html
 makeContextM = makeContextHtmlM
 
-makeContextHtml :: (VarName -> GVal (Run p (Writer Html) Html))
-                -> GingerContext p (Writer Html) Html
+makeContextHtml :: MonadFail m
+                => (VarName -> GVal (Run p (WriterT Html m) Html))
+                -> GingerContext p (WriterT Html m) Html
 makeContextHtml l = makeContext' l toHtml (Just htmlNewlines)
 
-makeContextHtmlM :: (Monad m, Functor m)
+makeContextHtmlM :: (MonadFail m, Functor m)
                  => (VarName -> Run p m Html (GVal (Run p m Html)))
                  -> (Html -> m ())
                  -> GingerContext p m Html
 makeContextHtmlM l w = makeContextM' l w toHtml (Just htmlNewlines)
 
-makeContextHtmlExM :: (Monad m, Functor m)
+makeContextHtmlExM :: (MonadFail m, Functor m)
                  => (VarName -> Run p m Html (GVal (Run p m Html)))
                  -> (Html -> m ())
                  -> (RuntimeError p -> m ())
                  -> GingerContext p m Html
 makeContextHtmlExM l w warn = makeContextExM' l w warn toHtml (Just htmlNewlines)
 
-makeContextText :: (VarName -> GVal (Run p (Writer Text) Text))
-                -> GingerContext p (Writer Text) Text
+makeContextText :: MonadFail m =>
+                (VarName -> GVal (Run p (WriterT Text m) Text))
+                -> GingerContext p (WriterT Text m) Text
 makeContextText l = makeContext' l asText (Just textNewlines)
 
 makeContextTextM :: (Monad m, Functor m)
