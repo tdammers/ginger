@@ -1,3 +1,9 @@
+## 0.9.0.0
+
+- Added `split()` builtin
+- Added support for byte arrays, represented as `ByteString` on the Haskell
+  side
+
 ## 0.8.4.0
 
 - Added builtin `apply`, making it possible to pass argument lists as arrays
