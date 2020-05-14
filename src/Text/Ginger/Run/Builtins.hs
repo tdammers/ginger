@@ -59,7 +59,7 @@ import Control.Monad.Identity
 import Control.Monad.Writer
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Except (throwError)
+import Control.Monad.Except (throwError, MonadError)
 import Control.Applicative
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
@@ -357,13 +357,13 @@ gfnSplit args =
         _ -> throwHere $ ArgumentsError (Just "split") "expected: (str, sep=null)"
 
 gfnCompose :: forall m p h. Monad m => Function (Run p m h)
-gfnCompose [] = fail "Invalid arguments to compose()"
+gfnCompose [] = throwError $ ArgumentsError (Just "compose") ""
 gfnCompose [(_, fG)] = return fG
 gfnCompose ((_, fG):xs) = do
   gG <- gfnCompose xs
   case (asFunction fG, asFunction gG) of
-    (Nothing, _) -> fail $ "Argument to compose() is not a function"
-    (_, Nothing) -> fail $ "PANIC: Composition of functions is not a function"
+    (Nothing, _) -> throwError NotAFunctionError
+    (_, Nothing) -> throwError NotAFunctionError
     (Just f, Just g) -> do
       let h args = do
               arg' <- g args
@@ -371,10 +371,10 @@ gfnCompose ((_, fG):xs) = do
       return $ fromFunction h
 
 gfnPartial :: forall m p h. Monad m => Function (Run p m h)
-gfnPartial [] = fail "Invalid arguments to partial()"
+gfnPartial [] = throwError $ ArgumentsError (Just "partial") ""
 gfnPartial ((_, fG):args) = do
   case asFunction fG of
-    Nothing -> fail "Argument to partial() is not a function"
+    Nothing -> throwError $ ArgumentsError (Just "partial") "Argument must be a function"
     Just f -> do
       let h args' = do
             f (args ++ args')
@@ -400,7 +400,7 @@ gfnZip args = do
 gfnZipWith :: forall m p h. Monad m => Function (Run p m h)
 gfnZipWith ((Nothing, gfn):args) = do
   zipFunction <- case asFunction gfn of
-    Nothing -> fail $ "Invalid args to zipwith"
+    Nothing -> throwError $ ArgumentsError (Just "zipwith") ""
     Just fn -> return fn
   toGVal <$> go zipFunction (fmap fst args) (fmap (fromMaybe [] . asList . snd) args)
   where
@@ -417,7 +417,7 @@ gfnZipWith ((Nothing, gfn):args) = do
         return $ currentVal : tailVals
 
 
-gfnMap :: Monad m => Function m
+gfnMap :: (Monad m, MonadError (RuntimeError a) m) => Function m
 gfnMap args = do
     let parsedArgs = extractArgsDefL
             [ ("collection", def)
@@ -433,7 +433,7 @@ gfnMap args = do
                    , Just (asText attribute)
                    )
         _ ->
-            fail "Invalid args to map()"
+            throwError $ ArgumentsError (Just "map") ""
     mapFunction <- case (functionMay, attributeMay) of
         (Just f, _) -> return f
         (Nothing, Just key) -> return $ \case
@@ -441,7 +441,7 @@ gfnMap args = do
                 return $ lookupLooseDef def (toGVal key) item
             _ ->
                 return def
-        _ -> fail "You have to pass a function or an attribute"
+        _ -> throwError $ ArgumentsError (Just "map") "You have to pass a function or an attribute"
     case (dictMay, listMay) of
         (Just items, _) ->
             dict <$> forM items
