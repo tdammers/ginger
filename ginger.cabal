@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                ginger
-version:             0.10.0.0
+version:             0.10.0.1
 synopsis:            An implementation of the Jinja2 template language in Haskell
 description:         Ginger is Jinja, minus the most blatant pythonisms. Wants
                      to be feature complete, but isn't quite there yet.
@@ -40,7 +40,7 @@ library
   -- other-modules:
   -- other-extensions:
   build-depends: base >=4.8 && <5
-               , aeson >=1.4.2.0 && <1.5
+               , aeson >=1.4.2.0 && <1.6
                , aeson-pretty >=0.8.7 && <0.9
                , bytestring >=0.10.8.2 && <0.11
                , data-default >= 0.5
