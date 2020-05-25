@@ -37,7 +37,7 @@ import Text.Parsec ( ParseError (..)
                    , runParserT
                    , try, lookAhead
                    , manyTill, oneOf, string, notFollowedBy, between, sepBy
-                   , eof, spaces, anyChar, noneOf, char
+                   , eof, space, spaces, anyChar, noneOf, char
                    , choice, option, optionMaybe
                    , unexpected
                    , digit
@@ -439,15 +439,25 @@ scriptEchoStmtP = do
 literalStmtP :: Monad m => Parser m (Statement SourcePos)
 literalStmtP = do
     pos <- getPosition
-    txt <- manyTill literalCharP endOfLiteralP
+    txt <- concat <$> manyTill literalCharsP endOfLiteralP
 
     case txt of
         [] -> unexpected "{{"
         _ -> return . LiteralS pos . unsafeRawHtml . Text.pack $ txt
 
-literalCharP :: Monad m => Parser m Char
-literalCharP =
-    literalNewlineP <|> anyChar
+literalCharsP :: Monad m => Parser m [Char]
+literalCharsP = do
+    dlims <- psDelimiters <$> getState
+    let forbiddenChars =
+          nub . sort $
+            " \t\r\n" ++
+            delimOpenInterpolation dlims ++
+            delimOpenComment dlims ++
+            delimOpenTag dlims
+    (some $ noneOf forbiddenChars) <|>
+      (fmap (:[]) literalNewlineP) <|>
+      some space <|>
+      (fmap (:[]) anyChar)
 
 literalNewlineP :: Monad m => Parser m Char
 literalNewlineP = do
