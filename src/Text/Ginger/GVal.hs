@@ -36,9 +36,9 @@ import Prelude ( (.), ($), (==), (/=)
                , not
                , fst, snd
                , Monad
-               , MonadFail
                , Functor
                )
+import Control.Monad.Fail (MonadFail)
 import qualified Prelude
 import Data.Maybe ( fromMaybe, catMaybes, isJust, mapMaybe )
 import Data.Text (Text)
