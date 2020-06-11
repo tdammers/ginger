@@ -193,7 +193,7 @@ instance ContextEncodable Html where
 -- based on a lookup key, and a writer function (outputting HTML by whatever
 -- means the carrier monad provides, e.g. @putStr@ for @IO@, or @tell@ for
 -- @Writer@s).
-makeContextM' :: (Monad m, Functor m)
+makeContextM' :: Monad m
              => (VarName -> Run p m h (GVal (Run p m h)))
              -> (h -> m ())
              -> (GVal (Run p m h) -> h)
@@ -202,7 +202,7 @@ makeContextM' :: (Monad m, Functor m)
 makeContextM' lookupFn writeFn encodeFn newlines =
   makeContextExM' lookupFn writeFn (Prelude.const $ return ()) encodeFn newlines
 
-makeContextExM' :: (Monad m, Functor m)
+makeContextExM' :: Monad m
              => (VarName -> Run p m h (GVal (Run p m h)))
              -> (h -> m ())
              -> (RuntimeError p -> m ())
@@ -249,7 +249,7 @@ makeContext :: (VarName -> GVal (Run p (Writer Html) Html))
 makeContext = makeContextHtml
 
 {-#DEPRECATED makeContextM "Compatibility alias for makeContextHtmlM" #-}
-makeContextM :: (Monad m, Functor m)
+makeContextM :: Monad m
              => (VarName -> Run p m Html (GVal (Run p m Html)))
              -> (Html -> m ())
              -> GingerContext p m Html
@@ -259,13 +259,13 @@ makeContextHtml :: (VarName -> GVal (Run p (Writer Html) Html))
                 -> GingerContext p (Writer Html) Html
 makeContextHtml l = makeContext' l toHtml (Just htmlNewlines)
 
-makeContextHtmlM :: (Monad m, Functor m)
+makeContextHtmlM :: Monad m
                  => (VarName -> Run p m Html (GVal (Run p m Html)))
                  -> (Html -> m ())
                  -> GingerContext p m Html
 makeContextHtmlM l w = makeContextM' l w toHtml (Just htmlNewlines)
 
-makeContextHtmlExM :: (Monad m, Functor m)
+makeContextHtmlExM :: Monad m
                  => (VarName -> Run p m Html (GVal (Run p m Html)))
                  -> (Html -> m ())
                  -> (RuntimeError p -> m ())
@@ -276,13 +276,13 @@ makeContextText :: (VarName -> GVal (Run p (Writer Text) Text))
                 -> GingerContext p (Writer Text) Text
 makeContextText l = makeContext' l asText (Just textNewlines)
 
-makeContextTextM :: (Monad m, Functor m)
+makeContextTextM :: Monad m
                  => (VarName -> Run p m Text (GVal (Run p m Text)))
                  -> (Text -> m ())
                  -> GingerContext p m Text
 makeContextTextM l w = makeContextM' l w asText (Just textNewlines)
 
-makeContextTextExM :: (Monad m, Functor m)
+makeContextTextExM :: Monad m
                  => (VarName -> Run p m Text (GVal (Run p m Text)))
                  -> (Text -> m ())
                  -> (RuntimeError p -> m ())
@@ -521,13 +521,13 @@ warnFromMaybe :: Monad m => RuntimeError p -> a -> Maybe a -> Run p m h a
 warnFromMaybe err d Nothing = warn err >> return d
 warnFromMaybe _ d (Just x) = return x
 
-setSourcePos :: (Monad m, Applicative m, Functor m)
+setSourcePos :: Monad m
              => p
              -> Run p m h ()
 setSourcePos pos =
   modify (\s -> s { rsCurrentSourcePos = pos })
 
-getSourcePos :: (Monad m, Applicative m, Functor m)
+getSourcePos :: Monad m
              => Run p m h p
 getSourcePos = gets rsCurrentSourcePos
 
@@ -539,7 +539,7 @@ throwHere err = do
 -- | @withSourcePos pos action@ runs @action@ in a context where the
 -- current source location is set to @pos@. The original source position is
 -- restored when @action@ finishes.
-withSourcePos :: (Monad m, Applicative m, Functor m)
+withSourcePos :: Monad m
               => p
               -> Run p m h a
               -> Run p m h a
