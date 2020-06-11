@@ -281,8 +281,6 @@ runGingerT :: ( ToGVal (Run p m h) h
               , ToGVal (Run p m h) p
               , Monoid h
               , Monad m
-              , Applicative m
-              , Functor m
               )
            => GingerContext p m h
            -> Template p
@@ -302,8 +300,6 @@ runTemplate :: ( ToGVal (Run p m h) h
                , ToGVal (Run p m h) p
                , Monoid h
                , Monad m
-               , Applicative m
-               , Functor m
                )
             => Template p
             -> Run p m h (GVal (Run p m h))
@@ -311,7 +307,7 @@ runTemplate =
     runStatement . templateBody . baseTemplate
 
 -- | Run an action within a different template context.
-withTemplate :: (Monad m, Applicative m, Functor m)
+withTemplate :: Monad m
              => Template p
              -> Run p m h a
              -> Run p m h a
@@ -324,7 +320,7 @@ withTemplate tpl a = do
     return result
 
 -- | Run an action within a block context
-withBlockName :: (Monad m, Applicative m, Functor m)
+withBlockName :: Monad m
               => VarName
               -> Run p m h a
               -> Run p m h a
@@ -335,7 +331,7 @@ withBlockName blockName a = do
     modify (\s -> s { rsCurrentBlockName = oldBlockName })
     return result
 
-lookupBlock :: (Monad m, Applicative m, Functor m) => VarName -> Run p m h (Block p)
+lookupBlock :: Monad m => VarName -> Run p m h (Block p)
 lookupBlock blockName = do
     tpl <- gets rsCurrentTemplate
     let blockMay = resolveBlock blockName tpl
@@ -357,7 +353,6 @@ runStatement :: forall m h p
                 , ToGVal (Run p m h) p
                 , Monoid h
                 , Monad m
-                , Functor m
                 )
              => Statement p
              -> Run p m h (GVal (Run p m h))
@@ -371,7 +366,6 @@ runStatement' :: forall m h p
                 , ToGVal (Run p m h) p
                 , Monoid h
                 , Monad m
-                , Functor m
                 )
              => Statement p
              -> Run p m h (GVal (Run p m h))
@@ -433,7 +427,7 @@ runStatement' (BlockRefS _ blockName) = do
 
 runStatement' (ScopedS _ body) = withLocalScope runInner
     where
-        runInner :: (Functor m, Monad m) => Run p m h (GVal (Run p m h))
+        runInner :: Monad m => Run p m h (GVal (Run p m h))
         runInner = runStatement body
 
 runStatement' (ForS _ varNameIndex varNameValue itereeExpr body) = do
@@ -510,7 +504,6 @@ macroToGVal :: forall m h p
              . ( ToGVal (Run p m h) h
                , ToGVal (Run p m h) p
                , Monoid h
-               , Functor m
                , Monad m
                ) => Macro p -> GVal (Run p m h)
 macroToGVal (Macro argNames body) =
@@ -584,7 +577,7 @@ runExpression' (DoE _ stmt) =
 
 -- | Helper function to output a HTML value using whatever print function the
 -- context provides.
-echo :: (Monad m, Applicative m, Functor m, Monoid h)
+echo :: (Monad m, Monoid h)
      => GVal (Run p m h) -> Run p m h ()
 echo src = do
     e <- asks contextEncode
@@ -605,20 +598,20 @@ echo src = do
                     rsAtLineStart = endsWithNewline newlines l
                 }
 
-indented :: (Monad m, Applicative m, Functor m, Monoid h)
+indented :: (Monad m, Monoid h)
          => h
          -> Run p m h a
          -> Run p m h a
 indented i action = do
     pushIndent i *> action <* popIndent
 
-pushIndent :: (Monad m, Applicative m, Functor m, Monoid h)
+pushIndent :: (Monad m, Monoid h)
            => h
            -> Run p m h ()
 pushIndent i =
     modify $ \state ->
         state { rsIndentation = increaseIndent i (rsIndentation state) }
-popIndent :: (Monad m, Applicative m, Functor m, Monoid h)
+popIndent :: (Monad m, Monoid h)
            => Run p m h ()
 popIndent =
     modify $ \state ->
