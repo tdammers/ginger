@@ -652,10 +652,10 @@ gvalAutoParseDate defTZ = go . Text.unpack . asText
             lt <- parseTimeM True defaultTimeLocale fmt input
             return $ ZonedTime lt defTZ
         formats =
-            [ (ztparse, "%Y-%m-%dT%H:%M:%S%Z")
-            , (utcparse, "%Y-%m-%d %H:%M:%S")
-            , (ztparse, "%Y-%m-%d %H:%M:%S%z")
-            , (ztparse, "%Y-%m-%d %H:%M:%S%Z")
+            [ (ztparse, "%Y-%m-%dT%H:%M:%S%Q%Z")
+            , (utcparse, "%Y-%m-%d %H:%M:%S%Q")
+            , (ztparse, "%Y-%m-%d %H:%M:%S%Q%z")
+            , (ztparse, "%Y-%m-%d %H:%M:%S%Q%Z")
             , (utcparse, "%Y-%m-%d")
             ]
 
