@@ -65,10 +65,10 @@ to the given `format`.
 - `date` can be one of:
   - a string containing a preformatted date or date+time, in one of the
     following formats:
-    - `%Y-%m-%dT%H:%M:%S%Z`
-    - `%Y-%m-%d %H:%M:%S`
-    - `%Y-%m-%d %H:%M:%S%z`
-    - `%Y-%m-%d %H:%M:%S%Z`
+    - `%Y-%m-%dT%H:%M:%S%Q%Z`
+    - `%Y-%m-%d %H:%M:%S%Q`
+    - `%Y-%m-%d %H:%M:%S%Q%z`
+    - `%Y-%m-%d %H:%M:%S%Q%Z`
     - `%Y-%m-%d`
   - A list of date parts, in the ordering:
     `[ year, month, day, hour, minute, second, timezone ]`; partial lists are
