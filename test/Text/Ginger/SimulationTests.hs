@@ -549,6 +549,22 @@ simulationTests = testGroup "Simulation"
                 mkTestHtml [] []
                     "{{ '2015-06-13T12:05:43Z'|date('%Y-%m-%d %H:%M:%S') }}"
                     "2015-06-13 12:05:43"
+            , testCase "format a string with fractional seconds as a date (all variants)" $ do
+                mkTestHtml [] []
+                    "{{ '2015-06-13T12:05:43.271828Z'|date('%Y-%m-%d %H:%M:%S%Q') }}"
+                    "2015-06-13 12:05:43.271828"
+                mkTestHtml [] []
+                    "{{ '2015-06-13 12:05:43.271828'|date('%Y-%m-%d %H:%M:%S%Q') }}"
+                    "2015-06-13 12:05:43.271828"
+                mkTestHtml [] []
+                    "{{ '2015-06-13 12:05:43.271828z'|date('%Y-%m-%d %H:%M:%S%Q') }}"
+                    "2015-06-13 12:05:43.271828"
+                mkTestHtml [] []
+                    "{{ '2015-06-13 12:05:43.271828Z'|date('%Y-%m-%d %H:%M:%S%Q') }}"
+                    "2015-06-13 12:05:43.271828"
+                mkTestHtml [] []
+                    "{{ '2015-06-13 12:05:43.271828+0200'|date('%Y-%m-%d %H:%M:%S%Q%z') }}"
+                    "2015-06-13 12:05:43.271828+0200"
             , testCase "format a string as a time-of-day" $ do
                 mkTestHtml [] []
                     "{{ '2015-06-13 12:05:43'|date('%H-%M-%S') }}"
