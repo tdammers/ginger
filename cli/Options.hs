@@ -1,6 +1,7 @@
 module Options
 where
 
+import Data.Semigroup ( (<>) ) -- needed for GHC 8.0 and 8.2
 import Options.Applicative
 
 
