@@ -9,6 +9,7 @@ module Main where
 import Text.Ginger
 import Text.Ginger.Html
 import Data.Text as Text
+import qualified Data.Text.IO as Text
 import qualified Data.Aeson as JSON
 import qualified Data.Yaml as YAML
 import Data.Maybe
@@ -48,7 +49,7 @@ loadTemplate tplSrc = do
     let resolve = loadFileMay
     (tpl, src) <- case tplSrc of
         TemplateFromFile fn -> (,) <$> parseGingerFile resolve fn <*> return Nothing
-        TemplateFromStdin -> getContents >>= \s -> (,) <$> parseGinger resolve Nothing s <*> return (Just s)
+        TemplateFromStdin -> Text.getContents >>= \s -> (,) <$> parseGinger resolve Nothing s <*> return (Just s)
 
     case tpl of
         Left err -> do
@@ -91,8 +92,8 @@ run tplSrc dataSrc = do
         | otherwise = putStrLn . show $ value
 
 
-printParserError :: Maybe String -> ParserError -> IO ()
-printParserError srcMay = putStrLn . formatParserError srcMay
+printParserError :: Maybe Text -> ParserError -> IO ()
+printParserError srcMay = Text.putStrLn . formatParserError srcMay
 
 displayParserError :: String -> ParserError -> IO ()
 displayParserError src pe = do
@@ -106,7 +107,7 @@ displayParserError src pe = do
                     putStrLn $ Prelude.replicate (sourceColumn pos - 1) ' ' ++ "^"
         _ -> return ()
 
-loadFile fn = openFile fn ReadMode >>= hGetContents
+loadFile fn = openFile fn ReadMode >>= Text.hGetContents
 
 loadFileMay fn =
     tryIOError (loadFile fn) >>= \e ->

@@ -673,7 +673,7 @@ gfnEval args =
             result' <- parseGinger
                 (Prelude.const . return $ Nothing) -- include resolver
                 Nothing -- source name
-                (Text.unpack . asText $ gSrc) -- source code
+                (asText gSrc) -- source code
             pos <- gets rsCurrentSourcePos
             let result = fmap (Prelude.const pos) <$> result'
             tpl <- case result of

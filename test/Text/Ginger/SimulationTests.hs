@@ -204,16 +204,16 @@ simulationTests = testGroup "Simulation"
     , testGroup "The `loop` auto-variable"
         [ testCase "loop.cycle" $ do
             mkTestHtml [] []
-                ( "{% for x in [\"foo\", \"bar\", \"baz\"] recursive -%}" ++
-                  "({{ loop.cycle(\"red\", \"green\") }}/{{ x }})" ++
+                ( "{% for x in [\"foo\", \"bar\", \"baz\"] recursive -%}" <>
+                  "({{ loop.cycle(\"red\", \"green\") }}/{{ x }})" <>
                   "{%- endfor %}"
                 )
                 "(red/foo)(green/bar)(red/baz)"
         , testCase "recursive loops" $ do
             mkTestHtml [] []
-                ( "{% for k, x in {\"a\":{\"b\":null,\"c\":{\"d\":null}}} -%}" ++
-                  "{{ k }}@{{ loop.depth }}({{ loop(x) }})" ++
-                  "{%- endfor %}" :: String
+                ( "{% for k, x in {\"a\":{\"b\":null,\"c\":{\"d\":null}}} -%}" <>
+                  "{{ k }}@{{ loop.depth }}({{ loop(x) }})" <>
+                  "{%- endfor %}" :: Text
                 )
                 "a@1(b@2()c@2(d@3()))"
         ]
@@ -270,18 +270,18 @@ simulationTests = testGroup "Simulation"
     , testGroup "Switch"
         [ testCase "switch 1 of 1, 2, default" $ do
             mkTestHtml [] []
-                ( "{% switch 1 %}\n" ++
-                  "{% case 1 %}One{% endcase %}\n" ++
-                  "{% case 2 %}Two{% endcase %}\n" ++
-                  "{% default %}Default{% enddefault %}\n" ++
+                ( "{% switch 1 %}\n" <>
+                  "{% case 1 %}One{% endcase %}\n" <>
+                  "{% case 2 %}Two{% endcase %}\n" <>
+                  "{% default %}Default{% enddefault %}\n" <>
                   "{% endswitch %}\n"
                 )
                 "One"
         , testCase "switch 1 of 1, 2" $ do
             mkTestHtml [] []
-                ( "{% switch 1 %}\n" ++
-                  "{% case 1 %}One{% endcase %}\n" ++
-                  "{% case 2 %}Two{% endcase %}\n" ++
+                ( "{% switch 1 %}\n" <>
+                  "{% case 1 %}One{% endcase %}\n" <>
+                  "{% case 2 %}Two{% endcase %}\n" <>
                   "{% endswitch %}\n"
                 )
                 "One"
@@ -1053,7 +1053,7 @@ simulationTests = testGroup "Simulation"
     , testGroup "Indentation"
         [ testCase "stripping leading spaces" $ do
             mkTestHtml [] []
-                (unlines
+                (Text.unlines
                     [ "{% indent %}"
                     , "  aaaaa"
                     , "  aaaaa"
@@ -1065,7 +1065,7 @@ simulationTests = testGroup "Simulation"
                     ])
         , testCase "explicit indent string" $ do
             mkTestHtml [] []
-                (unlines
+                (Text.unlines
                     [ "{% indent %}"
                     , "    aaaaa"
                     , "{% indent '    ' %}"
@@ -1081,7 +1081,7 @@ simulationTests = testGroup "Simulation"
                     ])
         , testCase "implicit indent string" $ do
             mkTestHtml [] []
-                (unlines
+                (Text.unlines
                     [ "{% indent %}"
                     , "    aaaaa"
                     , "{% indent %}"
@@ -1097,7 +1097,7 @@ simulationTests = testGroup "Simulation"
                     ])
         , testCase "explicit non-whitespace indent string" $ do
             mkTestHtml [] []
-                (unlines
+                (Text.unlines
                     [ "{% indent %}"
                     , "    aaaaa"
                     , "{% indent '--- ' %}"
@@ -1113,7 +1113,7 @@ simulationTests = testGroup "Simulation"
                     ])
         , testCase "explicit indent string from more complex expression" $ do
             mkTestHtml [] []
-                (unlines
+                (Text.unlines
                     [ "{% indent %}"
                     , "  aaaaa"
                     , "{% indent (17 + 4) ~ ' '%}"
@@ -1129,7 +1129,7 @@ simulationTests = testGroup "Simulation"
                     ])
         , testCase "discarding level-0 indents" $ do
             mkTestHtml [] []
-                (unlines
+                (Text.unlines
                     [ "{% indent 'nope' %}"
                     , "  aaaaa"
                     , "{% indent %}"
@@ -1145,7 +1145,7 @@ simulationTests = testGroup "Simulation"
                     ])
         , testCase "indentation levels inherited at runtime (dynamic)" $ do
             mkTestHtml [] []
-                (unlines
+                (Text.unlines
                     [ "{%- macro foobar() %}"
                     , "{% indent '  ' %}"
                     , "<div>"
@@ -1217,14 +1217,14 @@ simulationTests = testGroup "Simulation"
             mkTestHtml
                 []
                 [ ( "./inherit-parent.html"
-                  , "{%- extends \"inherit-grandparent.html\" %}" ++
+                  , "{%- extends \"inherit-grandparent.html\" %}" <>
                     "{%- block outer -%}Outer{%- block inner -%}{%- endblock -%}{%- endblock -%}"
                   )
                 , ( "./inherit-grandparent.html"
                   , "*{% block outer -%}{%- endblock %}*"
                   )
                 ]
-                ( "{%- extends \"inherit-parent.html\" -%}" ++
+                ( "{%- extends \"inherit-parent.html\" -%}" <>
                   "{%- block inner %} Space{%- endblock -%}"
                 )
                 "*Outer Space*"
@@ -1259,7 +1259,7 @@ simulationTests = testGroup "Simulation"
                     ""
             , testCase "multiple" $ do
                 mkTestHtml [] []
-                    (unlines
+                    (Text.unlines
                         [ "{% script %}"
                         , "23; # this is a comment"
                         , " ## this is a comment, too"
@@ -1268,7 +1268,7 @@ simulationTests = testGroup "Simulation"
                     ""
             , testCase "inside expressions" $ do
                 mkTestHtml [] []
-                    (unlines
+                    (Text.unlines
                         [ "{% script %}"
                         , "23 # this is a comment"
                         , " ## this is a comment, too"
@@ -1343,7 +1343,7 @@ simulationTests = testGroup "Simulation"
                 "This is an included template"
         , testCase "macro" $ do
             mkTestHtml [] []
-                (unlines
+                (Text.unlines
                     [ "{% script %}"
                     , "macro greet(name) {"
                     , "echo('Hello, ');"
@@ -1357,7 +1357,7 @@ simulationTests = testGroup "Simulation"
         , testGroup "Script statment blocks"
             [ testCase "baseline" $ do
                 mkTestHtml [] []
-                    (unlines
+                    (Text.unlines
                         [ "{% script %}"
                         , "set bedazzle = 'no';"
                         , "echo(bedazzle);"
@@ -1366,7 +1366,7 @@ simulationTests = testGroup "Simulation"
                     "no"
             , testCase "inside local scope" $ do
                 mkTestHtml [] []
-                    (unlines
+                    (Text.unlines
                         [ "{% script %}"
                         , "set bedazzle = 'no';"
                         , "{"
@@ -1378,7 +1378,7 @@ simulationTests = testGroup "Simulation"
                     "ya"
             , testCase "after exiting block" $ do
                 mkTestHtml [] []
-                    (unlines
+                    (Text.unlines
                         [ "{% script %}"
                         , "set bedazzle = 'no';"
                         , "{"
@@ -1392,7 +1392,7 @@ simulationTests = testGroup "Simulation"
         , testGroup "Explicit Local Scopes"
             [ testCase "baseline" $ do
                 mkTestHtml [] []
-                    (unlines
+                    (Text.unlines
                         [ "{% script %}"
                         , "set bedazzle = 'no';"
                         , "echo(bedazzle);"
@@ -1401,7 +1401,7 @@ simulationTests = testGroup "Simulation"
                     "no"
             , testCase "inside local scope" $ do
                 mkTestHtml [] []
-                    (unlines
+                    (Text.unlines
                         [ "{% script %}"
                         , "set bedazzle = 'no';"
                         , "scope {"
@@ -1413,7 +1413,7 @@ simulationTests = testGroup "Simulation"
                     "ya"
             , testCase "after exiting local scope" $ do
                 mkTestHtml [] []
-                    (unlines
+                    (Text.unlines
                         [ "{% script %}"
                         , "set bedazzle = 'no';"
                         , "scope {"
@@ -1528,30 +1528,30 @@ evilDelimiters
         }
 
 mkTestHtml :: [(VarName, GVal (Run SourcePos IO Html))]
-           -> [(FilePath, String)]
-           -> String
+           -> [(FilePath, Text)]
+           -> Text
            -> Text
            -> Assertion
 mkTestHtml = mkTest id makeContextHtmlM htmlSource
 
 mkTestHtmlOpts :: (ParserOptions IO -> ParserOptions IO)
                -> [(VarName, GVal (Run SourcePos IO Html))]
-               -> [(FilePath, String)]
-               -> String
+               -> [(FilePath, Text)]
+               -> Text
                -> Text
                -> Assertion
 mkTestHtmlOpts setOptions = mkTest setOptions makeContextHtmlM htmlSource
 
 mkTestText :: [(VarName, GVal (Run SourcePos IO Text))]
-           -> [(FilePath, String)]
-           -> String
+           -> [(FilePath, Text)]
+           -> Text
            -> Text
            -> Assertion
 mkTestText = mkTest id makeContextTextM id
 
 mkTestJSON :: [(VarName, GVal (Run SourcePos IO [JSON.Value]))]
-           -> [(FilePath, String)]
-           -> String
+           -> [(FilePath, Text)]
+           -> Text
            -> Text
            -> Assertion
 mkTestJSON = mkTest id
@@ -1567,8 +1567,8 @@ mkTest :: (Monoid a, ToGVal (Run SourcePos IO a) a)
        -> ((VarName -> Run SourcePos IO a (GVal (Run SourcePos IO a))) -> (a -> IO ()) -> GingerContext SourcePos IO a) -- ^ mkContextM flavor
        -> (a -> Text) -- ^ Convert a to Text for output
        -> [(VarName, GVal (Run SourcePos IO a))] -- ^ Context dictionary
-       -> [(FilePath, String)] -- ^ Lookup table for includes
-       -> String -- ^ Template source
+       -> [(FilePath, Text)] -- ^ Lookup table for includes
+       -> Text -- ^ Template source
        -> Text -- ^ Expected output
        -> Assertion
 mkTest setOptions mContext valToText contextDict includeLookup src expected = do
@@ -1590,7 +1590,7 @@ mkTest setOptions mContext valToText contextDict includeLookup src expected = do
 
     handleParserError :: ParserError -> IO ()
     handleParserError err = do
-      assertBool (formatParserError (Just src) err) False
+      assertBool (Text.unpack $ formatParserError (Just src) err) False
 
 loadSillyLocale :: IO (Maybe JSON.Value)
 loadSillyLocale = do

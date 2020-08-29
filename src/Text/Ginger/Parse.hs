@@ -79,7 +79,7 @@ import System.FilePath ( takeDirectory, (</>) )
 import Text.Printf ( printf )
 
 -- | Input type for the parser (source code).
-type Source = String
+type Source = Text
 
 -- | Used to resolve includes. Ginger will call this function whenever it
 -- encounters an {% include %}, {% import %}, or {% extends %} directive.
@@ -109,31 +109,31 @@ instance Exception ParserError where
 -- and the error message are printed. If template source code is provided,
 -- the offending source line is also printed, with a caret (@^@) marking the
 -- exact location of the error.
-formatParserError :: Maybe String -- ^ Template source code (not filename)
+formatParserError :: Maybe Source -- ^ Template source code (not filename)
                   -> ParserError -- ^ Error to format
-                  -> String
+                  -> Text
 formatParserError tplSrc e =
     let sourceLocation = do
             pos <- peSourcePosition e
-            return $ printf "%s:%i:%i\n"
+            return . Text.pack $ printf "%s:%i:%i\n"
                 (sourceName pos)
                 (sourceLine pos)
                 (sourceColumn pos)
         markerLines = do
-            sourceLines <- lines <$> tplSrc
+            sourceLines <- Text.lines <$> tplSrc
             pos <- peSourcePosition e
             let lineNum = sourceLine pos
             offendingLine <- listToMaybe . drop (pred lineNum) $ sourceLines
             let offendingColumn = sourceColumn pos
-            return . unlines $
+            return . Text.unlines $
                 [ offendingLine
-                , (replicate (pred offendingColumn) ' ') <> "^"
+                , (Text.replicate (pred offendingColumn) " ") <> "^"
                 ]
 
-    in unlines . catMaybes $
+    in Text.unlines . catMaybes $
         [ sourceLocation
         , markerLines
-        , Just (peErrorMessage e)
+        , Just (Text.pack $ peErrorMessage e)
         ]
 
 -- | Helper function to create a Ginger parser error from a Parsec error.
@@ -282,7 +282,7 @@ defParseState =
         , psDelimiters = defDelimiters
         }
 
-type Parser m a = ParsecT String ParseState (ReaderT (ParserOptions m) m) a
+type Parser m a = ParsecT Source ParseState (ReaderT (ParserOptions m) m) a
 
 ignore :: Monad m => m a -> m ()
 ignore = (>> return ())
