@@ -27,6 +27,7 @@ source-repository head
 library
   exposed-modules: Text.Ginger
                  , Text.Ginger.AST
+                 , Text.Ginger.Buildable
                  , Text.Ginger.GVal
                  , Text.Ginger.Html
                  , Text.Ginger.Optimizer

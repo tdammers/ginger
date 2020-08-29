@@ -74,6 +74,7 @@ import qualified Prelude
 import Data.Maybe (fromMaybe, isJust)
 import qualified Data.List as List
 import Text.Ginger.AST
+import Text.Ginger.Buildable
 import Text.Ginger.Html
 import Text.Ginger.GVal
 import Text.Ginger.Parse (ParserError (..), sourceLine, sourceColumn, sourceName)
@@ -121,7 +122,8 @@ data GingerContext p m h
 -- @hoistContext fwd rev context@ returns a context over a different
 -- output type, applying the @fwd@ and @rev@ projections to convert
 -- between the original and desired output types.
-hoistContext :: Monad m => (h -> t) -> (t -> h) -> GingerContext p m h -> GingerContext p m t
+hoistContext :: (Monad m, Buildable h, Buildable t)
+             => (h -> t) -> (t -> h) -> GingerContext p m h -> GingerContext p m t
 hoistContext fwd rev c =
     GingerContext
         { contextLookup = \varName ->
@@ -341,7 +343,7 @@ reNewline (x:xs) = (x <> "\n") : reNewline xs
 data RunState p m h
     = RunState
         { rsScope :: HashMap VarName (GVal (Run p m h))
-        , rsCapture :: h
+        , rsCapture :: Builder h
         , rsCurrentTemplate :: Template p -- the template we are currently running
         , rsCurrentBlockName :: Maybe Text -- the name of the innermost block we're currently in
         , rsIndentation :: Maybe [h] -- current indentation level, if any
@@ -352,11 +354,12 @@ data RunState p m h
 -- | Hoist a 'RunState' onto a different output type.
 -- You don't normally need to use this directly; see 'hoistRun' and/or
 -- 'hoistContext'.
-hoistRunState :: Monad m => (h -> t) -> (t -> h) -> RunState p m h -> RunState p m t
+hoistRunState :: (Monad m, Buildable h, Buildable t)
+              => (h -> t) -> (t -> h) -> RunState p m h -> RunState p m t
 hoistRunState fwd rev rs =
     RunState
         { rsScope = marshalGValEx (hoistRun fwd rev) (hoistRun rev fwd) <$> rsScope rs
-        , rsCapture = fwd $ rsCapture rs
+        , rsCapture = toBuilder . fwd . fromBuilder $ rsCapture rs
         , rsCurrentTemplate = rsCurrentTemplate rs
         , rsCurrentBlockName = rsCurrentBlockName rs
         , rsIndentation = fmap fwd <$> rsIndentation rs
@@ -486,7 +489,8 @@ rteGVal what extra =
     )
 
 -- | Internal type alias for our template-runner monad stack.
-type Run p m h = ExceptT (RuntimeError p) (StateT (RunState p m h) (ReaderT (GingerContext p m h) m))
+type Run p m h =
+  ExceptT (RuntimeError p) (StateT (RunState p m h) (ReaderT (GingerContext p m h) m))
 
 -- | Lift a value from the host monad @m@ into the 'Run' monad.
 liftRun :: Monad m => m a -> Run p m h a
@@ -500,7 +504,8 @@ liftRun2 f x = liftRun $ f x
 -- @hoistRun fwd rev action@ hoists the @action@ from @Run p m h a@ to
 -- @Run p m t a@, applying @fwd@ and @rev@ to convert between the output
 -- types.
-hoistRun :: Monad m => (h -> t) -> (t -> h) -> Run p m h a -> Run p m t a
+hoistRun :: (Monad m, Buildable h, Buildable t)
+         => (h -> t) -> (t -> h) -> Run p m h a -> Run p m t a
 hoistRun fwd rev action = do
     contextT <- ask
     let contextH = hoistContext rev fwd contextT

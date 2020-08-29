@@ -6,22 +6,35 @@
 {-#LANGUAGE GeneralizedNewtypeDeriving #-}
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE FlexibleInstances #-}
+{-#LANGUAGE TypeFamilies #-}
 module Text.Ginger.Html
 ( Html
 , unsafeRawHtml
 , html
 , htmlSource
 , ToHtml (..)
+, HtmlBuilder
 )
 where
 
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.Text.Lazy as LText
+import qualified Data.Text.Lazy.Builder as LText
 import Data.Semigroup as Semigroup
+import Text.Ginger.Buildable
 
 -- | A chunk of HTML source.
 newtype Html = Html { unHtml :: Text }
     deriving (Semigroup.Semigroup, Monoid, Show, Eq, Ord)
+
+newtype HtmlBuilder = HtmlBuilder { unHtmlBuilder :: LText.Builder }
+    deriving (Semigroup.Semigroup, Monoid)
+
+instance Buildable Html where
+  type Builder Html = HtmlBuilder
+  toBuilder = HtmlBuilder . toBuilder . unHtml
+  fromBuilder = Html . fromBuilder . unHtmlBuilder
 
 -- | Types that support conversion to HTML.
 class ToHtml s where

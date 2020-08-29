@@ -4,6 +4,7 @@
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE ScopedTypeVariables #-}
 {-#LANGUAGE FlexibleContexts #-}
+{-#LANGUAGE TypeFamilies #-}
 -- | A syntax tree optimizer
 module Text.Ginger.Optimizer
 ( Optimizable (..) )
@@ -12,6 +13,7 @@ where
 import Text.Ginger.AST
 import Text.Ginger.GVal
 import Text.Ginger.Run
+import Text.Ginger.Buildable
 import Control.Monad.Identity
 import Data.Default
 import Control.Monad.State (execState, evalState)
@@ -268,6 +270,11 @@ newtype Collected = Collected [GVal Identity]
 
 instance ToGVal m Collected where
     toGVal = collectedToGVal
+
+instance Buildable Collected where
+  type Builder Collected = Collected
+  toBuilder = id
+  fromBuilder = id
 
 collectedToGVal :: Collected -> GVal m
 collectedToGVal (Collected []) = def

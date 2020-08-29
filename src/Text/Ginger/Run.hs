@@ -87,6 +87,7 @@ import Data.Maybe (fromMaybe, isJust, isNothing)
 import qualified Data.List as List
 import Text.Ginger.AST
 import Text.Ginger.Html
+import Text.Ginger.Buildable
 import Text.Ginger.GVal
 import Text.Ginger.Run.Type
 import Text.Ginger.Run.Builtins
@@ -118,11 +119,13 @@ import Debug.Trace (trace)
 import Data.List (lookup, zipWith, unzip)
 import Data.Aeson as JSON
 
-defaultScope :: forall m h p
+defaultScope :: forall m h b p
               . ( Monoid h
                 , Monad m
                 , ToGVal (Run p m h) h
                 , ToGVal (Run p m h) p
+                , Buildable h
+                , Monoid (Builder h)
                 )
              => [(Text, GVal (Run p m h))]
 defaultScope =
@@ -238,6 +241,8 @@ easyRenderM :: ( Monad m
                , ToGVal (Run p m h) v
                , ToGVal (Run p m h) h
                , ToGVal (Run p m h) p
+               , Buildable h
+               , Monoid (Builder h)
                )
             => (h -> m ())
             -> v
@@ -256,6 +261,8 @@ easyRender :: ( ContextEncodable h
               , ToGVal (Run p (Writer h) h) v
               , ToGVal (Run p (Writer h) h) h
               , ToGVal (Run p (Writer h) h) p
+              , Buildable h
+              , Monoid (Builder h)
               )
            => v
            -> Template p
@@ -269,6 +276,8 @@ easyRender context template =
 runGinger :: ( ToGVal (Run p (Writer h) h) h
              , ToGVal (Run p (Writer h) h) p
              , Monoid h
+             , Buildable h
+             , Monoid (Builder h)
              )
           => GingerContext p (Writer h) h
           -> Template p
@@ -281,6 +290,8 @@ runGingerT :: ( ToGVal (Run p m h) h
               , ToGVal (Run p m h) p
               , Monoid h
               , Monad m
+              , Buildable h
+              , Monoid (Builder h)
               )
            => GingerContext p m h
            -> Template p
@@ -300,6 +311,8 @@ runTemplate :: ( ToGVal (Run p m h) h
                , ToGVal (Run p m h) p
                , Monoid h
                , Monad m
+               , Buildable h
+               , Monoid (Builder h)
                )
             => Template p
             -> Run p m h (GVal (Run p m h))
@@ -331,7 +344,8 @@ withBlockName blockName a = do
     modify (\s -> s { rsCurrentBlockName = oldBlockName })
     return result
 
-lookupBlock :: Monad m => VarName -> Run p m h (Block p)
+lookupBlock :: (Monad m, Buildable h, Monoid (Builder h))
+            => VarName -> Run p m h (Block p)
 lookupBlock blockName = do
     tpl <- gets rsCurrentTemplate
     let blockMay = resolveBlock blockName tpl
@@ -348,11 +362,13 @@ lookupBlock blockName = do
                     templateParent tpl >>= resolveBlock name
 
 -- | Run one statement.
-runStatement :: forall m h p
+runStatement :: forall m h b p
               . ( ToGVal (Run p m h) h
                 , ToGVal (Run p m h) p
                 , Monoid h
                 , Monad m
+                , Buildable h
+                , Monoid (Builder h)
                 )
              => Statement p
              -> Run p m h (GVal (Run p m h))
@@ -361,11 +377,13 @@ runStatement stmt =
         (annotation stmt)
         (runStatement' stmt)
 
-runStatement' :: forall m h p
+runStatement' :: forall m h b p
               . ( ToGVal (Run p m h) h
                 , ToGVal (Run p m h) p
                 , Monoid h
                 , Monad m
+                , Buildable h
+                , Monoid (Builder h)
                 )
              => Statement p
              -> Run p m h (GVal (Run p m h))
@@ -500,11 +518,13 @@ runStatement' (TryCatchS _ tryS catchesS finallyS) = do
                     handle catches e
 
 -- | Deeply magical function that converts a 'Macro' into a Function.
-macroToGVal :: forall m h p
+macroToGVal :: forall m h b p
              . ( ToGVal (Run p m h) h
                , ToGVal (Run p m h) p
                , Monoid h
                , Monad m
+               , Buildable h
+               , Monoid (Builder h)
                ) => Macro p -> GVal (Run p m h)
 macroToGVal (Macro argNames body) =
     fromFunction f
@@ -626,11 +646,13 @@ decreaseIndent Nothing = Nothing
 decreaseIndent (Just []) = Nothing
 decreaseIndent (Just (x:xs)) = Just xs
 
-defRunState :: forall m h p
+defRunState :: forall m h b p
              . ( ToGVal (Run p m h) h
                , ToGVal (Run p m h) p
                , Monoid h
                , Monad m
+               , Buildable h
+               , Monoid (Builder h)
                )
             => Template p
             -> RunState p m h
@@ -658,6 +680,8 @@ gfnEval :: ( Monad m
            , Monoid h
            , ToGVal (Run p m h) h
            , ToGVal (Run p m h) p
+           , Buildable h
+           , Monoid (Builder h)
            )
         => Function (Run p m h)
 gfnEval args =

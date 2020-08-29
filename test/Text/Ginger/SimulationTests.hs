@@ -5,6 +5,7 @@ where
 
 import Text.Ginger
 import Text.Ginger.Html
+import Text.Ginger.Buildable
 import Text.Ginger.Run.Type (GingerContext (..))
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -1562,7 +1563,7 @@ mkTestJSON = mkTest id
 encodeText :: JSON.ToJSON a => a -> Text
 encodeText = Text.pack . LUTF8.toString . JSON.encode
 
-mkTest :: (Monoid a, ToGVal (Run SourcePos IO a) a)
+mkTest :: (Monoid a, ToGVal (Run SourcePos IO a) a, Buildable a, Monoid (Builder a))
        => (ParserOptions IO -> ParserOptions IO)
        -> ((VarName -> Run SourcePos IO a (GVal (Run SourcePos IO a))) -> (a -> IO ()) -> GingerContext SourcePos IO a) -- ^ mkContextM flavor
        -> (a -> Text) -- ^ Convert a to Text for output

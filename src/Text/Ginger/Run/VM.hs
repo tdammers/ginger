@@ -1,9 +1,11 @@
+{-#LANGUAGE FlexibleContexts #-}
 module Text.Ginger.Run.VM
 where
 
 import Text.Ginger.Run.Type
 import Text.Ginger.Run.FuncUtils
 import Text.Ginger.AST
+import Text.Ginger.Buildable
 import Text.Ginger.GVal
 import Data.Monoid ( (<>) )
 import Control.Monad.State (MonadState (..), get, gets, modify)
@@ -51,12 +53,12 @@ getVar key = do
             l <- asks contextLookup
             l key
 
-clearCapture :: (Monoid h, Monad m) => Run p m h ()
+clearCapture :: (Buildable h, Monoid (Builder h), Monad m) => Run p m h ()
 clearCapture = modify (\s -> s { rsCapture = mempty })
 
-appendCapture :: (Monoid h, Monad m) => h -> Run p m h ()
-appendCapture h = modify (\s -> s { rsCapture = rsCapture s <> h })
+appendCapture :: (Buildable h, Monoid (Builder h), Monad m) => h -> Run p m h ()
+appendCapture h = modify (\s -> s { rsCapture = rsCapture s <> toBuilder h })
 
-fetchCapture :: Monad m => Run p m h h
-fetchCapture = gets rsCapture
+fetchCapture :: (Buildable h, Monad m) => Run p m h h
+fetchCapture = fromBuilder <$> gets rsCapture
 
