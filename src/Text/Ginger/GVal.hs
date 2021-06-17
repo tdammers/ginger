@@ -61,6 +61,8 @@ import Control.Applicative
 import qualified Data.Aeson as JSON
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
+import qualified Data.Map.Strict as Map
+import Data.Map.Strict (Map)
 import qualified Data.Vector as Vector
 import Control.Monad ((<=<), forM, mapM)
 import Control.Monad.Trans (MonadTrans, lift)
@@ -355,6 +357,22 @@ instance ToGVal m v => ToGVal m (HashMap Text v) where
                     , isNull = False
                     , asLookup = Just (`HashMap.lookup` xs)
                     , asDictItems = Just $ HashMap.toList xs
+                    }
+
+-- | 'Map' of 'Text' becomes a dictionary-like 'GVal'
+instance ToGVal m v => ToGVal m (Map Text v) where
+    toGVal xs = helper (Map.map toGVal xs)
+        where
+            helper :: Map Text (GVal m) -> GVal m
+            helper xs =
+                def
+                    { asHtml = mconcat . Prelude.map asHtml . Map.elems $ xs
+                    , asText = mconcat . Prelude.map asText . Map.elems $ xs
+                    , asBytes = mconcat . Prelude.map asBytes . Map.elems $ xs
+                    , asBoolean = not . Map.null $ xs
+                    , isNull = False
+                    , asLookup = Just (`Map.lookup` xs)
+                    , asDictItems = Just $ Map.toAscList xs
                     }
 
 instance ToGVal m Int where

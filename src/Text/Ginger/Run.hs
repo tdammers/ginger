@@ -109,6 +109,8 @@ import Control.Monad.State
 import Control.Applicative
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
+import qualified Data.Map.Strict as Map
+import Data.Map.Strict (Map)
 import Data.Scientific (Scientific, formatScientific)
 import qualified Data.Scientific as Scientific
 import Data.Default (def)
@@ -547,7 +549,7 @@ runExpression' (ObjectE _ xs) = do
         l <- asText <$> runExpression a
         r <- runExpression b
         return (l, r)
-    return . toGVal . HashMap.fromList $ items
+    return . toGVal . Map.fromList $ items
 runExpression' (MemberLookupE _ baseExpr indexExpr) = do
     base <- runExpression baseExpr
     index <- runExpression indexExpr
