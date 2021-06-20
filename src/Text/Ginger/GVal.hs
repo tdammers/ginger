@@ -17,30 +17,9 @@
 module Text.Ginger.GVal
 where
 
-import Prelude ( (.), ($), (==), (/=)
-               , (++), (+), (-), (*), (/), div
-               , (=<<), (>>=), return
-               , (||), (&&)
-               , undefined, otherwise, id, const
-               , fmap
-               , Maybe (..)
-               , Bool (..)
-               , Either (..)
-               , Char
-               , Int
-               , Integer
-               , Double
-               , Show, show
-               , Integral
-               , fromIntegral, floor
-               , not
-               , fst, snd
-               , Monad
-               , Functor
-               )
+import Prelude hiding (toInteger)
 import Control.Monad.Fail (MonadFail)
-import qualified Prelude
-import Data.Maybe ( fromMaybe, catMaybes, isJust, mapMaybe )
+import Data.Maybe ( fromMaybe, catMaybes, isJust, mapMaybe, listToMaybe )
 import Data.Text (Text)
 import Data.String (IsString, fromString)
 import qualified Data.Text as Text
@@ -83,6 +62,7 @@ import Data.Time ( Day (..)
                  )
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64 as Base64
 import qualified Data.ByteString.Lazy as LBS
 import Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import qualified Data.Text.Lazy.Encoding as LText
@@ -91,81 +71,194 @@ import Text.Ginger.Html
 
 -- * The Ginger Value type
 --
--- | A variant type designed as the unitype for the template language. Any
+-- | A sum type designed as the unitype for the template language. Any
 -- value referenced in a template, returned from within a template, or used
 -- in a template context, will be a 'GVal'.
 -- @m@, in most cases, should be a 'Monad'.
---
--- Some laws apply here, most notably:
---
--- - when 'isNull' is 'True', then all of 'asFunction', 'asText', 'asNumber',
---   'asHtml', 'asList', 'asDictItems', and 'length' should produce 'Nothing'
--- - when 'isNull' is 'True', then 'asBoolean' should produce 'False'
--- - when 'asNumber' is not 'Nothing', then 'asBoolean' should only return
---   'False' for exactly zero
--- - 'Nothing'-ness of 'length' should match one or both of 'asList' / 'asDictItems'
-data GVal m =
-    GVal
-        { asList :: Maybe [GVal m] -- ^ Convert value to list, if possible
-        , asDictItems :: Maybe [(Text, GVal m)] -- ^ Convert value to association list ("dictionary"), if possible
-        , asLookup :: Maybe (Text -> Maybe (GVal m)) -- ^ Convert value to a lookup function
-        , asHtml :: Html -- ^ Render value as HTML
-        , asText :: Text -- ^ Render value as plain-text
-        , asBoolean :: Bool -- ^ Get value's truthiness
-        , asNumber :: Maybe Scientific -- ^ Convert value to a number, if possible
-        , asFunction :: Maybe (Function m) -- ^ Access value as a callable function, if it is one
-        , asBytes :: Maybe ByteString -- ^ Access as raw bytes
-        , length :: Maybe Int -- ^ Get length of value, if it is a collection (list/dict)
-        , isNull :: Bool -- ^ Check if the value is null
-        , asJSON :: Maybe JSON.Value -- ^ Provide a custom JSON representation of the value
-        }
+data GVal m
+  = GNull
+  | GList [GVal m]
+  | GDict [Text] (Map Text (GVal m))
+  | GHtml Html
+  | GText Text
+  | GBool Bool
+  | GNumber Scientific
+  | GBytes ByteString
+  | GJSON JSON.Value
+  | GFunction (Function m)
+  | GMultiverse [GVal m]
+    -- ^ Use this to provide multiple alternative representations of a value
+
+data ConversionQuality
+  = CQPathological
+  | CQRaw
+  | CQRichDerived
+  | CQRichExplicit
+  deriving (Eq, Ord, Enum, Bounded, Read, Show)
+
+asList :: GVal m -> Maybe [GVal m]
+asList (GList items) = Just items
+asList (GDict ks kv) = Just [ v | k <- ks, Just v <- [Map.lookup k kv] ]
+asList (GJSON (JSON.Array items)) = Just . fmap GJSON . Vector.toList $ items
+asList (GJSON (JSON.Object items)) = Just . fmap (GJSON . snd) . List.sort . HashMap.toList $ items
+asList (GMultiverse xs) = listToMaybe . mapMaybe asList $ xs
+asList _ = Nothing
+
+asDictItems :: GVal m -> Maybe [(Text, GVal m)]
+asDictItems (GList items) = Just (zip (map (Text.pack . show) [0..]) items)
+asDictItems (GDict ks kv) = Just [ (k, v) | k <- ks, Just v <- [Map.lookup k kv] ]
+asDictItems (GJSON (JSON.Array items)) = Just . zip (map (Text.pack . show) [0..]) . fmap GJSON . Vector.toList $ items
+asDictItems (GJSON (JSON.Object items)) = Just . HashMap.toList . fmap GJSON $ items
+asDictItems (GMultiverse xs) = listToMaybe . mapMaybe asDictItems $ xs
+asDictItems _ = Nothing
+
+asHashMap :: GVal m -> Maybe (HashMap Text (GVal m))
+asHashMap (GJSON (JSON.Object items)) = Just $ fmap GJSON items
+asHashMap (GDict _ items) = Just $ HashMap.fromList . Map.toList $ items
+asHashMap g = HashMap.fromList <$> asDictItems g
+
+asMap :: GVal m -> Maybe (Map Text (GVal m))
+asMap (GDict _ items) = Just items
+asMap g = Map.fromList <$> asDictItems g
+
+asHtml :: GVal m -> Html
+asHtml (GList xs) = mconcat . map asHtml $ xs
+asHtml g@(GDict {}) = fromMaybe mempty $ mconcat . map asHtml <$> asList g
+asHtml x = snd . asHtmlQ $ x
+
+asHtmlQ :: GVal m -> (ConversionQuality, Html)
+asHtmlQ GNull = (CQPathological, mempty)
+asHtmlQ (GList xs) = (CQRaw, mconcat . map asHtml $ xs)
+asHtmlQ g@(GDict {}) = (CQRaw, fromMaybe mempty $ mconcat . map asHtml <$> asList g)
+asHtmlQ (GJSON (JSON.Array items)) = (CQRaw, Vector.foldl' (<>) mempty . fmap (asHtml . GJSON) $ items)
+asHtmlQ (GJSON (JSON.Object items)) = (CQRaw, mconcat . map snd . List.sort . HashMap.toList . fmap (asHtml . GJSON) $ items)
+asHtmlQ (GJSON (JSON.String txt)) = asHtmlQ (GText txt)
+asHtmlQ (GJSON (JSON.Bool b)) = asHtmlQ (GBool b)
+asHtmlQ (GJSON (JSON.Number n)) = asHtmlQ (GNumber n)
+asHtmlQ (GJSON JSON.Null) = asHtmlQ GNull
+asHtmlQ (GText x) = (CQRichDerived, toHtml x)
+asHtmlQ (GHtml x) = (CQRichExplicit, x)
+asHtmlQ (GBool x) = (CQPathological, toHtml $ if x then "1" :: Text else "")
+asHtmlQ (GNumber s) = (CQRaw, toHtml . asText $ GNumber s)
+asHtmlQ (GBytes s) = (CQRaw, toHtml . decodeUtf8 . Base64.encode $ s)
+asHtmlQ (GMultiverse xs) =
+  fromMaybe (CQPathological, mempty) . listToMaybe . reverse . List.sort . map asHtmlQ $ xs
+
+asText :: GVal m -> Text
+asText (GList xs) = mconcat . map asText $ xs
+asText g@(GDict {}) = fromMaybe "" $ mconcat . map asText <$> asList g
+asText x = snd . asTextQ $ x
+
+asTextQ :: GVal m -> (ConversionQuality, Text)
+asTextQ GNull = (CQPathological, mempty)
+asTextQ (GList xs) = (CQRaw, mconcat . map asText $ xs)
+asTextQ g@(GDict {}) = (CQRaw, fromMaybe "" $ mconcat . map asText <$> asList g)
+asTextQ (GJSON (JSON.Array items)) = (CQRaw, Vector.foldl' (<>) mempty . fmap (asText . GJSON) $ items)
+asTextQ (GJSON (JSON.Object items)) = (CQRaw, mconcat . map snd . List.sort . HashMap.toList . fmap (asText . GJSON) $ items)
+asTextQ (GJSON (JSON.String txt)) = asTextQ (GText txt)
+asTextQ (GJSON (JSON.Bool b)) = asTextQ (GBool b)
+asTextQ (GJSON (JSON.Number n)) = asTextQ (GNumber n)
+asTextQ (GJSON JSON.Null) = asTextQ GNull
+asTextQ (GText x) = (CQRichDerived, x)
+asTextQ (GHtml x) = (CQPathological, htmlSource x)
+asTextQ (GBool x) = (CQPathological, if x then "1" else "")
+asTextQ (GNumber s) =
+  (CQRaw, Text.pack $
+    either (const $ show s) show $ (floatingOrInteger s :: Either Double Integer))
+asTextQ (GBytes s) = (CQRaw, decodeUtf8 . Base64.encode $ s)
+asTextQ (GMultiverse xs) =
+  fromMaybe (CQPathological, mempty) . listToMaybe . reverse . List.sort . map asTextQ $ xs
+
+asBoolean :: GVal m -> Bool
+asBoolean GNull = False
+asBoolean (GList []) = False
+asBoolean (GDict _ d) = not (Map.null d)
+asBoolean (GJSON JSON.Null) = False
+asBoolean (GJSON (JSON.Array v)) = Vector.null v
+asBoolean (GJSON (JSON.Object h)) = HashMap.null h
+asBoolean (GJSON (JSON.Number 0)) = False
+asBoolean (GJSON (JSON.String "")) = False
+asBoolean (GJSON (JSON.Bool b)) = b
+asBoolean (GText "") = False
+asBoolean (GHtml h) = htmlSource h == ""
+asBoolean (GNumber 0) = False
+asBoolean (GBytes "") = False
+asBoolean (GBool b) = b
+asBoolean (GMultiverse xs) = List.all asBoolean xs
+asBoolean _ = True
+
+asNumber :: GVal m -> Maybe Scientific
+asNumber (GNumber n) = Just n
+asNumber (GText t) = readMay . Text.unpack $ t
+asNumber (GBool b) = Just $ if b then 1 else 0
+asNumber (GJSON j) = case j of
+  JSON.Number n -> Just n
+  JSON.String s -> asNumber (GText s)
+  JSON.Bool b -> asNumber (GBool b)
+  _ -> Nothing
+asNumber (GMultiverse xs) =
+  listToMaybe . mapMaybe asNumber $ xs
+asNumber _ = Nothing
+
+asFunction :: GVal m -> Maybe (Function m)
+asFunction (GFunction f) = Just f
+asFunction (GMultiverse xs) =
+  listToMaybe . mapMaybe asFunction $ xs
+asFunction _ = Nothing
+
+asBytes :: GVal m -> Maybe ByteString
+asBytes (GBytes b) = Just b
+asBytes (GMultiverse xs) =
+  listToMaybe . mapMaybe asBytes $ xs
+asBytes _ = Nothing
+
+isNull :: GVal m -> Bool
+isNull GNull = True
+isNull (GJSON JSON.Null) = True
+isNull (GMultiverse xs) = all isNull xs
+isNull _ = False
+
+asJSON :: GVal m -> Maybe JSON.Value
+asJSON (GJSON j) = Just j
+asJSON (GMultiverse xs) = listToMaybe . mapMaybe asJSON $ xs
+asJSON _ = Nothing
+
+glength :: GVal m -> Maybe Int
+glength (GList a) = Just $ List.length a
+glength (GDict _ a) = Just $ Map.size a
+glength (GJSON (JSON.Array xs)) = Just $ Vector.length xs
+glength (GJSON (JSON.Object xs)) = Just $ HashMap.size xs
+glength (GMultiverse xs) = listToMaybe . mapMaybe glength $ xs
+glength _ = Nothing
 
 gappend :: GVal m -> GVal m -> GVal m
-gappend a b =
-  GVal
-    { asList = (++) <$> asList a <*> asList b
-    , asDictItems = (++) <$> asDictItems a <*> asDictItems b
-    , asLookup = do
-        lookupA <- asLookup a
-        lookupB <- asLookup b
-        return $ \k -> lookupA k <|> lookupB k
-    , asHtml = asHtml a <> asHtml b
-    , asText = asText a <> asText b
-    , asBytes = asBytes a <> asBytes b
-    , asBoolean = (asBoolean a || asBoolean b) && not (isNull a || isNull b)
-    , asNumber = readMay . Text.unpack $ (asText a <> asText b)
-    , asFunction = Nothing
-    , isNull = isNull a || isNull b
-    , asJSON = case (JSON.toJSON a, JSON.toJSON b) of
-        (JSON.Array x, JSON.Array y) -> Just $ JSON.Array (x <> y)
-        (JSON.Object x, JSON.Object y) -> Just $ JSON.Object (x <> y)
-        (JSON.String x, JSON.String y) -> Just $ JSON.String (x <> y)
-        (JSON.Null, b) -> Just $ b
-        (a, JSON.Null) -> Just $ a
-        _ -> Nothing -- If JSON tags mismatch, use default toJSON impl
-    , length = (+) <$> length a <*> length b
-    }
+gappend GNull a = a
+gappend a GNull = a
+gappend (GList a) (GList b) = GList (a ++ b)
+gappend (GDict ak am) (GDict bk bm) = GDict (ak `List.union` bk) (am <> bm)
+gappend x y =
+  GMultiverse
+    [ GHtml (asHtml x <> asHtml y)
+    , GText (asText x <> asText y)
+    ]
 
 -- | Marshal a GVal between carrier monads.
 -- This will lose 'asFunction' information, because functions cannot be
 -- transferred to other carrier monads, but it will keep all other data
 -- structures intact.
 marshalGVal :: GVal m -> GVal n
-marshalGVal g =
-    GVal
-        { asList = fmap marshalGVal <$> asList g
-        , asDictItems = fmap (\items -> [(k, marshalGVal v) | (k, v) <- items]) (asDictItems g)
-        , asLookup = fmap (fmap marshalGVal .) (asLookup g)
-        , asHtml = asHtml g
-        , asText = asText g
-        , asBytes = asBytes g
-        , asBoolean = asBoolean g
-        , asNumber = asNumber g
-        , asFunction = Nothing
-        , isNull = isNull g
-        , length = length g
-        , asJSON = asJSON g
-        }
+marshalGVal (GFunction f) = GNull -- functions cannot be marshalled
+marshalGVal (GList xs) = GList $ map marshalGVal xs
+marshalGVal (GDict ks d) = GDict ks $ fmap marshalGVal d
+marshalGVal GNull = GNull
+marshalGVal (GNumber n) = GNumber n
+marshalGVal (GText t) = GText t
+marshalGVal (GHtml h) = GHtml h
+marshalGVal (GBool b) = GBool b
+marshalGVal (GJSON j) = GJSON j
+marshalGVal (GBytes b) = GBytes b
+marshalGVal (GMultiverse xs) = GMultiverse $ map marshalGVal xs
+
 
 -- | Marshal a GVal between carrier monads.
 -- Unlike 'marshalGVal', 'asFunction' information is retained by hoisting
@@ -177,21 +270,10 @@ marshalGValEx :: (Functor m, Functor n)
               -> (forall a. n a -> m a)
               -> GVal m
               -> GVal n
-marshalGValEx hoist unhoist g =
-    GVal
-        { asList = fmap (marshalGValEx hoist unhoist) <$> asList g
-        , asDictItems = fmap (\items -> [(k, marshalGValEx hoist unhoist v) | (k, v) <- items]) (asDictItems g)
-        , asLookup = fmap (fmap (marshalGValEx hoist unhoist) .) (asLookup g)
-        , asHtml = asHtml g
-        , asText = asText g
-        , asBytes = asBytes g
-        , asBoolean = asBoolean g
-        , asNumber = asNumber g
-        , asFunction = marshalFunction hoist unhoist <$> asFunction g
-        , isNull = isNull g
-        , length = length g
-        , asJSON = asJSON g
-        }
+marshalGValEx hoist unhoist (GFunction f) = GFunction $ marshalFunction hoist unhoist f
+marshalGValEx hoist unhoist (GList xs) = GList $ fmap (marshalGValEx hoist unhoist) xs
+marshalGValEx hoist unhoist (GDict ks xs) = GDict ks $ fmap (marshalGValEx hoist unhoist) xs
+marshalGValEx _ _ g = marshalGVal g
 
 marshalFunction :: (Functor m, Functor n) => (forall a. m a -> n a) -> (forall a. n a -> m a) -> Function m -> Function n
 -- [(Maybe Text, GVal m)] -> m (GVal m)
@@ -201,27 +283,9 @@ marshalFunction hoist unhoist f args =
                 ]
     in marshalGValEx hoist unhoist <$> hoist (f args')
 
--- | Convenience wrapper around 'asDictItems' to represent a 'GVal' as a
--- 'HashMap'.
-asHashMap :: GVal m -> Maybe (HashMap Text (GVal m))
-asHashMap g = HashMap.fromList <$> asDictItems g
-
 -- | The default 'GVal' is equivalent to NULL.
 instance Default (GVal m) where
-    def = GVal
-            { asList = Nothing
-            , asDictItems = Nothing
-            , asLookup = Nothing
-            , asHtml = unsafeRawHtml ""
-            , asText = ""
-            , asBytes = Nothing
-            , asBoolean = False
-            , asNumber = Nothing
-            , asFunction = Nothing
-            , isNull = True
-            , length = Nothing
-            , asJSON = Nothing
-            }
+    def = GNull
 
 -- | Conversion to JSON values attempts the following conversions, in order:
 --
@@ -236,32 +300,38 @@ instance Default (GVal m) where
 -- Note that the default conversions will never return booleans unless 'asJSON'
 -- explicitly does this, because 'asText' will always return *something*.
 instance JSON.ToJSON (GVal m) where
-    toJSON g =
-        if isNull g
-            then JSON.Null
-            else fromMaybe (JSON.toJSON $ asText g) $
-                    asJSON g <|>
-                    (JSON.toJSON <$> asList g) <|>
-                    (JSON.toJSON <$> asHashMap g) <|>
-                    (JSON.toJSON <$> asNumber g)
+    toJSON = gToJSON
+
+gToJSON :: GVal m -> JSON.Value
+gToJSON = snd . gToJSONQ
+
+gToJSONQ :: GVal m -> (ConversionQuality, JSON.Value)
+gToJSONQ GNull = (CQRichDerived, JSON.Null)
+gToJSONQ (GList xs) = (CQRichDerived, JSON.Array . Vector.fromList . map gToJSON $ xs)
+gToJSONQ (GDict _ xs) = (CQRichDerived, JSON.toJSON xs)
+gToJSONQ (GText t) = (CQRaw, JSON.String t)
+gToJSONQ (GHtml h) = (CQPathological, JSON.String $ htmlSource h)
+gToJSONQ (GNumber n) = (CQRaw, JSON.Number n)
+gToJSONQ (GBool b) = (CQRaw, JSON.Bool b)
+gToJSONQ (GJSON j) = (CQRichExplicit, j)
+gToJSONQ (GMultiverse xs) =
+  fromMaybe (CQPathological, JSON.Null) . listToMaybe . reverse . List.sort . map gToJSONQ $ xs
+gToJSONQ _ = (CQPathological, JSON.Null)
 
 -- | For convenience, 'Show' is implemented in a way that looks similar to
 -- JavaScript / JSON
 instance Show (GVal m) where
-    show v
-        | isNull v = "null"
-        | isJust (asFunction v) = "<<function>>"
-        | isJust (asDictItems v) =
-            let items = [ show k <> ": " <> show v | (k, v) <- fromMaybe [] (asDictItems v) ]
-                      ++ [ show k <> ": " <> show v | (k, v) <- Prelude.zip [0..] (fromMaybe [] $ asList v) ]
-            in "{" <> (mconcat . List.intersperse ", " $ items) <> "}"
-        | isJust (asList v) = "[" <> (mconcat . List.intersperse ", " . Prelude.map show $ fromMaybe [] (asList v)) <> "]"
-        | isJust (asNumber v) =
-            case floatingOrInteger <$> asNumber v :: Maybe (Either Double Integer) of
-                Just (Left x) -> show (asNumber v)
-                Just (Right x) -> show x
-                Nothing -> ""
-        | otherwise = show $ asText v
+    show = gShow
+
+gShow :: GVal m -> String
+gShow GNull = "null"
+gShow (GFunction f) = "<<function>>"
+gShow (GList xs) =
+  "[" <> (mconcat . List.intersperse ", " . Prelude.map show $ xs) <> "]"
+gShow (GDict ks kv) =
+  let items = [ show k <> ": " <> show v | k <- ks, Just v <- [Map.lookup k kv] ]
+  in "{" <> (mconcat . List.intersperse ", " $ items) <> "}"
+gShow x = LText.unpack . LText.decodeUtf8 . JSON.encode $ x
 
 -- | Converting to HTML hooks into the ToHtml instance for 'Text' for most tags.
 -- Tags that have no obvious textual representation render as empty HTML.
@@ -324,123 +394,58 @@ instance ToGVal m () where
 
 -- | 'Nothing' becomes NULL, 'Just' unwraps.
 instance ToGVal m v => ToGVal m (Maybe v) where
-    toGVal Nothing = def { asJSON = Just JSON.Null }
+    toGVal Nothing = GNull
     toGVal (Just x) = toGVal x
 
 -- | Haskell lists become list-like 'GVal's
 instance ToGVal m v => ToGVal m [v] where
-    toGVal xs = helper (Prelude.map toGVal xs)
-        where
-            helper :: [GVal m] -> GVal m
-            helper xs =
-                def
-                    { asHtml = mconcat . Prelude.map asHtml $ xs
-                    , asText = mconcat . Prelude.map asText $ xs
-                    , asBytes = mconcat . Prelude.map asBytes $ xs
-                    , asBoolean = not . List.null $ xs
-                    , isNull = False
-                    , asList = Just $ Prelude.map toGVal xs
-                    , length = Just $ Prelude.length xs
-                    }
+    toGVal xs = GList (map toGVal xs)
 
--- | 'HashMap' of 'Text' becomes a dictionary-like 'GVal'
+-- | 'HashMap' of 'Text' becomes a dictionary 'GVal'
 instance ToGVal m v => ToGVal m (HashMap Text v) where
-    toGVal xs = helper (HashMap.map toGVal xs)
-        where
-            helper :: HashMap Text (GVal m) -> GVal m
-            helper xs =
-                def
-                    { asHtml = mconcat . Prelude.map asHtml . HashMap.elems $ xs
-                    , asText = mconcat . Prelude.map asText . HashMap.elems $ xs
-                    , asBytes = mconcat . Prelude.map asBytes . HashMap.elems $ xs
-                    , asBoolean = not . HashMap.null $ xs
-                    , isNull = False
-                    , asLookup = Just (`HashMap.lookup` xs)
-                    , asDictItems = Just $ HashMap.toList xs
-                    }
+    toGVal h = GDict (HashMap.keys h) . fmap toGVal . Map.fromList . HashMap.toList $ h
 
--- | 'Map' of 'Text' becomes a dictionary-like 'GVal'
+-- | 'Map' of 'Text' becomes a dictionary 'GVal'
 instance ToGVal m v => ToGVal m (Map Text v) where
-    toGVal xs = helper (Map.map toGVal xs)
-        where
-            helper :: Map Text (GVal m) -> GVal m
-            helper xs =
-                def
-                    { asHtml = mconcat . Prelude.map asHtml . Map.elems $ xs
-                    , asText = mconcat . Prelude.map asText . Map.elems $ xs
-                    , asBytes = mconcat . Prelude.map asBytes . Map.elems $ xs
-                    , asBoolean = not . Map.null $ xs
-                    , isNull = False
-                    , asLookup = Just (`Map.lookup` xs)
-                    , asDictItems = Just $ Map.toAscList xs
-                    }
+    toGVal m = GDict (Map.keys m) . fmap toGVal $ m
 
 instance ToGVal m Int where
-    toGVal x =
-        def
-            { asHtml = html . Text.pack . show $ x
-            , asText = Text.pack . show $ x
-            , asBoolean = x /= 0
-            , asNumber = Just . fromIntegral $ x
-            , isNull = False
-            }
+    toGVal = GNumber . fromIntegral
 
 instance ToGVal m Integer where
-    toGVal x =
-        def
-            { asHtml = html . Text.pack . show $ x
-            , asText = Text.pack . show $ x
-            , asBytes = Just . encodeUtf8 . Text.pack . show $ x
-            , asBoolean = x /= 0
-            , asNumber = Just . fromIntegral $ x
-            , isNull = False
-            }
+    toGVal = GNumber . fromIntegral
 
 instance ToGVal m Scientific where
-    toGVal x =
-        def
-            { asHtml = html $ scientificToText x
-            , asText = scientificToText x
-            , asBytes = Just . encodeUtf8 . scientificToText $ x
-            , asBoolean = x /= 0
-            , asNumber = Just x
-            , isNull = False
-            }
+    toGVal = GNumber
 
 instance ToGVal m Day where
     toGVal x =
         let dayDict = dayToDict x
             julian = toModifiedJulianDay x
             formatted = Text.pack $ formatTime defaultTimeLocale "%0Y-%m-%d" x
-        in (orderedDict dayDict)
-            { asHtml = html $ formatted
-            , asText = formatted
-            , asBytes = Just . encodeUtf8 $ formatted
-            , asBoolean = True
-            , asNumber = Just . fromIntegral $ julian
-            , asList = Just (List.map snd dayDict)
-            }
+        in GMultiverse
+            [ GText formatted
+            , GDict (map fst dayDict) (Map.fromList dayDict)
+            , GList (List.map snd dayDict)
+            ]
 
 dayToDict :: Day -> [(Text, GVal m)]
 dayToDict x =
     let (year, month, day) = toGregorian x
     in [ "year" ~> year
-        , "month" ~> month
-        , "day" ~> day
-        ]
+       , "month" ~> month
+       , "day" ~> day
+       ]
 
 instance ToGVal m TimeOfDay where
     toGVal x =
         let timeDict = timeToDict x
             formatted = Text.pack $ formatTime defaultTimeLocale "%H:%M:%S" x
-        in (orderedDict timeDict)
-            { asHtml = html $ formatted
-            , asText = formatted
-            , asBytes = Just . encodeUtf8 $ formatted
-            , asBoolean = True
-            , asNumber = Nothing
-            , asList = Just (List.map snd timeDict)
-            }
+        in GMultiverse
+            [ GText formatted
+            , GDict (map fst timeDict) (Map.fromList timeDict)
+            , GList (List.map snd timeDict)
+            ]
 
 timeToDict :: TimeOfDay -> [(Text, GVal m)]
 timeToDict (TimeOfDay hours minutes seconds) =
@@ -453,18 +458,15 @@ instance ToGVal m LocalTime where
     toGVal x =
         let dtDict = localTimeToDict x
             formatted = Text.pack $ formatTime defaultTimeLocale "%0Y-%m-%d %H:%M:%S" x
-        in (orderedDict $
-                dtDict ++
+        in GMultiverse
+            [ GText formatted
+            , GDict ["date", "time"] (Map.fromList $ dtDict ++
                 [ "date" ~> localDay x
                 , "time" ~> localTimeOfDay x
-                ])
-            { asHtml = html $ formatted
-            , asText = formatted
-            , asBytes = Just . encodeUtf8 $ formatted
-            , asBoolean = True
-            , asNumber = Nothing
-            , asList = Just (List.map snd dtDict)
-            }
+                ]
+              )
+            , GList (List.map snd dtDict)
+            ]
 
 localTimeToDict :: LocalTime -> [(Text, GVal m)]
 localTimeToDict x =
@@ -488,13 +490,10 @@ instance ToGVal m TimeLocale where
                 Text.pack . formatTime t "%c" $
                     LocalTime (fromGregorian 2000 1 1) (TimeOfDay 13 15 00)
             timeLocaleDict = timeLocaleToDict t
-        in (dict timeLocaleDict)
-            { asHtml = html $ formattedExample
-            , asText = formattedExample
-            , asBytes = Just . encodeUtf8 $ formattedExample
-            , asBoolean = True
-            , asNumber = Nothing
-            }
+        in GMultiverse
+            [ GText formattedExample
+            , GDict (map fst timeLocaleDict) (Map.fromList timeLocaleDict)
+            ]
 
 timeLocaleToDict :: TimeLocale -> [(Text, GVal m)]
 timeLocaleToDict t =
@@ -515,13 +514,10 @@ instance ToGVal m ZonedTime where
     toGVal x =
         let dtDict = zonedTimeToDict x
             formatted = Text.pack $ formatTime defaultTimeLocale "%0Y-%m-%d %H:%M:%S%z" x
-        in (dict dtDict)
-            { asHtml = html $ formatted
-            , asText = formatted
-            , asBytes = Just . encodeUtf8 $ formatted
-            , asBoolean = True
-            , asNumber = Nothing
-            }
+        in GMultiverse
+            [ GText formatted
+            , dict dtDict
+            ]
 
 zonedTimeToDict :: ZonedTime -> [(Text, GVal m)]
 zonedTimeToDict t =
@@ -546,81 +542,31 @@ scientificToText x =
 
 -- | Booleans render as 1 or empty string, and otherwise behave as expected.
 instance ToGVal m Bool where
-    toGVal x =
-        def
-            { asHtml = if x then html "1" else html ""
-            , asText = if x then "1" else ""
-            , asBoolean = x
-            , asBytes = Just $ if x then "1" else "0"
-            , asNumber = Just $ if x then 1 else 0
-            , isNull = False
-            , asJSON = Just (JSON.Bool x)
-            }
+    toGVal x = GBool x
 
 -- | 'String' -> 'GVal' conversion uses the 'IsString' class; because 'String'
 -- is an alias for '[Char]', there is also a 'ToGVal' instance for 'String',
 -- but it marshals strings as lists of characters, i.e., calling 'toGVal' on
 -- a string produces a list of characters on the 'GVal' side.
 instance IsString (GVal m) where
-    fromString x =
-        def
-            { asHtml = html . Text.pack $ x
-            , asText = Text.pack x
-            , asBytes = Just . encodeUtf8 . Text.pack $ x
-            , asBoolean = not $ Prelude.null x
-            , asNumber = readMay x
-            , isNull = False
-            , length = Just . Prelude.length $ x
-            }
+    fromString x = GText (Text.pack x)
 
 -- | Single characters are treated as length-1 'Text's.
 instance ToGVal m Char where
     toGVal = toGVal . Text.singleton
 
 instance ToGVal m Text where
-    toGVal x =
-        def
-            { asHtml = html x
-            , asText = x
-            , asBytes = Just . encodeUtf8 $ x
-            , asBoolean = not $ Text.null x
-            , asNumber = readMay . Text.unpack $ x
-            , isNull = False
-            }
+    toGVal = GText
 
 instance ToGVal m LText.Text where
-    toGVal x =
-        def
-            { asHtml = html (LText.toStrict x)
-            , asText = LText.toStrict x
-            , asBytes = Just . LBS.toStrict . LText.encodeUtf8 $ x
-            , asBoolean = not $ LText.null x
-            , asNumber = readMay . LText.unpack $ x
-            , isNull = False
-            }
+    toGVal = GText . LText.toStrict
 
 instance ToGVal m ByteString where
-    toGVal x =
-        def
-            { asHtml = html (decodeUtf8 x)
-            , asText = decodeUtf8 x
-            , asBytes = Just x
-            , asBoolean = not $ BS.null x
-            , asNumber = readMay . Text.unpack . decodeUtf8 $ x
-            , isNull = False
-            }
+    toGVal = GBytes
 
 instance ToGVal m LBS.ByteString where
-    toGVal x =
-        def
-            { asHtml = html . LText.toStrict . LText.decodeUtf8 $ x
-            , asText = LText.toStrict . LText.decodeUtf8 $ x
-            , asBytes = Just . LBS.toStrict $ x
-            , asBoolean = not $ LBS.null x
-            , asNumber = readMay . LText.unpack . LText.decodeUtf8 $ x
-            , isNull = False
-            }
---
+    toGVal = GBytes . LBS.toStrict
+
 -- | This instance is slightly wrong; the 'asBoolean', 'asNumber', and 'asText'
 -- methods all treat the HTML source as plain text. We do this to avoid parsing
 -- the HTML back into a 'Text' (and dealing with possible parser errors); the
@@ -635,42 +581,14 @@ instance ToGVal m LBS.ByteString where
 -- templates (e.g. capturing macro output and then passing it through a textual
 -- filter).
 instance ToGVal m Html where
-    toGVal x =
-        def
-            { asHtml = x
-            , asText = htmlSource x
-            , asBoolean = not . Text.null . htmlSource $ x
-            , asNumber = readMay . Text.unpack . htmlSource $ x
-            , isNull = False
-            }
+    toGVal = GHtml
 
--- | Convert Aeson 'Value's to 'GVal's over an arbitrary host monad. Because
--- JSON cannot represent functions, this conversion will never produce a
--- 'Function'. Further, the 'ToJSON' instance for such a 'GVal' will always
--- produce the exact 'Value' that was use to construct the it.
 instance ToGVal m JSON.Value where
-    toGVal j = (rawJSONToGVal j) { asJSON = Just j }
-
-rawJSONToGVal :: JSON.Value -> GVal m
-rawJSONToGVal (JSON.Number n) = toGVal n
-rawJSONToGVal (JSON.String s) = toGVal s
-rawJSONToGVal (JSON.Bool b) = toGVal b
-rawJSONToGVal JSON.Null = def
-rawJSONToGVal (JSON.Array a) = toGVal $ Vector.toList a
-rawJSONToGVal (JSON.Object o) = toGVal o
+    toGVal j = GJSON j
 
 -- | Turn a 'Function' into a 'GVal'
 fromFunction :: Function m -> GVal m
-fromFunction f =
-    def
-        { asHtml = html ""
-        , asText = ""
-        , asBoolean = True
-        , isNull = False
-        , asFunction = Just f
-        , asJSON = Just "<<function>>"
-        }
-
+fromFunction = GFunction
 
 -- * Convenience API for constructing heterogenous dictionaries.
 --
@@ -686,23 +604,10 @@ type Pair m = (Text, GVal m)
 -- | Construct a dictionary GVal from a list of pairs. Internally, this uses
 -- a hashmap, so element order will not be preserved.
 dict :: [Pair m] -> GVal m
-dict = toGVal . HashMap.fromList
+dict pairs = GDict (map fst pairs) (Map.fromList pairs)
 
--- | Construct an ordered dictionary GVal from a list of pairs. Internally,
--- this conversion uses both a hashmap (for O(1) lookup) and the original list,
--- so element order is preserved, but there is a bit of a memory overhead.
 orderedDict :: [Pair m] -> GVal m
-orderedDict xs =
-    def
-        { asHtml = mconcat . Prelude.map (asHtml . snd) $ xs
-        , asText = mconcat . Prelude.map (asText . snd) $ xs
-        , asBoolean = not . Prelude.null $ xs
-        , isNull = False
-        , asLookup = Just (`HashMap.lookup` hm)
-        , asDictItems = Just xs
-        }
-    where
-        hm = HashMap.fromList xs
+orderedDict = dict
 
 -- | Construct a pair from a key and a value.
 (~>) :: ToGVal m a => Text -> a -> Pair m
@@ -760,8 +665,8 @@ lookupIndexMay i v = do
 -- up the value at a given key.
 lookupKey :: Text -> GVal m -> Maybe (GVal m)
 lookupKey k v = do
-    lf <- asLookup v
-    lf k
+    lf <- asMap v
+    Map.lookup k lf
 
 -- | Loosely-typed lookup: try dictionary-style lookup first (treat index as
 -- a string, and container as a dictionary), if that doesn't yield anything

@@ -435,13 +435,19 @@ runStatement' (ScopedS _ body) = withLocalScope runInner
 runStatement' (ForS _ varNameIndex varNameValue itereeExpr body) = do
     let go :: Int -> GVal (Run p m h) -> Run p m h (GVal (Run p m h))
         go recursionDepth iteree = do
-            iterPairs <- if isJust (asDictItems iteree)
-                then return [ (toGVal k, v) | (k, v) <- fromMaybe [] (asDictItems iteree) ]
-                else case asList iteree of
-                  Just items -> return $ Prelude.zip (Prelude.map toGVal ([0..] :: [Int])) items
-                  Nothing -> do
-                    warn $ TypeError ["list", "dictionary"] (Just $ tshow iteree)
-                    return []
+            iterPairs <-
+                if isNull iteree
+                then
+                  return []
+                else if isJust (asDictItems iteree)
+                then
+                  return [ (toGVal k, v) | (k, v) <- fromMaybe [] (asDictItems iteree) ]
+                else
+                  case asList iteree of
+                    Just items -> return $ Prelude.zip (Prelude.map toGVal ([0..] :: [Int])) items
+                    Nothing -> do
+                      warn $ TypeError ["list", "dictionary"] (Just $ tshow iteree)
+                      return []
             let numItems :: Int
                 numItems = Prelude.length iterPairs
                 cycle :: Int -> [(Maybe Text, GVal (Run p m h))] -> Run p m h (GVal (Run p m h))
@@ -458,8 +464,9 @@ runStatement' (ForS _ varNameIndex varNameValue itereeExpr body) = do
                           -> Run p m h (GVal (Run p m h))
                 iteration (index, (key, value)) = do
                     setVar varNameValue value
-                    setVar "loop" $
-                        (dict [ "index" ~> Prelude.succ index
+                    setVar "loop" $ GMultiverse
+                        [ dict
+                             [ "index" ~> Prelude.succ index
                              , "index0" ~> index
                              , "revindex" ~> (numItems - index)
                              , "revindex0" ~> (numItems - index - 1)
@@ -469,8 +476,9 @@ runStatement' (ForS _ varNameIndex varNameValue itereeExpr body) = do
                              , "last" ~> (Prelude.succ index == numItems)
                              , "length" ~> numItems
                              , "cycle" ~> fromFunction (cycle index)
-                             ])
-                             { asFunction = Just loop }
+                             ]
+                        , GFunction loop
+                        ]
                     case varNameIndex of
                         Nothing -> return def
                         Just n -> setVar n key

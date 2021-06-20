@@ -428,7 +428,10 @@ runtimeErrorToGVal :: forall m p. ToGVal m p => RuntimeError p -> GVal m
 runtimeErrorToGVal e =
     let (callStack, props) = runtimeErrorToGValRaw e
         props' = (("callStack" :: Text) ~> callStack):props
-    in (dict props') { asText = runtimeErrorMessage e }
+    in GMultiverse
+        [ GText $ runtimeErrorMessage e
+        , dict props'
+        ]
 
 runtimeErrorToGValRaw :: RuntimeError p -> ([p], [(Text, GVal m)])
 runtimeErrorToGValRaw (RuntimeError msg) =

@@ -69,7 +69,7 @@ import qualified Data.Scientific as Scientific
 import Data.Default (def)
 import Safe (readMay, lastDef, headMay)
 import Network.HTTP.Types (urlEncode)
-import Debug.Trace (trace)
+import Debug.Trace (trace, traceShow)
 import Data.List (lookup, zipWith, unzip, foldl')
 import Data.Time ( defaultTimeLocale
                  , formatTime
@@ -500,7 +500,7 @@ gfnSort args = do
         (pack, unpacked) =
             case (asDictItems sortee, asList sortee) of
                 (Just dictItems, _) ->
-                    (orderedDict, dictItems)
+                    (toGVal . fmap snd, dictItems)
                 (Nothing, Just listItems) ->
                     (toGVal . fmap snd, listToIndexedDict listItems)
                 (Nothing, Nothing) ->
@@ -838,10 +838,7 @@ matchTextToGVal :: Monad m => RE.MatchText String -> GVal m
 matchTextToGVal matchArr =
   let base = toGVal . toList . fmap (Text.pack . fst) $ matchArr
       textRepr = fromMaybe "" . fmap (Text.pack . fst) . headMay . toList $ matchArr
-  in base
-      { asText = textRepr
-      , asHtml = html textRepr
-      }
+  in GMultiverse [ GText textRepr, base ]
 
 fnReMatch matchFunc args =
   let gArgs = extractArgsL ["re", "haystack", "opts"] args
