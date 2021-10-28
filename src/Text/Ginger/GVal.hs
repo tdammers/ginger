@@ -1,3 +1,4 @@
+{-#LANGUAGE CPP #-}
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE MultiParamTypeClasses #-}
 {-#LANGUAGE FlexibleInstances #-}
@@ -59,6 +60,10 @@ import Data.Scientific ( Scientific
 import Data.Fixed (Fixed (..), Pico)
 import Control.Applicative
 import qualified Data.Aeson as JSON
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.Key as AK
+import qualified Data.Aeson.KeyMap as AKM
+#endif
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 import qualified Data.Map.Strict as Map
@@ -658,6 +663,24 @@ rawJSONToGVal (JSON.Bool b) = toGVal b
 rawJSONToGVal JSON.Null = def
 rawJSONToGVal (JSON.Array a) = toGVal $ Vector.toList a
 rawJSONToGVal (JSON.Object o) = toGVal o
+
+#if MIN_VERSION_aeson(2,0,0)
+-- | 'AKM.KeyMap' of 'JSON.Value' becomes a dictionary-like 'GVal'
+instance ToGVal m (AKM.KeyMap JSON.Value) where
+    toGVal xs = helper (AKM.map toGVal xs)
+        where
+            helper :: AKM.KeyMap (GVal m) -> GVal m
+            helper xs =
+                def
+                    { asHtml = mconcat . List.map (asHtml . snd) . AKM.toList $ xs
+                    , asText = mconcat . List.map (asText . snd) . AKM.toList $ xs
+                    , asBytes = mconcat . List.map (asBytes . snd) . AKM.toList $ xs
+                    , asBoolean = not . AKM.null $ xs
+                    , isNull = False
+                    , asLookup = Just $ (`AKM.lookup` xs) . AK.fromText
+                    , asDictItems = Just . List.map (\(k,v) -> (AK.toText k, v)) . AKM.toList $ xs
+                    }
+#endif
 
 -- | Turn a 'Function' into a 'GVal'
 fromFunction :: Function m -> GVal m
