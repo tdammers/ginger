@@ -95,7 +95,7 @@ import Text.Ginger.Run.VM
 import Text.Printf
 import Text.PrintfA
 import Text.Ginger.Parse (parseGinger, ParserError)
-import Control.Monad.Except (runExceptT, throwError, catchError)
+import Control.Monad.Trans.Except (runExceptT, catchE)
 
 import Data.Text (Text)
 import Data.String (fromString)
@@ -118,6 +118,7 @@ import Safe (readMay, lastDef, headMay)
 import Network.HTTP.Types (urlEncode)
 import Debug.Trace (trace)
 import Data.List (lookup, zipWith, unzip)
+import Data.Monoid (Monoid (..), (<>))
 import Data.Aeson as JSON
 
 defaultScope :: forall m h p
@@ -484,7 +485,7 @@ runStatement' (PreprocessedIncludeS _ tpl) =
     withTemplate tpl $ runTemplate tpl
 
 runStatement' (TryCatchS _ tryS catchesS finallyS) = do
-    result <- (runStatement tryS) `catchError` handle catchesS
+    result <- (runStatement tryS) `catchE` handle catchesS
     runStatement finallyS
     return result
     where

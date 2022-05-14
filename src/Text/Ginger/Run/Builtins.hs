@@ -1,5 +1,7 @@
+{-#LANGUAGE DerivingStrategies #-}
 {-#LANGUAGE FlexibleContexts #-}
 {-#LANGUAGE FlexibleInstances #-}
+{-#LANGUAGE GeneralizedNewtypeDeriving #-}
 {-#LANGUAGE OverloadedStrings #-}
 {-#LANGUAGE TupleSections #-}
 {-#LANGUAGE TypeSynonymInstances #-}
@@ -38,7 +40,6 @@ import Prelude ( (.), ($), (==), (/=)
                , either
                )
 import qualified Prelude
-import Control.Monad.Error (runErrorT)
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import qualified Data.List as List
 import Text.Ginger.AST
@@ -56,7 +57,6 @@ import qualified Data.Text as Text
 import qualified Data.ByteString.UTF8 as UTF8
 import qualified Data.ByteString.Lazy as LBS
 import Control.Monad
-import Control.Monad.Identity
 import Control.Monad.Writer
 import Control.Monad.Reader
 import Control.Monad.State
@@ -71,6 +71,7 @@ import Safe (readMay, lastDef, headMay)
 import Network.HTTP.Types (urlEncode)
 import Debug.Trace (trace)
 import Data.List (lookup, zipWith, unzip, foldl')
+import Data.Monoid (Monoid (..), (<>))
 import Data.Time ( defaultTimeLocale
                  , formatTime
                  , LocalTime (..)
@@ -852,7 +853,7 @@ fnReMatch matchFunc args =
         go [r, h, Just def]
       [Just reG, Just haystackG, Just optsG] -> do
         opts <- parseCompOpts optsG
-        let reM = runIdentity . runErrorT $
+        let reM = runFailToEither $
                       RE.makeRegexOptsM opts RE.defaultExecOpt (Text.unpack . asText $ reG)
             haystack = Text.unpack . asText $ haystackG
         case reM of
@@ -878,5 +879,17 @@ parseCompOpts g = do
     )
     RE.blankCompOpt
     str
+
+-- | This type provides an easy way to use 'RE.makeRegexOptsM' without having
+-- to add a new dependency.
+newtype FailToEither a
+  = FailToEither
+      { runFailToEither :: Either String a
+      }
+  deriving newtype (Applicative, Functor, Monad)
+
+instance MonadFail FailToEither where
+  fail = FailToEither . Left
+  {-# INLINE fail #-}
 
 -- vim: sw=4 ts=4 expandtab
