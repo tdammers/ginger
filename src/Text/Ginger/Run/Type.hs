@@ -80,7 +80,7 @@ import Text.Ginger.Parse (ParserError (..), sourceLine, sourceColumn, sourceName
 import Text.Printf
 import Text.PrintfA
 import Data.Scientific (formatScientific)
-import Control.Monad.Except (ExceptT (..))
+import Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import Data.Default (Default (..), def)
 
 import Data.Char (isSpace)
@@ -104,6 +104,7 @@ import Safe (readMay, lastDef, headMay)
 import Network.HTTP.Types (urlEncode)
 import Debug.Trace (trace)
 import Data.Maybe (isNothing)
+import Data.Monoid (Monoid (..), (<>))
 import Data.List (lookup, zipWith, unzip)
 
 -- | Execution context. Determines how to look up variables from the
