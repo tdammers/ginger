@@ -1,6 +1,6 @@
 cabal-version:       2.2
 name:                ginger
-version:             0.10.5.1
+version:             0.10.5.2
 synopsis:            An implementation of the Jinja2 template language in Haskell
 description:         Ginger is Jinja, minus the most blatant pythonisms. Wants
                      to be feature complete, but isn't quite there yet.
