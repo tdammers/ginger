@@ -186,6 +186,7 @@ defaultScope =
     , ("product", fromFunction . variadicNumericFunc 1 $ Prelude.product)
     , ("ratio", fromFunction . variadicNumericFunc 1 $ Scientific.fromFloatDigits . ratio . Prelude.map Scientific.toRealFloat)
     , ("replace", fromFunction gfnReplace)
+    , ("reverse", fromFunction gfnReverse)
     , ("round", fromFunction . unaryNumericFunc 0 $ Prelude.fromIntegral . Prelude.round)
     , ("show", fromFunction . unaryFunc $ fromString . show)
     , ("slice", fromFunction gfnSlice)

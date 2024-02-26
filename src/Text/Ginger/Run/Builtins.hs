@@ -453,6 +453,17 @@ gfnMap args = do
         (Nothing, Nothing) ->
             return def
 
+gfnReverse :: forall p m h. Monad m => Function (Run p m h)
+gfnReverse args = do
+    let parsedArgs = extractArgsDefL
+            [ ("reversee", def)
+            ]
+            args
+    reversee <- case parsedArgs of
+        Right [reversee] -> return reversee
+        _ -> throwHere $ ArgumentsError (Just "reverse") "expected: (reversee)"
+    return . toGVal $ List.reverse <$> asList reversee
+    
 
 gfnSort :: forall p m h. Monad m => Function (Run p m h)
 gfnSort args = do
