@@ -25,7 +25,7 @@ common deps
   build-depends: base >=4.8 && <5
                , aeson >=1.4.2.0 && <2.3
                , bytestring >=0.10.8.2 && <0.13
-               , data-default >= 0.5 && <0.8
+               , data-default >= 0.5 && <0.9
                , mtl >= 2.2 && <2.4
                , text >=1.2.3.1 && <2.2
                , time >= 0.1.6.0 && <1.13
@@ -87,4 +87,4 @@ test-suite tests
     build-depends: ginger
                  , tasty >=1.2 && <1.6
                  , tasty-hunit >=0.10.0.1 && <0.11
-                 , tasty-quickcheck >=0.10 && <0.11
+                 , tasty-quickcheck >=0.10 && <0.12
