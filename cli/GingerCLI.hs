@@ -8,7 +8,8 @@ module Main where
 
 import Text.Ginger
 import Text.Ginger.Html
-import Data.Text as Text
+import Data.Text (Text)
+import qualified Data.Text as Text
 import qualified Data.Aeson as JSON
 import qualified Data.Yaml as YAML
 import Data.Maybe
