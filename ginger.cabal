@@ -72,7 +72,7 @@ executable ginger
     hs-source-dirs: cli
     default-language:    Haskell2010
     build-depends: ginger
-                 , optparse-applicative >=0.14.3.0 && <0.19
+                 , optparse-applicative >=0.14.3.0 && <0.20
                  , process >=1.6.5.0 && <1.7
                  , yaml >=0.11.0.0 && <0.12
 
